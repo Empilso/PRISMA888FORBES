@@ -1,0 +1,205 @@
+"""
+API Router: Strategies
+Gerenciamento de estratégias (ativação, aprovação, etc)
+"""
+
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
+from typing import Optional
+import os
+from supabase import create_client
+from dotenv import load_dotenv
+
+load_dotenv()
+
+router = APIRouter(prefix="/api", tags=["strategies"])
+
+
+def get_supabase_client():
+    """Cria cliente Supabase com service role"""
+    url = os.getenv("SUPABASE_URL")
+    key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+    if not url or not key:
+        raise ValueError("Supabase credentials not found")
+    return create_client(url, key)
+
+
+class ActivateStrategyResponse(BaseModel):
+    """Response do endpoint de ativação"""
+    success: bool
+    task_id: str
+    message: str
+
+
+@router.post("/campaign/{campaign_id}/strategies/{strategy_id}/activate", 
+             response_model=ActivateStrategyResponse)
+async def activate_strategy(campaign_id: str, strategy_id: str):
+    """
+    Ativa uma estratégia transformando-a em uma tarefa no Kanban.
+    
+    Fluxo:
+    1. Busca a estratégia
+    2. Verifica se pertence à campanha
+    3. Cria uma nova tarefa baseada na estratégia
+    4. Atualiza o status da estratégia para 'executed'
+    
+    Args:
+        campaign_id: UUID da campanha
+        strategy_id: UUID da estratégia
+        
+    Returns:
+        Sucesso + ID da nova tarefa criada
+    """
+    supabase = get_supabase_client()
+    
+    # 1. Buscar a estratégia
+    strategy_result = supabase.table("strategies") \
+        .select("*") \
+        .eq("id", strategy_id) \
+        .eq("campaign_id", campaign_id) \
+        .single() \
+        .execute()
+    
+    if not strategy_result.data:
+        raise HTTPException(
+            status_code=404, 
+            detail="Estratégia não encontrada ou não pertence a esta campanha"
+        )
+    
+    strategy = strategy_result.data
+    
+    # Verificar se já foi executada
+    if strategy.get("status") == "executed":
+        raise HTTPException(
+            status_code=400, 
+            detail="Esta estratégia já foi transformada em tarefa"
+        )
+    
+    # 2. Criar tarefa a partir da estratégia
+    task_data = {
+        "campaign_id": campaign_id,
+        "strategy_id": strategy_id,
+        "title": strategy.get("title"),
+        "description": strategy.get("description"),
+        "status": "pending",  # A Fazer
+        "priority": "medium",
+        "tags": [strategy.get("pillar"), strategy.get("phase")],
+        "ai_suggestion": f"Gerado pela IA Genesis a partir da estratégia: {strategy.get('title')}"
+    }
+    
+    task_result = supabase.table("tasks").insert(task_data).execute()
+    
+    if not task_result.data:
+        raise HTTPException(
+            status_code=500,
+            detail="Erro ao criar tarefa no banco de dados"
+        )
+    
+    created_task = task_result.data[0]
+    
+    # 3. Atualizar status da estratégia para 'executed'
+    update_result = supabase.table("strategies") \
+        .update({"status": "executed"}) \
+        .eq("id", strategy_id) \
+        .execute()
+    
+    if not update_result.data:
+        # Rollback: deletar a tarefa criada
+        supabase.table("tasks").delete().eq("id", created_task["id"]).execute()
+        raise HTTPException(
+            status_code=500,
+            detail="Erro ao atualizar status da estratégia"
+        )
+    
+    return ActivateStrategyResponse(
+        success=True,
+        task_id=created_task["id"],
+        message=f"Tarefa '{strategy.get('title')}' criada com sucesso no Kanban!"
+    )
+
+
+@router.get("/campaign/{campaign_id}/strategies/{strategy_id}/status")
+async def get_strategy_status(campaign_id: str, strategy_id: str):
+    """
+    Verifica o status atual de uma estratégia.
+    
+    Útil para verificar se já foi transformada em tarefa.
+    """
+    supabase = get_supabase_client()
+    
+    result = supabase.table("strategies") \
+        .select("id, title, status, created_at") \
+        .eq("id", strategy_id) \
+        .eq("campaign_id", campaign_id) \
+        .single() \
+        .execute()
+    
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Estratégia não encontrada")
+    
+    return result.data
+
+
+@router.post("/campaign/{campaign_id}/strategies/{strategy_id}/reject")
+async def reject_strategy(campaign_id: str, strategy_id: str):
+    """
+    Rejeita uma estratégia, removendo-a da lista de sugestões visíveis.
+    
+    Não deleta do banco - apenas marca como 'rejected' para manter histórico.
+    
+    Args:
+        campaign_id: UUID da campanha
+        strategy_id: UUID da estratégia
+        
+    Returns:
+        Sucesso e ID da estratégia rejeitada
+    """
+    supabase = get_supabase_client()
+    
+    # 1. Verificar se a estratégia existe e pertence à campanha
+    strategy_result = supabase.table("strategies") \
+        .select("id, title, status") \
+        .eq("id", strategy_id) \
+        .eq("campaign_id", campaign_id) \
+        .single() \
+        .execute()
+    
+    if not strategy_result.data:
+        raise HTTPException(
+            status_code=404, 
+            detail="Estratégia não encontrada ou não pertence a esta campanha"
+        )
+    
+    strategy = strategy_result.data
+    
+    # Verificar se já foi executada
+    if strategy.get("status") == "executed":
+        raise HTTPException(
+            status_code=400, 
+            detail="Não é possível rejeitar uma estratégia já ativada. Use 'Desfazer' na tarefa."
+        )
+    
+    # Verificar se já foi rejeitada
+    if strategy.get("status") == "rejected":
+        raise HTTPException(
+            status_code=400, 
+            detail="Esta estratégia já foi rejeitada"
+        )
+    
+    # 2. Atualizar status para 'rejected'
+    update_result = supabase.table("strategies") \
+        .update({"status": "rejected"}) \
+        .eq("id", strategy_id) \
+        .execute()
+    
+    if not update_result.data:
+        raise HTTPException(
+            status_code=500,
+            detail="Erro ao rejeitar estratégia"
+        )
+    
+    return {
+        "success": True,
+        "strategy_id": strategy_id,
+        "message": f"Estratégia '{strategy.get('title')}' foi rejeitada e removida da lista."
+    }

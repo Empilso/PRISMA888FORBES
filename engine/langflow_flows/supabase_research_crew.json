@@ -1,0 +1,264 @@
+{
+    "name": "Supabase Research Crew - Forbes",
+    "description": "Crew de agentes que lê dados do Supabase, faz pesquisa, organiza tarefas e atualiza o banco usando DeepSeek",
+    "data": {
+        "nodes": [
+            {
+                "id": "input-1",
+                "type": "ChatInput",
+                "position": {
+                    "x": 100,
+                    "y": 300
+                },
+                "data": {
+                    "node": {
+                        "template": {
+                            "input_value": {
+                                "value": "",
+                                "type": "str"
+                            }
+                        },
+                        "display_name": "📥 Input Inicial",
+                        "description": "Recebe o contexto inicial para a crew"
+                    }
+                }
+            },
+            {
+                "id": "supabase-reader-1",
+                "type": "SupabaseReader",
+                "position": {
+                    "x": 400,
+                    "y": 200
+                },
+                "data": {
+                    "node": {
+                        "template": {
+                            "supabase_url": {
+                                "value": "https://gsmmanjpsdburmntgpg.supabase.co",
+                                "type": "str"
+                            },
+                            "supabase_key": {
+                                "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdzbW1hbmpwc2RiZndtbm10Z3BnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMyOTcyNTMsImV4cCI6MjA3ODg3MzI1M30.3aN1W_wiMo1fin3UgYbHIisPw_-k7GRP6qIg8xvblp0",
+                                "type": "str"
+                            },
+                            "table_name": {
+                                "value": "candidates",
+                                "type": "str"
+                            },
+                            "query": {
+                                "value": "*",
+                                "type": "str"
+                            }
+                        },
+                        "display_name": "🗄️ Supabase Reader",
+                        "description": "Lê dados dos candidatos"
+                    }
+                }
+            },
+            {
+                "id": "data-organizer-1",
+                "type": "OpenAIModel",
+                "position": {
+                    "x": 700,
+                    "y": 200
+                },
+                "data": {
+                    "node": {
+                        "template": {
+                            "model_name": {
+                                "value": "deepseek-chat",
+                                "type": "str"
+                            },
+                            "openai_api_base": {
+                                "value": "https://api.deepseek.com",
+                                "type": "str"
+                            },
+                            "openai_api_key": {
+                                "value": "sk-b4a58944452b4f239fecc60b4ba26c9f",
+                                "type": "str"
+                            },
+                            "system_message": {
+                                "value": "Você é um especialista em organização de dados políticos. Sua tarefa é:\n1. Receber dados brutos de candidatos do Supabase\n2. Limpar e estruturar os dados\n3. Identificar campos importantes (nome, cargo, partido, propostas)\n4. Preparar dados para análise\n5. Retornar dados organizados em formato JSON estruturado\n\nFormato de saída esperado:\n{\n  \"candidatos\": [\n    {\n      \"id\": \"...\",\n      \"nome\": \"...\",\n      \"cargo\": \"...\",\n      \"partido\": \"...\",\n      \"principais_propostas\": [...]\n    }\n  ]\n}",
+                                "type": "str"
+                            },
+                            "temperature": {
+                                "value": 0.3,
+                                "type": "float"
+                            }
+                        },
+                        "display_name": "📊 Data Organizer Agent",
+                        "description": "Organiza dados usando DeepSeek"
+                    }
+                }
+            },
+            {
+                "id": "research-agent-1",
+                "type": "OpenAIModel",
+                "position": {
+                    "x": 1000,
+                    "y": 200
+                },
+                "data": {
+                    "node": {
+                        "template": {
+                            "model_name": {
+                                "value": "deepseek-chat",
+                                "type": "str"
+                            },
+                            "openai_api_base": {
+                                "value": "https://api.deepseek.com",
+                                "type": "str"
+                            },
+                            "openai_api_key": {
+                                "value": "sk-b4a58944452b4f239fecc60b4ba26c9f",
+                                "type": "str"
+                            },
+                            "system_message": {
+                                "value": "Você é um pesquisador político especializado. Sua tarefa é:\n1. Analisar os dados organizados dos candidatos\n2. Fazer pesquisas sobre propostas e histórico\n3. Coletar informações de fontes confiáveis\n4. Validar dados com fontes oficiais (TSE, sites governamentais)\n5. Enriquecer os dados com análise de viabilidade das propostas\n6. Identificar pontos fortes e fracos de cada candidato\n\nFormato de saída esperado:\n{\n  \"candidatos_analisados\": [\n    {\n      \"id\": \"...\",\n      \"nome\": \"...\",\n      \"analise\": \"...\",\n      \"viabilidade_propostas\": \"...\",\n      \"pontos_fortes\": [...],\n      \"pontos_fracos\": [...],\n      \"fontes\": [...]\n    }\n  ]\n}",
+                                "type": "str"
+                            },
+                            "temperature": {
+                                "value": 0.5,
+                                "type": "float"
+                            }
+                        },
+                        "display_name": "🔍 Research Agent",
+                        "description": "Pesquisa e enriquece dados usando DeepSeek"
+                    }
+                }
+            },
+            {
+                "id": "task-organizer-1",
+                "type": "OpenAIModel",
+                "position": {
+                    "x": 1300,
+                    "y": 200
+                },
+                "data": {
+                    "node": {
+                        "template": {
+                            "model_name": {
+                                "value": "deepseek-chat",
+                                "type": "str"
+                            },
+                            "openai_api_base": {
+                                "value": "https://api.deepseek.com",
+                                "type": "str"
+                            },
+                            "openai_api_key": {
+                                "value": "sk-b4a58944452b4f239fecc60b4ba26c9f",
+                                "type": "str"
+                            },
+                            "system_message": {
+                                "value": "Você é um gerente de campanha política especializado. Sua tarefa é:\n1. Receber análises dos candidatos\n2. Identificar ações estratégicas necessárias\n3. Criar tarefas estruturadas para a equipe\n4. Priorizar tarefas por impacto e urgência\n5. Definir prazos realistas\n6. Organizar em formato Kanban (todo, in_progress, done)\n\nFormato de saída esperado (array de tarefas para inserir no Supabase):\n[\n  {\n    \"title\": \"Título da tarefa\",\n    \"description\": \"Descrição detalhada\",\n    \"status\": \"todo\",\n    \"priority\": \"high|medium|low\",\n    \"due_date\": \"YYYY-MM-DD\",\n    \"assigned_to\": \"nome do responsável\",\n    \"candidate_id\": \"id do candidato relacionado\",\n    \"tags\": [\"tag1\", \"tag2\"]\n  }\n]",
+                                "type": "str"
+                            },
+                            "temperature": {
+                                "value": 0.4,
+                                "type": "float"
+                            }
+                        },
+                        "display_name": "✅ Task Organizer Agent",
+                        "description": "Cria tarefas usando DeepSeek"
+                    }
+                }
+            },
+            {
+                "id": "supabase-writer-1",
+                "type": "SupabaseWriter",
+                "position": {
+                    "x": 1600,
+                    "y": 200
+                },
+                "data": {
+                    "node": {
+                        "template": {
+                            "supabase_url": {
+                                "value": "https://gsmmanjpsdburmntgpg.supabase.co",
+                                "type": "str"
+                            },
+                            "supabase_key": {
+                                "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdzbW1hbmpwc2RiZndtbm10Z3BnIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MzI5NzI1MywiZXhwIjoyMDc4ODczMjUzfQ.kmXCryVGBRJ4FctN2tb0zJsTNFfI69D9uWCcndv-nDE",
+                                "type": "str"
+                            },
+                            "table_name": {
+                                "value": "tasks",
+                                "type": "str"
+                            },
+                            "operation": {
+                                "value": "insert",
+                                "type": "str"
+                            }
+                        },
+                        "display_name": "💾 Supabase Writer",
+                        "description": "Salva tarefas no banco"
+                    }
+                }
+            },
+            {
+                "id": "output-1",
+                "type": "ChatOutput",
+                "position": {
+                    "x": 1900,
+                    "y": 300
+                },
+                "data": {
+                    "node": {
+                        "template": {
+                            "input_value": {
+                                "type": "Message"
+                            }
+                        },
+                        "display_name": "✨ Output Final",
+                        "description": "Resultado da crew"
+                    }
+                }
+            }
+        ],
+        "edges": [
+            {
+                "id": "edge-1",
+                "source": "input-1",
+                "target": "supabase-reader-1",
+                "sourceHandle": "output",
+                "targetHandle": "input"
+            },
+            {
+                "id": "edge-2",
+                "source": "supabase-reader-1",
+                "target": "data-organizer-1",
+                "sourceHandle": "output",
+                "targetHandle": "input"
+            },
+            {
+                "id": "edge-3",
+                "source": "data-organizer-1",
+                "target": "research-agent-1",
+                "sourceHandle": "output",
+                "targetHandle": "input"
+            },
+            {
+                "id": "edge-4",
+                "source": "research-agent-1",
+                "target": "task-organizer-1",
+                "sourceHandle": "output",
+                "targetHandle": "input"
+            },
+            {
+                "id": "edge-5",
+                "source": "task-organizer-1",
+                "target": "supabase-writer-1",
+                "sourceHandle": "output",
+                "targetHandle": "input"
+            },
+            {
+                "id": "edge-6",
+                "source": "supabase-writer-1",
+                "target": "output-1",
+                "sourceHandle": "output",
+                "targetHandle": "input"
+            }
+        ]
+    },
+    "is_component": false
+}

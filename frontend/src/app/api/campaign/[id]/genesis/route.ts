@@ -1,0 +1,38 @@
+import { NextRequest, NextResponse } from "next/server";
+
+export async function POST(
+    request: NextRequest,
+    { params }: { params: Promise<{ id: string }> }
+) {
+    try {
+        const { id } = await params;
+        const body = await request.json();
+
+        // URL do backend Python
+        const backendUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+        const endpoint = `${backendUrl}/api/campaign/${id}/genesis`;
+
+        console.log(`[Genesis Proxy] Forwarding request to: ${endpoint}`);
+
+        // Faz o fetch para o backend Python
+        const response = await fetch(endpoint, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify(body),
+        });
+
+        // Pega a resposta do Python
+        const data = await response.json();
+
+        // Retorna a resposta para o frontend
+        return NextResponse.json(data, { status: response.status });
+    } catch (error) {
+        console.error("[Genesis Proxy] Error:", error);
+        return NextResponse.json(
+            { error: "Failed to trigger Genesis Crew" },
+            { status: 500 }
+        );
+    }
+}

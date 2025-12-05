@@ -1,0 +1,112 @@
+id: alert_flow
+namespace: prisma888.system
+description: Standard alert flow for failures (reusable)
+
+labels:
+  system: observability
+  type: alert
+
+inputs:
+  - id: flow_id
+    type: STRING
+    required: true
+    description: ID of the failed flow
+  
+  - id: error_message
+    type: STRING
+    required: true
+    description: Error message from the failed task
+  
+  - id: execution_id
+    type: STRING
+    required: true
+    description: Execution ID for tracking
+  
+  - id: severity
+    type: STRING
+    defaults: "high"
+    description: Severity level (low, medium, high, critical)
+
+tasks:
+  - id: ai_diagnosis
+    type: io.kestra.plugin.scripts.python.Script
+    docker:
+      image: ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+    script: |
+      import json
+      import os
+      
+      # Simulated AI diagnosis (replace with actual LLM call)
+      def diagnose_error(flow_id: str, error: str) -> str:
+          """Generate AI diagnosis of the error"""
+          # In production, call OpenAI/Anthropic API here
+          common_issues = {
+              "connection": "Verifique se o serviço está rodando e acessível",
+              "timeout": "Aumente o timeout ou verifique performance",
+              "authentication": "Verifique as credenciais e permissões",
+              "not found": "Verifique se o recurso existe",
+          }
+          
+          error_lower = error.lower()
+          for keyword, suggestion in common_issues.items():
+              if keyword in error_lower:
+                  return f"💡 **Diagnóstico**: {suggestion}"
+          
+          return "⚠️ Erro não reconhecido. Verifique os logs completos."
+      
+      diagnosis = diagnose_error("{{ inputs.flow_id }}", "{{ inputs.error_message }}")
+      print(json.dumps({"diagnosis": diagnosis}))
+    
+    timeout: PT30S
+
+  - id: format_alert
+    type: io.kestra.core.tasks.scripts.Bash
+    script: |
+      cat << EOF
+      {
+        "text": "🚨 *FALHA DETECTADA*",
+        "blocks": [
+          {
+            "type": "section",
+            "text": {
+              "type": "mrkdwn",
+              "text": "*Flow:* \`{{ inputs.flow_id }}\`\n*Severidade:* {{ inputs.severity }}\n*Erro:* {{ inputs.error_message }}"
+            }
+          },
+          {
+            "type": "section",
+            "text": {
+              "type": "mrkdwn",
+              "text": "{{ outputs.ai_diagnosis.vars.output }}"
+            }
+          },
+          {
+            "type": "actions",
+            "elements": [
+              {
+                "type": "button",
+                "text": {"type": "plain_text", "text": "Ver Execução"},
+                "url": "http://localhost:8080/ui/executions/{{ inputs.execution_id }}"
+              }
+            ]
+          }
+        ]
+      }
+      EOF
+
+  - id: send_slack
+    type: io.kestra.plugin.notifications.slack.SlackIncomingWebhook
+    url: "{{ secret('SLACK_WEBHOOK') }}"
+    payload: "{{ outputs.format_alert.vars.output }}"
+    
+    # Optional: Only send if webhook is configured
+    disabled: "{{ secret('SLACK_WEBHOOK') == null }}"
+
+  - id: log_alert
+    type: io.kestra.core.tasks.log.Log
+    level: ERROR
+    message: |
+      🚨 Alert sent for flow {{ inputs.flow_id }}
+      Execution: {{ inputs.execution_id }}
+      Error: {{ inputs.error_message }}
+      Diagnosis: {{ outputs.ai_diagnosis.vars.output }}

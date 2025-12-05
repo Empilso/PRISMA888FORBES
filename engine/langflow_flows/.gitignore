@@ -1,0 +1,41 @@
+# 🔒 Langflow Flows - Gitignore
+# Protege credenciais e arquivos sensíveis
+
+# Credenciais
+.env.langflow
+*.env
+*.key
+
+# Logs do Langflow
+*.log
+logs/
+
+# Cache Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Langflow specific
+langflow.db
+langflow_data/
+*.db
+*.db-journal

@@ -1,0 +1,78 @@
+id: health_check
+namespace: prisma888.system
+description: Health check for backend API
+
+labels:
+  system: monitoring
+  criticality: high
+
+tasks:
+  - id: check_backend
+    type: io.kestra.plugin.scripts.python.Script
+    docker:
+      image: ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+    script: |
+      import json
+      import sys
+      from urllib.request import urlopen, Request
+      from urllib.error import URLError, HTTPError
+      
+      def check_health(url: str) -> dict:
+          """Check if backend is healthy"""
+          try:
+              req = Request(url, headers={'User-Agent': 'Kestra-HealthCheck'})
+              with urlopen(req, timeout=5) as response:
+                  if response.status == 200:
+                      return {
+                          "status": "healthy",
+                          "url": url,
+                          "code": response.status
+                      }
+                  else:
+                      return {
+                          "status": "unhealthy",
+                          "url": url,
+                          "code": response.status
+                      }
+          except (URLError, HTTPError) as e:
+              return {
+                  "status": "error",
+                  "url": url,
+                  "error": str(e)
+              }
+      
+      # Check backend health endpoint
+      result = check_health("http://backend:8000/health")
+      print(json.dumps(result))
+      
+      # Exit with error if unhealthy
+      if result["status"] != "healthy":
+          sys.exit(1)
+    
+    retry:
+      type: constant
+      interval: PT10S
+      maxAttempt: 3
+    
+    timeout: PT30S
+
+  - id: log_result
+    type: io.kestra.core.tasks.log.Log
+    message: |
+      Health Check Result: {{ outputs.check_backend.vars.output }}
+
+triggers:
+  - id: schedule
+    type: io.kestra.core.models.triggers.types.Schedule
+    cron: "*/5 * * * *"  # Every 5 minutes
+    timezone: America/Sao_Paulo
+
+errors:
+  - id: alert_on_failure
+    type: io.kestra.core.tasks.flows.Flow
+    namespace: prisma888.system
+    flowId: alert_flow
+    inputs:
+      flow_id: "{{ flow.id }}"
+      error_message: "Backend health check failed"
+      execution_id: "{{ execution.id }}"

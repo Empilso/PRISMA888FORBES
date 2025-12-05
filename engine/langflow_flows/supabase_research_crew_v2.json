@@ -1,0 +1,115 @@
+{
+    "name": "Supabase Research Crew - Forbes",
+    "description": "Crew de agentes para análise de candidatos",
+    "data": {
+        "nodes": [
+            {
+                "id": "chat_input",
+                "type": "ChatInput",
+                "data": {
+                    "node": {
+                        "display_name": "Input Inicial",
+                        "description": "Recebe o comando"
+                    },
+                    "input_value": "Analise os candidatos"
+                },
+                "position": {
+                    "x": 0,
+                    "y": 0
+                }
+            },
+            {
+                "id": "supabase_reader",
+                "type": "SupabaseComponent",
+                "data": {
+                    "node": {
+                        "display_name": "Supabase Reader",
+                        "template": {
+                            "supabase_url": {
+                                "value": "https://gsmmanjpsdburmntgpg.supabase.co"
+                            },
+                            "supabase_service_key": {
+                                "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdzbW1hbmpwc2RiZndtbm10Z3BnIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MzI5NzI1MywiZXhwIjoyMDc4ODczMjUzfQ.kmXCryVGBRJ4FctN2tb0zJsTNFfI69D9uWCcndv-nDE"
+                            },
+                            "table_name": {
+                                "value": "candidates"
+                            },
+                            "query": {
+                                "value": "*"
+                            }
+                        }
+                    }
+                },
+                "position": {
+                    "x": 300,
+                    "y": 0
+                }
+            },
+            {
+                "id": "data_organizer",
+                "type": "OpenAIModel",
+                "data": {
+                    "node": {
+                        "display_name": "Data Organizer",
+                        "template": {
+                            "model_name": {
+                                "value": "deepseek-chat"
+                            },
+                            "openai_api_base": {
+                                "value": "https://api.deepseek.com"
+                            },
+                            "api_key": {
+                                "value": "sk-b4a58944452b4f239fecc60b4ba26c9f"
+                            },
+                            "temperature": {
+                                "value": 0.3
+                            },
+                            "system_message": {
+                                "value": "Você é um organizador de dados."
+                            }
+                        }
+                    }
+                },
+                "position": {
+                    "x": 600,
+                    "y": 0
+                }
+            },
+            {
+                "id": "chat_output",
+                "type": "ChatOutput",
+                "data": {
+                    "node": {
+                        "display_name": "Output Final",
+                        "description": "Resultado"
+                    }
+                },
+                "position": {
+                    "x": 900,
+                    "y": 0
+                }
+            }
+        ],
+        "edges": [
+            {
+                "source": "chat_input",
+                "target": "supabase_reader",
+                "sourceHandle": "message",
+                "targetHandle": "search_term"
+            },
+            {
+                "source": "supabase_reader",
+                "target": "data_organizer",
+                "sourceHandle": "data",
+                "targetHandle": "input_value"
+            },
+            {
+                "source": "data_organizer",
+                "target": "chat_output",
+                "sourceHandle": "text",
+                "targetHandle": "text"
+            }
+        ]
+    },
+    "endpoint_name": "supabase_research_crew"
+}

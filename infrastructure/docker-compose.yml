@@ -1,0 +1,160 @@
+version: '3.8'
+
+volumes:
+  postgres-data:
+  kestra-data:
+
+
+networks:
+  sheepstack-net:
+    driver: bridge
+
+services:
+  # ---------------------------------------------------
+  # Database: Postgres with pgvector
+  # ---------------------------------------------------
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: sheepstack-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: sheepstack_user
+      POSTGRES_PASSWORD: sheepstack_password
+      POSTGRES_DB: sheepstack_db
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    ports:
+      - "5432:5432"
+    networks:
+      - sheepstack-net
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U sheepstack_user -d sheepstack_db" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ---------------------------------------------------
+  # Observability: Jaeger (OpenTelemetry)
+  # ---------------------------------------------------
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: sheepstack-jaeger
+    restart: always
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "16686:16686" # Jaeger UI
+      - "4317:4317" # OTLP gRPC
+      - "4318:4318" # OTLP HTTP
+    networks:
+      - sheepstack-net
+
+  # ---------------------------------------------------
+  # Orchestration: Kestra
+  # ---------------------------------------------------
+  kestra:
+    image: kestra/kestra:latest
+    container_name: sheepstack-kestra
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+      jaeger:
+        condition: service_started
+    environment:
+      KESTRA_CONFIGURATION: |
+        kestra:
+          server:
+            access-log:
+              enabled: true
+          repository:
+            type: postgres
+          database:
+            type: postgres
+            url: jdbc:postgresql://postgres:5432/sheepstack_db
+            username: sheepstack_user
+            password: sheepstack_password
+          storage:
+            type: local
+            local:
+              base-path: /app/storage
+          queue:
+            type: postgres
+          tasks:
+            tmp-dir:
+              path: /tmp/kestra-wd/tmp
+
+        # OpenTelemetry Integration
+        micronaut:
+          application:
+            name: kestra
+          server:
+            port: 8080
+          metrics:
+            enabled: true
+            export:
+              prometheus:
+                enabled: true
+                step: PT1M
+    volumes:
+      - kestra-data:/app/storage
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Mount flows directory for live editing
+      - ../kestra_flows:/app/flows
+      # Mount backend source for Kestra to execute
+      - ../backend:/app/backend
+    ports:
+      - "8080:8080"
+    networks:
+      - sheepstack-net
+
+  # ---------------------------------------------------
+  # Backend: FastAPI (Development)
+  # ---------------------------------------------------
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile.dev
+    container_name: sheepstack-backend
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+      jaeger:
+        condition: service_started
+    environment:
+      DATABASE_URL: postgresql://sheepstack_user:sheepstack_password@postgres:5432/sheepstack_db
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
+      OTEL_SERVICE_NAME: sheepstack-backend
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      - ../backend:/app
+    ports:
+      - "8000:8000"
+    networks:
+      - sheepstack-net
+    command: uv run fastapi dev src/main.py --host 0.0.0.0 --port 8000
+
+  # ---------------------------------------------------
+  # Frontend: Next.js (Development)
+  # ---------------------------------------------------
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile.dev
+    container_name: sheepstack-frontend
+    restart: always
+    depends_on:
+      - backend
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+    volumes:
+      - ../frontend:/app
+      - /app/node_modules
+      - /app/.next
+    ports:
+      - "3000:3000"
+    networks:
+      - sheepstack-net
+    command: pnpm dev

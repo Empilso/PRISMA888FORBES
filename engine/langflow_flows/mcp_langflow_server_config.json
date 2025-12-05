@@ -1,0 +1,14 @@
+{
+    "mcpServers": {
+        "langflow-forbes": {
+            "command": "uvx",
+            "args": [
+                "mcp-proxy",
+                "http://localhost:7860/api/v1/mcp/project/Starter Project/sse"
+            ],
+            "env": {
+                "LANGFLOW_API_KEY": "sk-NPkae9kQtGMXFDK9qKqc_KYZdkh5kaekBuwVZTh7hHk"
+            }
+        }
+    }
+}
