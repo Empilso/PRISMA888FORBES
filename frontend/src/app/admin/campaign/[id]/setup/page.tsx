@@ -216,6 +216,11 @@ export default function CampaignSetupPage() {
     const [viewMode, setViewMode] = useState<'kanban' | 'matrix'>('kanban');
     const [selectedStrategy, setSelectedStrategy] = useState<Strategy | null>(null);
     const [isEditorOpen, setIsEditorOpen] = useState(false);
+    // 🔍 Estados para verificação de saúde dos dados
+    const [locationsCount, setLocationsCount] = useState<number | null>(null);
+    const [chunksCount, setChunksCount] = useState<number | null>(null);
+    const [isProcessing, setIsProcessing] = useState(false);
+    const [documents, setDocuments] = useState<{ file_url: string; file_type: string }[]>([]);
     const supabase = createClient();
     const { toast } = useToast();
 
@@ -308,7 +313,107 @@ export default function CampaignSetupPage() {
         fetchCampaign();
         fetchRuns();
         fetchStrategies();
+        fetchDataHealth(); // Verificar saúde dos dados
     }, [campaignId]);
+
+    // 🔍 Verificar saúde dos dados (locations e chunks)
+    const fetchDataHealth = async () => {
+        console.log('🔍 [DATA HEALTH] Verificando dados processados para campanha:', campaignId);
+
+        // Buscar documentos da campanha
+        const { data: docs } = await supabase
+            .from('documents')
+            .select('file_url, file_type')
+            .eq('campaign_id', campaignId);
+
+        setDocuments(docs || []);
+        console.log('📄 [DATA HEALTH] Documentos encontrados:', docs?.length || 0);
+
+        // Contar locations
+        const { count: locCount } = await supabase
+            .from('locations')
+            .select('*', { count: 'exact', head: true })
+            .eq('campaign_id', campaignId);
+
+        setLocationsCount(locCount || 0);
+        console.log('📍 [DATA HEALTH] Locations:', locCount);
+
+        // Contar chunks (document_chunks)
+        const { count: chunkCount } = await supabase
+            .from('document_chunks')
+            .select('*', { count: 'exact', head: true })
+            .eq('campaign_id', campaignId);
+
+        setChunksCount(chunkCount || 0);
+        console.log('📝 [DATA HEALTH] Chunks:', chunkCount);
+
+        console.log('DEBUG DADOS:', { locationsCount: locCount, chunksCount: chunkCount });
+    };
+
+    // 🔄 Processar arquivos pendentes
+    const handleProcessFiles = async () => {
+        setIsProcessing(true);
+        toast({
+            title: '🔄 Processando arquivos...',
+            description: 'Isso pode levar alguns segundos.',
+        });
+
+        try {
+            const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
+
+            // Processar CSV (locations)
+            const csvDoc = documents.find(d => d.file_type === 'csv');
+            if (csvDoc && locationsCount === 0) {
+                console.log('📊 [PROCESS] Processando CSV:', csvDoc.file_url);
+                const csvResponse = await fetch(`${BACKEND_URL}/api/ingest/csv`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        campaign_id: campaignId,
+                        csv_url: csvDoc.file_url
+                    })
+                });
+                if (!csvResponse.ok) {
+                    console.error('Erro ao processar CSV');
+                }
+            }
+
+            // Processar PDF (chunks)
+            const pdfDoc = documents.find(d => d.file_type === 'pdf');
+            if (pdfDoc && chunksCount === 0) {
+                console.log('📄 [PROCESS] Processando PDF:', pdfDoc.file_url);
+                const pdfResponse = await fetch(`${BACKEND_URL}/api/ingest/pdf`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        campaign_id: campaignId,
+                        pdf_url: pdfDoc.file_url
+                    })
+                });
+                if (!pdfResponse.ok) {
+                    console.error('Erro ao processar PDF');
+                }
+            }
+
+            toast({
+                title: '✅ Processamento concluído!',
+                description: 'Os dados foram processados. Recarregando...',
+            });
+
+            // Recarregar contagens
+            await fetchDataHealth();
+
+        } catch (error) {
+            console.error('Erro ao processar arquivos:', error);
+            toast({
+                title: '❌ Erro no processamento',
+                description: 'Não foi possível processar os arquivos.',
+                variant: 'destructive',
+            });
+        } finally {
+            setIsProcessing(false);
+        }
+    };
 
     const handleDragStart = (event: DragStartEvent) => {
         setActiveId(event.active.id as string);
@@ -674,6 +779,39 @@ export default function CampaignSetupPage() {
                         </div>
                     </div>
                 </div>
+
+                {/* 🟡 Alert de Dados Não Processados */}
+                {locationsCount !== null && chunksCount !== null && (locationsCount === 0 || chunksCount === 0) && documents.length > 0 && (
+                    <div className="px-6 pt-4">
+                        <Alert className="bg-yellow-50 border-yellow-200">
+                            <AlertTriangle className="h-4 w-4 text-yellow-600" />
+                            <AlertTitle className="text-yellow-800">⚠️ Dados não processados</AlertTitle>
+                            <AlertDescription className="text-yellow-700 flex justify-between items-center">
+                                <span>
+                                    {locationsCount === 0 && chunksCount === 0
+                                        ? 'O CSV do mapa e o PDF não foram processados. O mapa estará vazio e a IA não terá contexto.'
+                                        : locationsCount === 0
+                                            ? 'O CSV do mapa não foi processado. O mapa estará vazio.'
+                                            : 'O PDF não foi processado. A IA não terá contexto do plano de governo.'
+                                    }
+                                </span>
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="bg-white border-yellow-300 hover:bg-yellow-100 text-yellow-900 ml-4"
+                                    onClick={handleProcessFiles}
+                                    disabled={isProcessing}
+                                >
+                                    {isProcessing ? (
+                                        <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Processando...</>
+                                    ) : (
+                                        '🔄 Processar Agora'
+                                    )}
+                                </Button>
+                            </AlertDescription>
+                        </Alert>
+                    </div>
+                )}
 
                 {/* Content */}
                 <div className="flex-1 p-6 overflow-auto space-y-6">
