@@ -11,7 +11,6 @@ import {
     Map,
     FolderOpen,
     Settings,
-    Calendar,
     ChevronLeft,
     ChevronRight,
     Menu,
@@ -32,11 +31,7 @@ export function DashboardSidebar({ campaignId }: { campaignId?: string }) {
             href: campaignId ? `${baseUrl}/dashboard` : baseUrl,
             icon: LayoutDashboard,
         },
-        {
-            name: "Plano Estratégico",
-            href: campaignId ? `${baseUrl}/plan` : `${baseUrl}/plano`,
-            icon: Calendar,
-        },
+        // "Plano Estratégico" removed from main list
         {
             name: "IA & Tarefas",
             href: campaignId ? `${baseUrl}/tasks` : `${baseUrl}/ia-tarefas`,
@@ -142,6 +137,39 @@ export function DashboardSidebar({ campaignId }: { campaignId?: string }) {
                         );
                     })}
                 </nav>
+
+                {/* PREMIUM BUTTON - PLANO MESTRE */}
+                {campaignId && (
+                    <div className="px-3 pb-2 pt-4">
+                        {!isCollapsed ? (
+                            <>
+                                <div className="mb-2 px-4 text-xs font-semibold text-muted-foreground tracking-wider uppercase">
+                                    Estratégia
+                                </div>
+                                <Link
+                                    href={`/campaign/${campaignId}/plan`}
+                                    className="group flex items-center gap-3 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-3 text-white shadow-lg shadow-indigo-200 transition-all hover:shadow-indigo-300 hover:scale-[1.02]"
+                                >
+                                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/20">
+                                        <Sparkles className="h-4 w-4 text-white" />
+                                    </div>
+                                    <div className="flex flex-col text-left">
+                                        <span className="text-sm font-bold">Plano Mestre</span>
+                                        <span className="text-[10px] text-indigo-100 opacity-90">Ver Dossiê & IA</span>
+                                    </div>
+                                </Link>
+                            </>
+                        ) : (
+                            <Link
+                                href={`/campaign/${campaignId}/plan`}
+                                className="group flex items-center justify-center rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 p-3 text-white shadow-lg transition-all hover:scale-105"
+                                title="Plano Mestre"
+                            >
+                                <Sparkles className="h-5 w-5" />
+                            </Link>
+                        )}
+                    </div>
+                )}
 
                 {/* Footer */}
                 <div className="border-t p-4">

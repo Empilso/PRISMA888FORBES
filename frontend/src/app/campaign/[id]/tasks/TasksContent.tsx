@@ -11,13 +11,16 @@ import {
     LayoutGrid,
     Sparkles,
     Loader2,
-    ArrowLeft,
     ArrowRight,
     Edit,
-    MoreVertical,
     CheckCircle2,
     Circle,
     Timer,
+    Grid,
+    Trash2,
+    Calendar,
+    List,
+    User
 } from "lucide-react";
 import {
     DndContext,
@@ -27,13 +30,10 @@ import {
     useSensor,
     useSensors,
     DragOverlay,
-    defaultDropAnimationSideEffects,
     DragStartEvent,
-    DragOverEvent,
     DragEndEvent,
 } from "@dnd-kit/core";
 import {
-    arrayMove,
     SortableContext,
     sortableKeyboardCoordinates,
     verticalListSortingStrategy,
@@ -44,11 +44,12 @@ import { useToast } from "@/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { TaskDetailsSheet } from "@/components/tasks/task-details-sheet";
-// import { MOCK_TASKS, Task } from "@/lib/mock-db"; // Removido mock
+import { TaskStatusSelector } from "@/components/tasks/TaskStatusSelector";
 
-// Interface Task baseada no Supabase
 interface Task {
     id: string;
     title: string;
@@ -56,17 +57,18 @@ interface Task {
     status: "pending" | "in_progress" | "review" | "completed";
     priority: "low" | "medium" | "high" | "urgent";
     tags: string[];
-    dueDate?: string;
+    due_date?: string;
     assignee?: {
         name: string;
         avatar: string;
     };
     ai_suggestion?: string;
+    created_at?: string;
 }
 
 export default function TasksContent({ campaignId }: { campaignId: string }) {
     const [searchQuery, setSearchQuery] = useState("");
-    const [currentView, setCurrentView] = useQueryState('view', { defaultValue: 'tasks' });
+    const [currentView, setCurrentView] = useQueryState('view', { defaultValue: 'grid' }); // Default alterado para grid para mostrar o redesign
     const [selectedTask, setSelectedTask] = useState<Task | null>(null);
     const [isSheetOpen, setIsSheetOpen] = useState(false);
     const { toast } = useToast();
@@ -75,72 +77,70 @@ export default function TasksContent({ campaignId }: { campaignId: string }) {
     const [tasks, setTasks] = useState<Task[]>([]);
     const [loading, setLoading] = useState(true);
 
-    // Dnd Kit Sensors
-    const sensors = useSensors(
-        useSensor(PointerSensor, {
-            activationConstraint: {
-                distance: 5, // Previne cliques acidentais ao arrastar
-            },
-        }),
-        useSensor(KeyboardSensor, {
-            coordinateGetter: sortableKeyboardCoordinates,
-        })
-    );
-
     const [activeId, setActiveId] = useState<string | null>(null);
 
+    // Sensors config for DnD
+    const sensors = useSensors(
+        useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+        useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+    );
+
     useEffect(() => {
-        const fetchTasks = async () => {
-            setLoading(true);
-            const supabase = createClient();
-            const { data, error } = await supabase
-                .from('tasks')
-                .select('*')
-                .eq('campaign_id', campaignId)
-                .order('created_at', { ascending: false });
-
-            if (error) {
-                console.error("Erro ao buscar tarefas:", error);
-            } else {
-                setTasks(data || []);
-            }
-            setLoading(false);
-        };
-
         fetchTasks();
     }, [campaignId]);
+
+    const fetchTasks = async () => {
+        setLoading(true);
+        const supabase = createClient();
+        const { data, error } = await supabase
+            .from('tasks')
+            .select('*')
+            .eq('campaign_id', campaignId)
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            console.error("Erro ao buscar tarefas:", error);
+            toast({ title: "Erro", description: "Falha ao carregar tarefas", variant: "destructive" });
+        } else {
+            setTasks(data || []);
+        }
+        setLoading(false);
+    };
 
     const handleTaskClick = (task: Task) => {
         setSelectedTask(task);
         setIsSheetOpen(true);
     };
 
-    const handleMoveTask = async (taskId: string, newStatus: Task["status"]) => {
+    // Unificada: Status Change e Move Task (DnD) usam a mesma lógica
+    const handleStatusChange = async (taskId: string, newStatus: Task["status"]) => {
         // Optimistic Update
-        setTasks((prev) =>
-            prev.map((t) => (t.id === taskId ? { ...t, status: newStatus } : t))
-        );
+        setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, status: newStatus } : t)));
 
         const supabase = createClient();
-        const { error } = await supabase
-            .from("tasks")
-            .update({ status: newStatus })
-            .eq("id", taskId);
+        const { error } = await supabase.from("tasks").update({ status: newStatus }).eq("id", taskId);
 
         if (error) {
             console.error("Erro ao atualizar status:", error);
-            toast({
-                title: "Erro ao mover tarefa",
-                description: "Não foi possível salvar a alteração.",
-                variant: "destructive",
-            });
-            // Rollback (opcional, mas recomendado)
-            // fetchTasks(); 
+            toast({ title: "Erro", description: "Não foi possível atualizar o status.", variant: "destructive" });
+            fetchTasks(); // Rollback
         } else {
-            toast({
-                title: "Tarefa atualizada",
-                description: `Status alterado para ${newStatus}`,
-            });
+            // Sucesso silencioso ou toast discreto? O visual já mudou, então ok.
+            // toast({ description: "Status atualizado" });
+        }
+    };
+
+    const handleDeleteTask = async (taskId: string) => {
+        if (!confirm("Tem certeza que deseja excluir esta tarefa?")) return;
+
+        const supabase = createClient();
+        const { error } = await supabase.from("tasks").delete().eq("id", taskId);
+
+        if (error) {
+            toast({ title: "Erro", description: "Falha ao excluir", variant: "destructive" });
+        } else {
+            setTasks(prev => prev.filter(t => t.id !== taskId));
+            toast({ title: "Tarefa excluída" });
         }
     };
 
@@ -152,51 +152,41 @@ export default function TasksContent({ campaignId }: { campaignId: string }) {
     const handleDragEnd = (event: DragEndEvent) => {
         const { active, over } = event;
         setActiveId(null);
-
         if (!over) return;
 
         const activeId = active.id as string;
         const overId = over.id as string;
-
-        // Encontrar a tarefa ativa
         const activeTask = tasks.find((t) => t.id === activeId);
         if (!activeTask) return;
 
-        // Verificar se soltou em uma coluna (droppable container)
-        // O ID das colunas será o próprio status: "pending", "in_progress", etc.
         const isOverColumn = ["pending", "in_progress", "review", "completed"].includes(overId);
 
         if (isOverColumn && activeTask.status !== overId) {
-            handleMoveTask(activeId, overId as Task["status"]);
-        }
-        // Se soltou sobre outra tarefa, precisamos descobrir a coluna dessa tarefa
-        else if (!isOverColumn) {
+            handleStatusChange(activeId, overId as Task["status"]);
+        } else if (!isOverColumn) {
             const overTask = tasks.find(t => t.id === overId);
             if (overTask && activeTask.status !== overTask.status) {
-                handleMoveTask(activeId, overTask.status);
+                handleStatusChange(activeId, overTask.status);
             }
         }
     };
 
-    // Mock AI Insights (ainda mockado por enquanto)
-    const aiInsights = [
-        {
-            id: "1",
-            type: "suggestion",
-            title: "Priorize Zona Oeste esta semana",
-            description: "Análise de dados indica 34% de indecisos na região oeste. Recomenda-se aumento de 40% nas atividades de campo.",
-            impact: "high",
-        },
-        {
-            id: "2",
-            type: "alert",
-            title: "Atenção: Tema Saúde em alta",
-            description: "Menções a 'saúde pública' cresceram 67% nas últimas 48h. Considere criar conteúdo sobre propostas na área.",
-            impact: "medium",
-        },
-    ];
+    const getPriorityColor = (priority: string) => {
+        switch (priority) {
+            case "urgent": return "bg-red-50 text-red-700 border-red-100";
+            case "high": return "bg-orange-50 text-orange-700 border-orange-100";
+            case "medium": return "bg-yellow-50 text-yellow-700 border-yellow-100";
+            default: return "bg-slate-50 text-slate-600 border-slate-100";
+        }
+    };
 
-    if (loading) {
+    const getPriorityLabel = (priority: string) => {
+        const labels: any = { urgent: "Urgente", high: "Alta", medium: "Média", low: "Baixa" };
+        return labels[priority] || priority;
+    };
+
+
+    if (loading && tasks.length === 0) {
         return (
             <div className="flex justify-center items-center h-64">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -205,135 +195,212 @@ export default function TasksContent({ campaignId }: { campaignId: string }) {
     }
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 pb-20">
             {/* Header */}
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold">IA & Tarefas</h1>
+                    <h1 className="text-2xl font-bold tracking-tight">IA & Tarefas</h1>
                     <p className="text-sm text-muted-foreground">
-                        Gestão inteligente de tarefas com insights de IA
+                        Gestão tática e operacional da campanha.
                     </p>
                 </div>
-                <Button className="gap-2">
-                    <Plus className="h-4 w-4" />
-                    Nova Tarefa
-                </Button>
-            </div>
-
-            {/* Dashboard de Métricas */}
-            <div className="grid gap-4 md:grid-cols-4">
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Total de Tarefas</CardTitle>
-                        <LayoutList className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{tasks.length}</div>
-                        <p className="text-xs text-muted-foreground">
-                            Nesta campanha
-                        </p>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">A Fazer</CardTitle>
-                        <Circle className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{tasks.filter(t => t.status === 'pending').length}</div>
-                        <p className="text-xs text-muted-foreground">
-                            Aguardando início
-                        </p>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Em Progresso</CardTitle>
-                        <Timer className="h-4 w-4 text-blue-500" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{tasks.filter(t => t.status === 'in_progress').length}</div>
-                        <p className="text-xs text-muted-foreground">
-                            Sendo executadas
-                        </p>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Concluídas</CardTitle>
-                        <CheckCircle2 className="h-4 w-4 text-green-500" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{tasks.filter(t => t.status === 'completed').length}</div>
-                        <p className="text-xs text-muted-foreground">
-                            Finalizadas com sucesso
-                        </p>
-                    </CardContent>
-                </Card>
-            </div>
-
-            {/* Search and Filters */}
-            <div className="flex gap-4">
-                <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                    <Input
-                        placeholder="Buscar tarefas, tags, responsáveis..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="pl-9"
-                    />
+                <div className="flex items-center gap-2">
+                    <div className="relative w-full md:w-64">
+                        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                        <Input
+                            placeholder="Buscar tarefas..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="pl-9 h-9 bg-white"
+                        />
+                    </div>
+                    <Button size="sm" className="gap-2 h-9">
+                        <Plus className="h-4 w-4" />
+                        Nova Tarefa
+                    </Button>
                 </div>
-                <Button variant="outline" className="gap-2">
-                    <Filter className="h-4 w-4" />
-                    Filtros
-                </Button>
             </div>
 
-            {/* View Toggle com Nuqs */}
-            <Tabs value={currentView || 'tasks'} onValueChange={setCurrentView} className="w-full">
-                <TabsList className="grid w-full max-w-md grid-cols-2">
-                    <TabsTrigger value="tasks" className="gap-2">
-                        <LayoutList className="h-4 w-4" />
-                        Tarefas
-                    </TabsTrigger>
-                    <TabsTrigger value="kanban" className="gap-2">
-                        <LayoutGrid className="h-4 w-4" />
-                        Kanban
-                    </TabsTrigger>
-                </TabsList>
+            {/* Metrics */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {[
+                    { label: "Total", value: tasks.length, icon: Circle, color: "text-slate-500" },
+                    { label: "A Fazer", value: tasks.filter(t => t.status === 'pending').length, icon: Circle, color: "text-slate-500" },
+                    { label: "Em Progresso", value: tasks.filter(t => t.status === 'in_progress').length, icon: Timer, color: "text-blue-500" },
+                    { label: "Concluídas", value: tasks.filter(t => t.status === 'completed').length, icon: CheckCircle2, color: "text-green-500" },
+                ].map((metric, i) => (
+                    <Card key={i} className="shadow-sm border-slate-100">
+                        <CardContent className="p-4 flex items-center justify-between">
+                            <div>
+                                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">{metric.label}</p>
+                                <p className="text-2xl font-bold text-slate-900 mt-1">{metric.value}</p>
+                            </div>
+                            <metric.icon className={`h-5 w-5 ${metric.color}`} />
+                        </CardContent>
+                    </Card>
+                ))}
+            </div>
 
-                {/* Tasks List View */}
-                <TabsContent value="tasks" className="space-y-4">
-                    <div className="rounded-lg border bg-card text-card-foreground">
-                        <div className="p-6">
-                            <div className="text-sm text-muted-foreground mb-4">
-                                {tasks.length} tarefas encontradas
-                            </div>
-                            <div className="space-y-3">
-                                {tasks.length === 0 ? (
-                                    <div className="text-center py-8 text-muted-foreground">
-                                        Nenhuma tarefa encontrada. Crie uma nova ou ative uma estratégia do Plano.
+            {/* Views Tabs */}
+            <Tabs value={currentView || 'grid'} onValueChange={setCurrentView} className="w-full">
+                <div className="flex items-center justify-between mb-6">
+                    <TabsList className="bg-slate-100/50 p-1 rounded-lg">
+                        <TabsTrigger value="list" className="gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                            <List className="h-4 w-4" />
+                            Lista
+                        </TabsTrigger>
+                        <TabsTrigger value="grid" className="gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                            <Grid className="h-4 w-4" />
+                            Grade
+                        </TabsTrigger>
+                        <TabsTrigger value="kanban" className="gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                            <LayoutGrid className="h-4 w-4" />
+                            Kanban
+                        </TabsTrigger>
+                    </TabsList>
+
+                    <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground">
+                        <Filter className="h-4 w-4" />
+                        Filtros
+                    </Button>
+                </div>
+
+                {/* LIST VIEW (SLIM e INTEBRATED) */}
+                <TabsContent value="list" className="mt-0">
+                    <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                        {tasks.length === 0 ? (
+                            <EmptyState />
+                        ) : (
+                            <div className="divide-y divide-slate-100">
+                                {tasks.map((task) => (
+                                    <div
+                                        key={task.id}
+                                        onClick={() => handleTaskClick(task)}
+                                        className="group flex items-center gap-4 p-3 hover:bg-slate-50 transition-colors cursor-pointer"
+                                    >
+                                        <div className="pl-2">
+                                            <div className={`w-2 h-2 rounded-full ${task.priority === 'urgent' ? 'bg-red-500' : task.priority === 'high' ? 'bg-orange-500' : 'bg-slate-300'}`} />
+                                        </div>
+
+                                        <div className="flex-1 min-w-0 grid grid-cols-12 gap-4 items-center">
+                                            <div className="col-span-12 md:col-span-5">
+                                                <h3 className="text-sm font-semibold text-slate-900 truncate">{task.title}</h3>
+                                                <p className="text-xs text-muted-foreground truncate">{task.description}</p>
+                                            </div>
+
+                                            <div className="col-span-6 md:col-span-3 flex items-center gap-2">
+                                                <TaskStatusSelector
+                                                    status={task.status}
+                                                    onStatusChange={(s) => handleStatusChange(task.id, s)}
+                                                />
+                                            </div>
+
+                                            <div className="col-span-6 md:col-span-2 flex items-center gap-2 text-xs text-muted-foreground">
+                                                {task.due_date && (
+                                                    <span className="flex items-center gap-1">
+                                                        <Calendar className="h-3 w-3" />
+                                                        {new Date(task.due_date).toLocaleDateString('pt-BR')}
+                                                    </span>
+                                                )}
+                                            </div>
+
+                                            <div className="col-span-12 md:col-span-2 flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:text-blue-600">
+                                                    <Edit className="h-4 w-4" />
+                                                </Button>
+                                                <Button
+                                                    size="icon"
+                                                    variant="ghost"
+                                                    className="h-8 w-8 text-slate-400 hover:text-red-600"
+                                                    onClick={(e) => { e.stopPropagation(); handleDeleteTask(task.id); }}
+                                                >
+                                                    <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                            </div>
+                                        </div>
                                     </div>
-                                ) : (
-                                    tasks.map((task) => (
-                                        <TaskCard
-                                            key={task.id}
-                                            task={task}
-                                            onClick={() => handleTaskClick(task)}
-                                        />
-                                    ))
-                                )}
+                                ))}
                             </div>
-                        </div>
+                        )}
                     </div>
                 </TabsContent>
 
-                {/* Kanban View */}
-                <TabsContent value="kanban">
+                {/* GRID VIEW (PREMIUM & CONSISTENT) */}
+                <TabsContent value="grid" className="mt-0">
+                    {tasks.length === 0 ? (
+                        <EmptyState />
+                    ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                            {tasks.map((task) => (
+                                <div
+                                    key={task.id}
+                                    onClick={() => handleTaskClick(task)}
+                                    className="group bg-white rounded-2xl p-6 shadow-sm hover:shadow-md transition-all border-none hover:-translate-y-1 cursor-pointer flex flex-col h-[280px]"
+                                >
+                                    {/* Header: Status Pill e Prioridade */}
+                                    <div className="flex items-center justify-between mb-4">
+                                        <TaskStatusSelector
+                                            status={task.status}
+                                            onStatusChange={(s) => handleStatusChange(task.id, s)}
+                                        />
+                                        <Badge variant="outline" className={`font-normal rounded-md ${getPriorityColor(task.priority)}`}>
+                                            {getPriorityLabel(task.priority)}
+                                        </Badge>
+                                    </div>
+
+                                    {/* Body */}
+                                    <div className="flex-1 mb-4">
+                                        <h3 className="font-bold text-lg text-slate-900 mb-2 leading-tight group-hover:text-primary transition-colors line-clamp-2">
+                                            {task.title}
+                                        </h3>
+                                        <p className="text-sm text-slate-500 line-clamp-3 leading-relaxed">
+                                            {task.description}
+                                        </p>
+                                    </div>
+
+                                    {/* Footer */}
+                                    <div className="pt-4 border-t border-slate-50 flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <Avatar className="h-7 w-7 border border-slate-200">
+                                                <AvatarImage src={task.assignee?.avatar} />
+                                                <AvatarFallback className="text-[10px] bg-slate-100 text-slate-600 font-bold">
+                                                    {task.assignee?.name?.substring(0, 2) || <User className="h-3 w-3" />}
+                                                </AvatarFallback>
+                                            </Avatar>
+                                            {task.due_date && (
+                                                <span className="text-xs text-slate-400 flex items-center gap-1 font-medium">
+                                                    <Calendar className="h-3 w-3" />
+                                                    {new Date(task.due_date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <Button size="icon" variant="ghost" className="h-8 w-8 rounded-full hover:bg-slate-100">
+                                                <Edit className="h-4 w-4 text-slate-500" />
+                                            </Button>
+                                            <Button
+                                                size="icon"
+                                                variant="ghost"
+                                                className="h-8 w-8 rounded-full hover:bg-red-50 hover:text-red-600"
+                                                onClick={(e) => { e.stopPropagation(); handleDeleteTask(task.id); }}
+                                            >
+                                                <Trash2 className="h-4 w-4 text-slate-400 hover:text-red-600" />
+                                            </Button>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </TabsContent>
+
+                {/* KANBAN VIEW */}
+                <TabsContent value="kanban" className="mt-0 h-[calc(100vh-250px)]">
                     <KanbanBoard
                         tasks={tasks}
                         onTaskClick={handleTaskClick}
-                        onMoveTask={handleMoveTask}
+                        onMoveTask={handleStatusChange}
                         sensors={sensors}
                         onDragStart={handleDragStart}
                         onDragEnd={handleDragEnd}
@@ -342,100 +409,32 @@ export default function TasksContent({ campaignId }: { campaignId: string }) {
                 </TabsContent>
             </Tabs>
 
-            {/* AI Insights Section */}
-            <div className="mt-8">
-                <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                    <Sparkles className="h-5 w-5 text-purple-600" />
-                    Insights da IA
-                </h2>
-                <div className="grid gap-4 md:grid-cols-2">
-                    {aiInsights.map((insight) => (
-                        <AIInsightCard key={insight.id} insight={insight} />
-                    ))}
-                </div>
-            </div>
-
             {/* Task Details Sheet */}
             <TaskDetailsSheet
-                task={selectedTask as any} // Cast temporário se a interface do Sheet for diferente
+                task={selectedTask as any}
                 open={isSheetOpen}
-                onOpenChange={setIsSheetOpen}
+                onOpenChange={(open) => {
+                    setIsSheetOpen(open);
+                    if (!open) setSelectedTask(null);
+                }}
             />
         </div>
     );
 }
 
-// Componentes Auxiliares
-
-function TaskCard({ task, onClick }: { task: Task; onClick?: () => void }) {
-    const priorityColors: Record<string, string> = {
-        low: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300",
-        medium: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300",
-        high: "bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300",
-        urgent: "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300",
-    };
-
-    const statusColors: Record<string, string> = {
-        pending: "bg-gray-100 text-gray-700",
-        in_progress: "bg-blue-100 text-blue-700",
-        review: "bg-purple-100 text-purple-700",
-        completed: "bg-green-100 text-green-700",
-    };
-
-    const statusLabels: Record<string, string> = {
-        pending: "Pendente",
-        in_progress: "Em Progresso",
-        review: "Em Revisão",
-        completed: "Concluído",
-    };
-
+function EmptyState() {
     return (
-        <div
-            className="flex items-start gap-4 border rounded-lg p-4 hover:bg-muted/50 transition-colors cursor-pointer"
-            onClick={onClick}
-        >
-            <input type="checkbox" className="mt-1" />
-            <div className="flex-1 space-y-2">
-                <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1">
-                        <h3 className="font-semibold text-sm">{task.title}</h3>
-                        <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                            {task.description}
-                        </p>
-                        {task.ai_suggestion && (
-                            <div className="mt-2 flex items-center gap-1 text-xs text-purple-600 bg-purple-50 px-2 py-1 rounded w-fit">
-                                <Sparkles className="h-3 w-3" />
-                                Sugestão IA
-                            </div>
-                        )}
-                    </div>
-                    <span
-                        className={`px-2 py-1 rounded text-xs font-medium whitespace-nowrap ${priorityColors[task.priority] || priorityColors.medium}`}
-                    >
-                        {task.priority === "urgent" ? "Urgente" : task.priority === "high" ? "Alta" : task.priority === "medium" ? "Média" : "Baixa"}
-                    </span>
-                </div>
-
-                <div className="flex items-center gap-2 flex-wrap">
-                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${statusColors[task.status] || statusColors.pending}`}>
-                        {statusLabels[task.status] || "Pendente"}
-                    </span>
-                    {task.tags && task.tags.map((tag) => (
-                        <span key={tag} className="px-2 py-0.5 rounded bg-primary/10 text-primary text-xs font-medium">
-                            {tag}
-                        </span>
-                    ))}
-                    {task.dueDate && (
-                        <span className="text-xs text-muted-foreground">
-                            📅 {new Date(task.dueDate).toLocaleDateString("pt-BR")}
-                        </span>
-                    )}
-                </div>
+        <div className="text-center py-12">
+            <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-3">
+                <LayoutList className="h-6 w-6 text-slate-300" />
             </div>
+            <h3 className="text-sm font-medium text-slate-900">Nenhuma tarefa encontrada</h3>
+            <p className="text-xs text-muted-foreground mt-1">Crie uma nova ou ajuste os filtros.</p>
         </div>
     );
 }
 
+// Kanban Components
 function KanbanBoard({
     tasks,
     onTaskClick,
@@ -443,48 +442,51 @@ function KanbanBoard({
     sensors,
     onDragStart,
     onDragEnd,
-    activeId,
-}: {
-    tasks: Task[];
-    onTaskClick?: (task: Task) => void;
-    onMoveTask: (taskId: string, newStatus: Task["status"]) => void;
-    sensors: any;
-    onDragStart: (event: DragStartEvent) => void;
-    onDragEnd: (event: DragEndEvent) => void;
-}) {
+    activeId
+}: any) {
     const columns = [
-        { status: "pending", label: "Pendente" },
-        { status: "in_progress", label: "Em Progresso" },
-        { status: "review", label: "Em Revisão" },
-        { status: "completed", label: "Concluído" },
+        { status: "pending", label: "A Fazer", color: "bg-blue-50 text-blue-700 border-blue-100" },
+        { status: "in_progress", label: "Em Progresso", color: "bg-orange-50 text-orange-700 border-orange-100" },
+        { status: "review", label: "Em Revisão", color: "bg-purple-50 text-purple-700 border-purple-100" },
+        { status: "completed", label: "Concluído", color: "bg-green-50 text-green-700 border-green-100" },
     ];
-
-    const activeTask = tasks.find((t) => t.id === activeId);
+    const activeTask = tasks.find((t: Task) => t.id === activeId);
 
     return (
-        <DndContext
-            sensors={sensors}
-            collisionDetection={closestCorners}
-            onDragStart={onDragStart}
-            onDragEnd={onDragEnd}
-        >
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 h-full min-h-[500px]">
+        <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={onDragStart} onDragEnd={onDragEnd}>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 h-full p-2">
                 {columns.map((column) => (
-                    <KanbanColumn
-                        key={column.status}
-                        id={column.status}
-                        title={column.label}
-                        tasks={tasks.filter((t) => t.status === column.status)}
-                        onTaskClick={onTaskClick}
-                        onMoveTask={onMoveTask}
-                    />
+                    <div key={column.status} className="flex flex-col h-full rounded-2xl">
+                        {/* Header Vivido */}
+                        <div className="mb-4 flex items-center justify-between">
+                            <div className={`px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide border ${column.color}`}>
+                                {column.label}
+                            </div>
+                            <span className="text-xs text-slate-400 font-medium">
+                                {tasks.filter((t: Task) => t.status === column.status).length}
+                            </span>
+                        </div>
+
+                        {/* Column Body - Arejado */}
+                        <div className="flex-1 space-y-3 min-h-[100px]">
+                            <SortableContext id={column.status} items={tasks.filter((t: Task) => t.status === column.status).map((t: Task) => t.id)} strategy={verticalListSortingStrategy}>
+                                {tasks.filter((t: Task) => t.status === column.status).map((task: Task) => (
+                                    <SortableTaskCard
+                                        key={task.id}
+                                        task={task}
+                                        onTaskClick={onTaskClick}
+                                        onMoveTask={onMoveTask}
+                                    />
+                                ))}
+                            </SortableContext>
+                        </div>
+                    </div>
                 ))}
             </div>
-
             <DragOverlay>
                 {activeId && activeTask ? (
-                    <div className="opacity-80 rotate-2 cursor-grabbing">
-                        <TaskCardContent task={activeTask} />
+                    <div className="opacity-90 rotate-2 scale-105 cursor-grabbing">
+                        <KanbanCardContent task={activeTask} />
                     </div>
                 ) : null}
             </DragOverlay>
@@ -492,205 +494,86 @@ function KanbanBoard({
     );
 }
 
-function KanbanColumn({
-    id,
-    title,
-    tasks,
-    onTaskClick,
-    onMoveTask,
-}: {
-    id: string;
-    title: string;
-    tasks: Task[];
-    onTaskClick?: (task: Task) => void;
-    onMoveTask: (taskId: string, newStatus: Task["status"]) => void;
-}) {
-    const { setNodeRef } = useSortable({ id });
-
-    return (
-        <Card className="h-full flex flex-col bg-muted/30">
-            <CardHeader className="pb-3 p-4">
-                <CardTitle className="text-sm font-medium flex items-center justify-between">
-                    <span>{title}</span>
-                    <span className="bg-background border px-2 py-0.5 rounded-full text-xs text-muted-foreground">
-                        {tasks.length}
-                    </span>
-                </CardTitle>
-            </CardHeader>
-            <CardContent className="flex-1 p-2 space-y-2 min-h-[150px]" ref={setNodeRef}>
-                <SortableContext
-                    id={id}
-                    items={tasks.map((t) => t.id)}
-                    strategy={verticalListSortingStrategy}
-                >
-                    {tasks.map((task) => (
-                        <SortableTaskCard
-                            key={task.id}
-                            task={task}
-                            onTaskClick={onTaskClick}
-                            onMoveTask={onMoveTask}
-                        />
-                    ))}
-                </SortableContext>
-                {tasks.length === 0 && (
-                    <div className="h-full flex items-center justify-center text-xs text-muted-foreground italic p-4 border-2 border-dashed border-muted-foreground/10 rounded-lg">
-                        Arraste tarefas aqui
-                    </div>
-                )}
-            </CardContent>
-        </Card>
-    );
-}
-
-function SortableTaskCard({
-    task,
-    onTaskClick,
-    onMoveTask,
-}: {
-    task: Task;
-    onTaskClick?: (task: Task) => void;
-    onMoveTask: (taskId: string, newStatus: Task["status"]) => void;
-}) {
-    const {
-        attributes,
-        listeners,
-        setNodeRef,
-        transform,
-        transition,
-        isDragging,
-    } = useSortable({ id: task.id });
-
+function SortableTaskCard({ task, onTaskClick, onMoveTask }: any) {
+    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id });
     const style = {
         transform: CSS.Transform.toString(transform),
         transition,
         opacity: isDragging ? 0.3 : 1,
+        zIndex: isDragging ? 999 : 1
     };
-
     return (
-        <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
-            <TaskCardContent
-                task={task}
-                onTaskClick={onTaskClick}
-                onMoveTask={onMoveTask}
-            />
+        <div ref={setNodeRef} style={style} {...attributes} {...listeners} onClick={() => onTaskClick(task)}>
+            <KanbanCardContent task={task} onMoveTask={onMoveTask} />
         </div>
     );
 }
 
-function TaskCardContent({
-    task,
-    onTaskClick,
-    onMoveTask,
-}: {
-    task: Task;
-    onTaskClick?: (task: Task) => void;
-    onMoveTask?: (taskId: string, newStatus: Task["status"]) => void;
-}) {
+function KanbanCardContent({ task, onMoveTask }: { task: Task; onMoveTask?: (id: string, status: any) => void }) {
+
+    // Logic for Quick Move
     const statusOrder = ["pending", "in_progress", "review", "completed"];
-    const currentStatusIndex = statusOrder.indexOf(task.status);
+    const currentIdx = statusOrder.indexOf(task.status);
+    const nextStatus = currentIdx < statusOrder.length - 1 ? statusOrder[currentIdx + 1] : null;
 
-    const handleMove = (direction: "prev" | "next", e: React.MouseEvent) => {
+    const handleQuickMove = (e: React.MouseEvent) => {
         e.stopPropagation();
-        if (!onMoveTask) return;
-
-        const newIndex = direction === "next" ? currentStatusIndex + 1 : currentStatusIndex - 1;
-        if (newIndex >= 0 && newIndex < statusOrder.length) {
-            onMoveTask(task.id, statusOrder[newIndex] as Task["status"]);
+        if (nextStatus && onMoveTask) {
+            onMoveTask(task.id, nextStatus as any);
         }
     };
 
     return (
-        <div
-            className="group relative bg-background border rounded-lg p-3 shadow-sm hover:shadow-md transition-all cursor-grab active:cursor-grabbing"
-            onClick={() => onTaskClick?.(task)}
-        >
-            <div className="space-y-2">
-                <div className="flex justify-between items-start gap-2">
-                    <h4 className="text-sm font-semibold line-clamp-2 leading-tight">
-                        {task.title}
-                    </h4>
-                    {task.priority === "urgent" && (
-                        <span className="h-2 w-2 rounded-full bg-red-500 shrink-0 mt-1" title="Urgente" />
-                    )}
+        <div className="bg-white p-4 rounded-xl shadow-sm border-none hover:shadow-md transition-all cursor-grab active:cursor-grabbing group relative">
+            <div className="flex items-center justify-between mb-3">
+                <div className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${task.priority === 'urgent' ? 'bg-red-50 text-red-700' :
+                        task.priority === 'high' ? 'bg-orange-50 text-orange-700' :
+                            task.priority === 'medium' ? 'bg-yellow-50 text-yellow-700' :
+                                'bg-slate-100 text-slate-500'
+                    }`}>
+                    {task.priority === 'urgent' ? 'Urgente' : task.priority === 'high' ? 'Alta' : task.priority === 'medium' ? 'Média' : 'Baixa'}
                 </div>
-
-                <div className="flex flex-wrap gap-1">
-                    {task.tags &&
-                        task.tags.slice(0, 2).map((tag) => (
-                            <span
-                                key={tag}
-                                className="text-[10px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground font-medium"
-                            >
-                                {tag}
-                            </span>
-                        ))}
-                </div>
-
-                <div className="flex items-center justify-between pt-2 mt-1 border-t border-dashed">
-                    {/* Botão Voltar */}
-                    {currentStatusIndex > 0 ? (
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6 text-muted-foreground hover:text-orange-600 hover:bg-orange-50"
-                            onClick={(e) => handleMove("prev", e)}
-                            title="Voltar status"
-                        >
-                            <ArrowLeft className="h-3 w-3" />
-                        </Button>
-                    ) : (
-                        <div className="w-6" /> // Spacer
-                    )}
-
-                    {/* Botão Editar */}
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 px-2 text-xs text-muted-foreground hover:text-primary"
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            onTaskClick?.(task);
-                        }}
-                    >
-                        <Edit className="h-3 w-3 mr-1" />
-                        Editar
-                    </Button>
-
-                    {/* Botão Avançar */}
-                    {currentStatusIndex < statusOrder.length - 1 ? (
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6 text-muted-foreground hover:text-green-600 hover:bg-green-50"
-                            onClick={(e) => handleMove("next", e)}
-                            title="Avançar status"
-                        >
-                            <ArrowRight className="h-3 w-3" />
-                        </Button>
-                    ) : (
-                        <div className="w-6" /> // Spacer
-                    )}
+                {/* Selector Discreto no Kanban tbm, se o usuário quiser mudar para status não sequencial */}
+                <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                    {/* <MoreHorizontal ... /> // Opcional, ou manter clean. */}
                 </div>
             </div>
 
-            {task.ai_suggestion && (
-                <div className="absolute top-2 right-2">
-                    <Sparkles className="h-3 w-3 text-purple-500 animate-pulse" />
-                </div>
-            )}
-        </div>
-    );
-}
+            <h4 className="text-sm font-bold text-slate-900 leading-tight mb-2 line-clamp-3">
+                {task.title}
+            </h4>
 
-function AIInsightCard({ insight }: { insight: any }) {
-    return (
-        <Card className="border-l-4 border-l-purple-500">
-            <CardHeader>
-                <CardTitle className="text-base">{insight.title}</CardTitle>
-            </CardHeader>
-            <CardContent>
-                <p className="text-sm text-muted-foreground">{insight.description}</p>
-            </CardContent>
-        </Card>
+            <TaskStatusSelector status={task.status} onStatusChange={(s) => onMoveTask && onMoveTask(task.id, s)} />
+
+            <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-50">
+                <div className="flex items-center gap-1">
+                    <Avatar className="h-6 w-6 border-2 border-white">
+                        <AvatarImage src={task.assignee?.avatar} />
+                        <AvatarFallback className="text-[9px] bg-indigo-50 text-indigo-700 font-bold">
+                            {task.assignee?.name?.substring(0, 2) || "IA"}
+                        </AvatarFallback>
+                    </Avatar>
+                    {task.due_date && (
+                        <span className="ml-2 text-[10px] font-medium text-slate-400 flex items-center gap-1">
+                            <Calendar className="h-3 w-3" />
+                            {new Date(task.due_date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+                        </span>
+                    )}
+                </div>
+
+                {/* Quick Action Button - Visible on Hover/Mobile */}
+                {nextStatus && (
+                    <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-7 w-7 rounded-full text-slate-300 hover:text-primary hover:bg-indigo-50 opacity-0 group-hover:opacity-100 transition-all"
+                        onClick={handleQuickMove}
+                        title={`Mover para ${nextStatus.replace('_', ' ')}`}
+                    >
+                        <ArrowRight className="h-4 w-4" />
+                    </Button>
+                )}
+            </div>
+        </div>
     );
 }

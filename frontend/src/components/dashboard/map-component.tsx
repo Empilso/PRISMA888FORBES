@@ -14,45 +14,30 @@ const mapStyles: Record<string, { url: string; attribution: string }> = {
     'carto-dark': { url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', attribution: 'Carto' },
 };
 
-// URLs de Pins
-const pinUrls: Record<string, string> = {
-    'classic-red': 'https://cdn-icons-png.flaticon.com/512/684/684908.png',
-    'classic-blue': 'https://cdn-icons-png.flaticon.com/512/684/684909.png',
-    'classic-green': 'https://cdn-icons-png.flaticon.com/512/684/684907.png',
-    'modern-red': 'https://cdn-icons-png.flaticon.com/512/2776/2776067.png',
-    'modern-blue': 'https://cdn-icons-png.flaticon.com/512/2776/2776071.png',
-    'modern-purple': 'https://cdn-icons-png.flaticon.com/512/2776/2776073.png',
-    'location-red': 'https://cdn-icons-png.flaticon.com/512/447/447031.png',
-    'location-blue': 'https://cdn-icons-png.flaticon.com/512/447/447032.png',
-    'marker-orange': 'https://cdn-icons-png.flaticon.com/512/1483/1483336.png',
-    'marker-pink': 'https://cdn-icons-png.flaticon.com/512/1483/1483285.png',
-    'pin-shadow': 'https://cdn-icons-png.flaticon.com/512/3177/3177361.png',
-    'pin-glow': 'https://cdn-icons-png.flaticon.com/512/3177/3177370.png',
-    'custom-home': 'https://cdn-icons-png.flaticon.com/512/1946/1946436.png',
-    'custom-star': 'https://cdn-icons-png.flaticon.com/512/1828/1828884.png',
-    'custom-heart': 'https://cdn-icons-png.flaticon.com/512/833/833472.png',
+// Lógica de Cor por Performance
+const getPerformanceStyles = (votes: number) => {
+    if (votes > 2000) return 'bg-emerald-500 shadow-emerald-500/40'; // Alta
+    if (votes >= 1000) return 'bg-amber-400 shadow-amber-400/40';   // Média
+    return 'bg-rose-500 shadow-rose-500/40';                        // Baixa
 };
 
-// Configuração de ícones
-const createIcon = (style: string, colorOverride?: string) => {
-    // Tenta usar o estilo selecionado, ou fallback para classic-red
-    // Se houver colorOverride (do objeto location), tenta achar um estilo correspondente (ex: classic-green)
+const createPerformanceIcon = (votes: number) => {
+    const colorClasses = getPerformanceStyles(votes);
 
-    let iconUrl = pinUrls[style] || pinUrls['classic-red'];
+    // HTML do Marcador (Puro CSS/Tailwind)
+    // Círculo colorido com borda branca grossa e sombra colorida (Glow)
+    const html = `
+        <div class="relative flex items-center justify-center w-full h-full group">
+            <div class="${colorClasses} w-4 h-4 rounded-full border-[2.5px] border-white shadow-lg ring-1 ring-black/5 transition-transform duration-300 group-hover:scale-125"></div>
+        </div>
+    `;
 
-    // Lógica simples para override de cor se o estilo for "classic" ou "modern"
-    if (colorOverride && (style.includes('classic') || style.includes('modern'))) {
-        const baseStyle = style.split('-')[0]; // classic ou modern
-        const specificUrl = pinUrls[`${baseStyle}-${colorOverride}`];
-        if (specificUrl) iconUrl = specificUrl;
-    }
-
-    return L.icon({
-        iconUrl: iconUrl,
-        iconSize: [38, 38], // Aumentado levemente para melhor UX
-        iconAnchor: [19, 38],
-        popupAnchor: [0, -38],
-        // Sombra removida para evitar artefatos visuais e sobreposição
+    return L.divIcon({
+        className: 'bg-transparent', // Remove container default do leaflet
+        html: html,
+        iconSize: [24, 24],   // Tamanho do container
+        iconAnchor: [12, 12], // Âncora no centro exato (agora são bolinhas)
+        popupAnchor: [0, -12]
     });
 };
 
@@ -61,7 +46,7 @@ function MapController({ center }: { center?: [number, number] }) {
     const map = useMap();
     useEffect(() => {
         if (center) {
-            map.flyTo(center, 14, { duration: 1.5 });
+            map.flyTo(center, 15, { duration: 1.2, easeLinearity: 0.25 });
         }
     }, [center, map]);
     return null;
@@ -71,21 +56,22 @@ export default function MapComponent({
     locations,
     onLocationClick,
     mapStyle = 'osm-bright',
-    pinStyle = 'classic-red',
     centerPosition
 }: any) {
-    // Fix para o mapa renderizar corretamente
+    // Fix para o mapa renderizar corretamente (invalidar size ao montar)
     useEffect(() => {
-        window.dispatchEvent(new Event('resize'));
+        setTimeout(() => {
+            window.dispatchEvent(new Event('resize'));
+        }, 100);
     }, []);
 
     const currentMapStyle = mapStyles[mapStyle] || mapStyles['osm-bright'];
 
     return (
         <MapContainer
-            center={[-23.550520, -46.633308]} // Centro de SP (exemplo)
+            center={[-23.550520, -46.633308]} // Centro de SP (fallback)
             zoom={13}
-            style={{ height: '100%', width: '100%', background: '#f0f0f0' }}
+            style={{ height: '100%', width: '100%', background: '#f8fafc', zIndex: 0 }} // zIndex 0 para garantir que fique atrás do Sheet
             zoomControl={false}
         >
             <ZoomControl position="bottomright" />
@@ -98,11 +84,9 @@ export default function MapComponent({
 
             {locations.map((loc: any) => (
                 <Marker
-                    // Key composta força a recriação do marcador quando o estilo muda,
-                    // evitando que o ícone antigo permaneça visível (bug visual comum)
-                    key={`${loc.id}-${pinStyle}-${loc.color}`}
+                    key={loc.id}
                     position={loc.position}
-                    icon={createIcon(pinStyle, loc.color)}
+                    icon={createPerformanceIcon(loc.votes || 0)}
                     eventHandlers={{
                         click: () => onLocationClick(loc),
                     }}

@@ -79,11 +79,15 @@ function DraggableStrategyCard({
         id: strategy.id,
     });
 
-    const colorClass = pillarColors[strategy.pillar] || "bg-gray-100 text-gray-800 border-gray-300";
+    const colorClass = pillarColors[strategy.pillar] || "bg-gray-100 text-gray-800";
+
+    // Removing borders from color class if they exist in pillarColors map
+    const badgeClass = colorClass.replace(/border-[a-z]+-[0-9]+/, "");
 
     const style = transform ? {
         transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
-        opacity: isDragging ? 0.5 : 1,
+        opacity: isDragging ? 0.8 : 1,
+        zIndex: isDragging ? 50 : 0,
     } : undefined;
 
     const handleQuickMove = (e: React.MouseEvent) => {
@@ -102,58 +106,61 @@ function DraggableStrategyCard({
     };
 
     return (
-        <div ref={setNodeRef} style={style}>
+        <div ref={setNodeRef} style={style} className="group">
             <Card
-                className="cursor-grab active:cursor-grabbing border-l-4 hover:shadow-lg transition-shadow"
-                style={{ borderLeftColor: strategy.pillar === "Credibilidade" ? "#3b82f6" : strategy.pillar === "Proximidade" ? "#22c55e" : "#9333ea" }}
+                className={`
+                    cursor-grab active:cursor-grabbing border-none 
+                    bg-white rounded-2xl shadow-sm hover:shadow-md 
+                    transition-all duration-200 hover:-translate-y-0.5
+                    ${isDragging ? 'shadow-xl rotate-2 ring-2 ring-primary/20' : ''}
+                `}
             >
-                <CardHeader className="pb-3">
+                <CardHeader className="p-4 pb-2">
                     <div className="flex justify-between items-start gap-2 mb-2">
                         <div className="flex items-center gap-2" {...listeners} {...attributes}>
-                            <GripVertical className="h-4 w-4 text-muted-foreground" />
-                            <Badge variant="outline" className={`${colorClass} border text-xs`}>
+                            <Badge variant="secondary" className={`${badgeClass} border-none rounded-full px-2 py-0.5 font-normal`}>
                                 {strategy.pillar}
                             </Badge>
                         </div>
-                        <span className="text-lg" title={strategy.phase}>
+                        <span className="text-sm bg-slate-50 p-1 rounded-full" title={strategy.phase}>
                             {phaseIcons[strategy.phase] || "📌"}
                         </span>
                     </div>
-                    <CardTitle className="text-sm leading-tight">{strategy.title}</CardTitle>
+                    <CardTitle className="text-base font-semibold leading-tight text-slate-800">{strategy.title}</CardTitle>
                 </CardHeader>
-                <CardContent>
-                    <p className="text-xs text-muted-foreground line-clamp-2 mb-3">{strategy.description}</p>
+                <CardContent className="p-4 pt-1">
+                    <p className="text-sm text-slate-500 line-clamp-3 mb-4 leading-relaxed">{strategy.description}</p>
 
-                    {/* Botões de Ação Rápida */}
-                    <div className="flex items-center gap-2 pt-2 border-t">
+                    {/* Botões de Ação Rápida - Invisíveis até hover (exceto em mobile/touch) */}
+                    <div className="flex items-center gap-2 pt-3 border-t border-slate-50 opacity-0 group-hover:opacity-100 transition-opacity">
                         <Button
                             variant="ghost"
                             size="sm"
                             onClick={handleEdit}
-                            className="h-7 text-xs flex-1"
+                            className="h-8 text-xs flex-1 rounded-full hover:bg-slate-100 text-slate-600"
                         >
-                            <Edit className="h-3 w-3 mr-1" />
+                            <Edit className="h-3.5 w-3.5 mr-1.5" />
                             Editar
                         </Button>
 
                         {strategy.status === "suggested" ? (
                             <Button
-                                variant="outline"
+                                variant="ghost"
                                 size="sm"
                                 onClick={handleQuickMove}
-                                className="h-7 text-xs border-green-300 text-green-700 hover:bg-green-50"
+                                className="h-8 text-xs text-green-700 hover:text-green-800 hover:bg-green-50 rounded-full"
                             >
-                                <ArrowRight className="h-3 w-3 mr-1" />
+                                <ArrowRight className="h-3.5 w-3.5 mr-1.5" />
                                 Aprovar
                             </Button>
                         ) : (
                             <Button
-                                variant="outline"
+                                variant="ghost"
                                 size="sm"
                                 onClick={handleQuickMove}
-                                className="h-7 text-xs border-orange-300 text-orange-700 hover:bg-orange-50"
+                                className="h-8 text-xs text-orange-700 hover:text-orange-800 hover:bg-orange-50 rounded-full"
                             >
-                                <ArrowLeft className="h-3 w-3 mr-1" />
+                                <ArrowLeft className="h-3.5 w-3.5 mr-1.5" />
                                 Voltar
                             </Button>
                         )}
@@ -182,19 +189,34 @@ function DroppableColumn({
     const { setNodeRef, isOver } = useDroppable({ id });
 
     return (
-        <div ref={setNodeRef} className={`h-full flex flex-col transition-colors ${isOver ? "ring-2 ring-primary ring-offset-2 rounded-xl" : ""}`}>
-            <div className="flex items-center justify-between mb-4 pb-3 border-b">
-                <div className="flex items-center gap-2">
+        <div
+            ref={setNodeRef}
+            className={`
+                h-full flex flex-col p-4 rounded-3xl transition-all duration-300
+                ${isOver
+                    ? "bg-slate-100/80 ring-2 ring-primary/20 scale-[1.01]"
+                    : "bg-slate-50/40 border-2 border-dashed border-slate-200 hover:border-slate-300 hover:bg-slate-50/60"
+                }
+            `}
+        >
+            <div className="flex items-center justify-between mb-4 pl-1 pr-1">
+                <div className="flex items-center gap-3 opacity-80">
                     {icon}
-                    <h3 className="text-lg font-semibold">{title} ({count})</h3>
+                    <h3 className="text-sm font-bold uppercase tracking-wide text-slate-600">{title} <span className="text-slate-400 ml-1">({count})</span></h3>
                 </div>
                 {actionButton}
             </div>
-            <div className={`flex-1 space-y-3 overflow-y-auto pr-2 ${count === 0 ? "border-2 border-dashed border-muted rounded-lg flex items-center justify-center" : ""}`}>
+
+            <div className="flex-1 space-y-3 overflow-y-auto pr-2 custom-scrollbar">
                 {count === 0 ? (
-                    <p className="text-muted-foreground text-sm text-center p-8 max-w-xs mx-auto">
-                        Arraste estratégias aqui para {id === "approved" ? "aprovar" : "revisar"}
-                    </p>
+                    <div className="h-40 flex flex-col items-center justify-center text-center p-6 border-2 border-dashed border-slate-100 rounded-2xl bg-white/50">
+                        <div className="w-12 h-12 rounded-full bg-slate-50 flex items-center justify-center mb-3">
+                            <Sparkles className="w-5 h-5 text-slate-300" />
+                        </div>
+                        <p className="text-sm text-slate-400 font-medium">
+                            {id === "approved" ? "Arraste para aprovar" : "Lista vazia"}
+                        </p>
+                    </div>
                 ) : (
                     children
                 )}
@@ -373,7 +395,8 @@ export default function CampaignSetupPage() {
         });
 
         try {
-            const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
+            const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+            console.log('🔌 [SETUP] API Base URL:', API_BASE);
 
             // Processar CSV (locations)
             const csvDoc = documents.find(d => d.file_type === 'csv');
@@ -381,7 +404,7 @@ export default function CampaignSetupPage() {
                 console.log('📊 [PROCESS] Processando CSV:', csvDoc.file_url);
                 // Rota correta: /api/ingest/locations
                 // Payload correto: file_url
-                const csvResponse = await fetch(`${BACKEND_URL}/api/ingest/locations`, {
+                const csvResponse = await fetch(`${API_BASE}/api/ingest/locations`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -401,7 +424,7 @@ export default function CampaignSetupPage() {
             if (pdfDoc && chunksCount === 0) {
                 console.log('📄 [PROCESS] Processando PDF:', pdfDoc.file_url);
                 // Payload correto: file_url
-                const pdfResponse = await fetch(`${BACKEND_URL}/api/ingest/pdf`, {
+                const pdfResponse = await fetch(`${API_BASE}/api/ingest/pdf`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -688,12 +711,10 @@ export default function CampaignSetupPage() {
     console.log('🎨 [RENDER] Suggested (from selected run):', suggestedStrategies.length, 'Approved:', approvedStrategies.length);
 
     return (
-        <div className="flex h-screen overflow-hidden bg-gradient-to-br from-slate-50 to-slate-100">
-            <DashboardSidebar campaignId={campaignId} />
-
+        <div className="flex h-screen overflow-hidden bg-background">
             <div className="flex-1 flex flex-col overflow-hidden">
                 {/* Header */}
-                <div className="border-b bg-white/90 backdrop-blur-sm px-6 py-4 shadow-sm space-y-4">
+                <div className="border-b border-border bg-card/50 backdrop-blur-md px-6 py-4 shadow-sm space-y-4">
                     {/* Manifesto da Campanha */}
                     <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-lg p-4">
                         <h2 className="text-sm font-semibold text-purple-900 mb-1">📜 Manifesto da Campanha</h2>

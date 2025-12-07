@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
-import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,6 +26,13 @@ interface Location {
     color: string;
 }
 
+interface LocationResult {
+    id: string;
+    candidate_name: string;
+    votes: number;
+    location_id: string;
+}
+
 export default function MapaInterativoPage() {
     const params = useParams();
     const campaignId = params.id as string;
@@ -40,6 +47,50 @@ export default function MapaInterativoPage() {
     const [searchQuery, setSearchQuery] = useState('');
     const [centerPosition, setCenterPosition] = useState<[number, number] | undefined>(undefined);
     const [showControls, setShowControls] = useState(false);
+
+    // Estado para resultados detalhados (Location Results)
+    const [locationResults, setLocationResults] = useState<LocationResult[]>([]);
+    const [loadingResults, setLoadingResults] = useState(false);
+    const [campaignName, setCampaignName] = useState<string>("");
+
+    // Buscar nome da campanha para destaque
+    useEffect(() => {
+        async function fetchCampaignName() {
+            if (!campaignId) return;
+            const { data } = await supabase.from('campaigns').select('candidate_name').eq('id', campaignId).single();
+            if (data) setCampaignName(data.candidate_name);
+        }
+        fetchCampaignName();
+    }, [campaignId]);
+
+    // Buscar resultados quando um local é selecionado
+    useEffect(() => {
+        async function fetchResults() {
+            if (!selectedLocation) {
+                setLocationResults([]); // Limpa resultados anteriores ao fechar ou mudar
+                return;
+            }
+
+            setLoadingResults(true);
+
+            try {
+                const { data, error } = await supabase
+                    .from('location_results')
+                    .select('*')
+                    .eq('location_id', selectedLocation.id)
+                    .order('votes', { ascending: false }); // Ranking do 1º ao último
+
+                if (error) throw error;
+                setLocationResults(data || []);
+            } catch (err) {
+                console.error("Erro ao buscar resultados do local:", err);
+                setLocationResults([]);
+            } finally {
+                setLoadingResults(false);
+            }
+        }
+        fetchResults();
+    }, [selectedLocation]);
 
     useEffect(() => {
         const fetchLocations = async () => {
@@ -136,23 +187,6 @@ export default function MapaInterativoPage() {
                                 <option value="carto-dark">Carto Dark</option>
                             </select>
                         </div>
-                        <div className="space-y-2">
-                            <label className="text-xs font-bold uppercase text-muted-foreground">Estilo dos Pins</label>
-                            <select
-                                className="w-full text-sm p-2 rounded border bg-background"
-                                value={pinStyle}
-                                onChange={(e) => setPinStyle(e.target.value)}
-                            >
-                                <option value="classic-red">Clássico Vermelho</option>
-                                <option value="classic-blue">Clássico Azul</option>
-                                <option value="classic-green">Clássico Verde</option>
-                                <option value="modern-red">Moderno Vermelho</option>
-                                <option value="modern-blue">Moderno Azul</option>
-                                <option value="modern-purple">Moderno Roxo</option>
-                                <option value="location-red">Localização Vermelha</option>
-                                <option value="location-blue">Localização Azul</option>
-                            </select>
-                        </div>
                     </div>
                 )}
             </div>
@@ -177,15 +211,15 @@ export default function MapaInterativoPage() {
                 <h4 className="text-xs font-bold uppercase text-muted-foreground mb-2">Performance por Região</h4>
                 <div className="space-y-1.5">
                     <div className="flex items-center gap-2 text-xs">
-                        <div className="w-3 h-3 rounded-full bg-green-500" />
+                        <div className="w-3 h-3 rounded-full bg-emerald-500 border border-white shadow-sm" />
                         <span>Alta Performance (&gt; 2000 votos)</span>
                     </div>
                     <div className="flex items-center gap-2 text-xs">
-                        <div className="w-3 h-3 rounded-full bg-yellow-500" />
+                        <div className="w-3 h-3 rounded-full bg-amber-400 border border-white shadow-sm" />
                         <span>Média Performance (1000-2000)</span>
                     </div>
                     <div className="flex items-center gap-2 text-xs">
-                        <div className="w-3 h-3 rounded-full bg-red-500" />
+                        <div className="w-3 h-3 rounded-full bg-rose-500 border border-white shadow-sm" />
                         <span>Baixa Performance (&lt; 1000)</span>
                     </div>
                 </div>
@@ -210,9 +244,10 @@ export default function MapaInterativoPage() {
                 />
             </div>
 
-            {/* Sheet de Detalhes */}
+            {/* Sheet de Detalhes - Z-Index Fix */}
             <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
-                <SheetContent className="w-[400px] sm:w-[540px] overflow-y-auto p-0 gap-0">
+                <SheetContent className="w-[400px] sm:w-[540px] overflow-y-auto p-0 gap-0 z-[9999]">
+                    <SheetTitle className="hidden">Detalhes do Local</SheetTitle>
                     {selectedLocation && (
                         <div className="flex flex-col h-full">
                             {/* Header com imagem/mapa estático */}
@@ -236,7 +271,7 @@ export default function MapaInterativoPage() {
                                     <h2 className="text-xl font-bold">{selectedLocation.name}</h2>
                                     <p className="text-sm text-muted-foreground mt-1">{selectedLocation.address}</p>
                                     <div className="flex gap-2 mt-3">
-                                        <span className="bg-slate-100 text-slate-600 text-xs px-2 py-1 rounded border">ID: {selectedLocation.id.substring(0, 8)}</span>
+                                        <span className="bg-slate-100 text-slate-600 text-xs px-2 py-1 rounded border">ID: #{selectedLocation.id}</span>
                                         <span className="bg-blue-50 text-blue-600 text-xs px-2 py-1 rounded border border-blue-100 font-medium">
                                             {selectedLocation.votes.toLocaleString()} VOTOS
                                         </span>
@@ -271,26 +306,60 @@ export default function MapaInterativoPage() {
 
                                 {/* Top Candidatos (Placeholder por enquanto) */}
                                 <div className="space-y-4">
-                                    <h3 className="text-xs font-bold uppercase text-muted-foreground">Top 3 Candidatos no Local</h3>
+                                    <h3 className="text-xs font-bold uppercase text-muted-foreground flex justify-between items-center">
+                                        <span>Ranking de Candidatos</span>
+                                        {loadingResults && <Loader2 className="h-3 w-3 animate-spin" />}
+                                    </h3>
+
                                     <div className="space-y-3">
-                                        {[
-                                            { name: "CANDIDATO A", percent: 45.1, color: "bg-orange-500" },
-                                            { name: "CANDIDATO B", percent: 30.2, color: "bg-slate-400" },
-                                            { name: "CANDIDATO C", percent: 15.5, color: "bg-red-500" }
-                                        ].map((cand, idx) => (
-                                            <div key={idx} className="flex items-center justify-between p-3 border rounded-lg hover:bg-slate-50 transition-colors">
-                                                <div className="flex items-center gap-3">
-                                                    <div className={`w-8 h-8 rounded-full ${cand.color} flex items-center justify-center text-white text-xs font-bold`}>
-                                                        {idx + 1}º
+                                        {!loadingResults && locationResults.length === 0 && (
+                                            <p className="text-sm text-muted-foreground italic">Nenhum resultado registrado para este local.</p>
+                                        )}
+
+                                        {locationResults.map((cand, idx) => {
+                                            const totalVotes = selectedLocation.votes || 1; // Evita divisão por zero
+                                            const percent = ((cand.votes / totalVotes) * 100).toFixed(1);
+                                            const isMyCampaign = campaignName && cand.candidate_name.toLowerCase().includes(campaignName.toLowerCase());
+
+                                            // Cores dinâmicas para o ranking
+                                            let rankColor = "bg-slate-200 text-slate-700";
+                                            if (idx === 0) rankColor = "bg-yellow-100 text-yellow-700 border-yellow-200 border";
+                                            if (idx === 1) rankColor = "bg-slate-100 text-slate-700 border-slate-200 border";
+                                            if (idx === 2) rankColor = "bg-orange-50 text-orange-800 border-orange-100 border";
+
+                                            // Cor da barra de progresso
+                                            const progressColor = isMyCampaign ? "bg-blue-600" : (idx === 0 ? "bg-emerald-500" : "bg-slate-300");
+
+                                            return (
+                                                <div key={cand.id} className={`flex flex-col gap-1 p-2 rounded-lg transition-colors ${isMyCampaign ? 'bg-blue-50/50 border border-blue-100' : 'hover:bg-slate-50'}`}>
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${rankColor}`}>
+                                                                {idx + 1}º
+                                                            </div>
+                                                            <div>
+                                                                <p className={`text-sm font-bold ${isMyCampaign ? 'text-blue-700' : 'text-slate-800'}`}>
+                                                                    {cand.candidate_name}
+                                                                    {isMyCampaign && <span className="ml-1.5 text-[10px] bg-blue-100 text-blue-700 px-1 py-0.5 rounded">VOCÊ</span>}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                        <div className="text-right">
+                                                            <span className="text-sm font-bold block">{cand.votes.toLocaleString()}</span>
+                                                            <span className="text-[10px] text-muted-foreground">{percent}%</span>
+                                                        </div>
                                                     </div>
-                                                    <div>
-                                                        <p className="text-sm font-bold">{cand.name}</p>
-                                                        <p className="text-xs text-muted-foreground">-- votos</p>
+
+                                                    {/* Barra de Progresso */}
+                                                    <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden mt-1">
+                                                        <div
+                                                            className={`h-full rounded-full ${progressColor}`}
+                                                            style={{ width: `${percent}%` }}
+                                                        />
                                                     </div>
                                                 </div>
-                                                <span className="text-sm font-bold">{cand.percent}%</span>
-                                            </div>
-                                        ))}
+                                            );
+                                        })}
                                     </div>
                                 </div>
                             </div>

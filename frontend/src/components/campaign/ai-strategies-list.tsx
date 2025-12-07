@@ -2,13 +2,14 @@
 
 import React, { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
-import { Loader2, RefreshCw, Rocket, CheckCircle2, X, ChevronDown, Target, Users, Zap } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Loader2, RefreshCw, CheckCircle2, Target, Users, Zap, LayoutGrid, ListFilter, Pencil, Rocket, X, Check } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
+import { StrategyDetailModal } from "@/components/campaign/StrategyDetailSheet";
 
 interface Strategy {
     id: string;
@@ -21,46 +22,45 @@ interface Strategy {
 
 // Mapeamento de fases para labels amigáveis
 const PHASE_CONFIG = {
-    pre_campaign: { label: "Diagnóstico", icon: Target, color: "bg-blue-100 text-blue-800" },
-    campaign: { label: "Campanha", icon: Users, color: "bg-green-100 text-green-800" },
-    final_sprint: { label: "Reta Final", icon: Zap, color: "bg-orange-100 text-orange-800" },
+    pre_campaign: { label: "Diagnóstico", icon: Target, color: "bg-blue-50 text-blue-700 border-blue-200" },
+    campaign: { label: "Campanha", icon: Users, color: "bg-green-50 text-green-700 border-green-200" },
+    final_sprint: { label: "Reta Final", icon: Zap, color: "bg-orange-50 text-orange-700 border-orange-200" },
 } as const;
 
-// Mapa de normalização: converte valores do banco para as chaves das abas
-// O banco pode ter: 'diagnostico', 'campanha_rua', 'reta_final'  
-// Ou alternativas: 'Diagnóstico', 'Campanha de Rua', 'Reta Final'
-// As abas usam: 'pre_campaign', 'campaign', 'final_sprint'
+// Mapa de normalização
 const PHASE_NORMALIZATION: Record<string, string> = {
-    // Valores técnicos do banco (snake_case)
     'diagnostico': 'pre_campaign',
     'campanha_rua': 'campaign',
     'campanha': 'campaign',
     'reta_final': 'final_sprint',
-    // Labels amigáveis (caso venham assim)
     'Diagnóstico': 'pre_campaign',
     'Campanha de Rua': 'campaign',
     'Campanha': 'campaign',
     'Reta Final': 'final_sprint',
-    // Valores já normalizados (passthrough)
     'pre_campaign': 'pre_campaign',
     'campaign': 'campaign',
     'final_sprint': 'final_sprint',
 };
 
-// Função para normalizar o valor da fase
 const normalizePhase = (phase: string | null | undefined): string => {
     if (!phase) return 'unknown';
     return PHASE_NORMALIZATION[phase] || PHASE_NORMALIZATION[phase.toLowerCase()] || phase;
 };
 
-export function AIStrategiesList({ campaignId }: { campaignId: string }) {
+export function AIStrategiesList({ campaignId, onTaskCreated }: { campaignId: string; onTaskCreated?: () => void }) {
     const [strategies, setStrategies] = useState<Strategy[]>([]);
     const [loading, setLoading] = useState(true);
     const [generating, setGenerating] = useState(false);
-    const [activatingIds, setActivatingIds] = useState<Set<string>>(new Set());
-    const [rejectingIds, setRejectingIds] = useState<Set<string>>(new Set());
     const [activeTab, setActiveTab] = useState("all");
-    const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
+    const [selectedStrategy, setSelectedStrategy] = useState<Strategy | null>(null);
+    const [isSheetOpen, setIsSheetOpen] = useState(false);
+
+    // Novas States para Bulk Actions e feedback
+    const [selectedIds, setSelectedIds] = useState<string[]>([]);
+    const [activatingIds, setActivatingIds] = useState<string[]>([]);
+    const [successIds, setSuccessIds] = useState<string[]>([]);
+    const [bulkActivating, setBulkActivating] = useState(false);
+
     const supabase = createClient();
     const { toast } = useToast();
 
@@ -87,15 +87,15 @@ export function AIStrategiesList({ campaignId }: { campaignId: string }) {
 
     useEffect(() => {
         fetchStrategies();
-        const interval = setInterval(fetchStrategies, 10000); // Aumentado para 10s
+        const interval = setInterval(fetchStrategies, 10000);
         return () => clearInterval(interval);
     }, [campaignId]);
 
     const handleGenerate = async () => {
         setGenerating(true);
         toast({
-            title: "🚀 Iniciando Genesis Crew",
-            description: "A IA está analisando os dados e gerando estratégias...",
+            title: "🚀 Processando...",
+            description: "A IA está analisando o cenário...",
         });
 
         try {
@@ -108,114 +108,112 @@ export function AIStrategiesList({ campaignId }: { campaignId: string }) {
             if (!response.ok) throw new Error("Falha na requisição");
 
             toast({
-                title: "✅ Processo iniciado",
-                description: "Aguarde alguns instantes enquanto as estratégias são criadas.",
+                title: "✅ Iniciado!",
+                description: "Novas estratégias aparecerão em breve.",
             });
         } catch (error) {
             toast({
                 title: "Erro",
-                description: "Não foi possível iniciar a geração de estratégias.",
+                description: "Não foi possível iniciar a geração.",
                 variant: "destructive",
             });
             setGenerating(false);
         }
     };
 
-    const handleActivateStrategy = async (strategyId: string, strategyTitle: string) => {
-        setActivatingIds(prev => new Set(prev).add(strategyId));
-
+    const activateSingle = async (strategyId: string, strategyTitle: string) => {
+        setActivatingIds(prev => [...prev, strategyId]);
         try {
             const response = await fetch(
                 `/api/campaign/${campaignId}/strategies/${strategyId}/activate`,
                 { method: "POST", headers: { "Content-Type": "application/json" } }
             );
 
-            let data;
-            try {
-                data = await response.json();
-            } catch {
-                throw new Error("Resposta inválida do servidor");
-            }
+            if (!response.ok) throw new Error("Falha ao ativar");
 
-            if (!response.ok) {
-                throw new Error(data?.detail || data?.error || "Falha ao ativar");
-            }
+            // Sucesso Visual e Callback
+            setSuccessIds(prev => [...prev, strategyId]);
+            if (onTaskCreated) onTaskCreated();
 
-            toast({
-                title: "✅ Missão Ativada!",
-                description: `"${strategyTitle}" foi adicionada ao Kanban.`,
-            });
+            // Aguarda 1s para o usuário ver o sucesso
+            setTimeout(() => {
+                setStrategies(prev =>
+                    prev.map(s => s.id === strategyId ? { ...s, status: "executed" } : s)
+                );
+                setSuccessIds(prev => prev.filter(id => id !== strategyId));
+                setActivatingIds(prev => prev.filter(id => id !== strategyId));
+                setSelectedIds(prev => prev.filter(id => id !== strategyId));
+            }, 1000);
 
-            setStrategies(prev =>
-                prev.map(s => s.id === strategyId ? { ...s, status: "executed" } : s)
-            );
-        } catch (error: any) {
+        } catch (error) {
             console.error("Erro ao ativar:", error);
             toast({
-                title: "❌ Erro na Ativação",
-                description: error.message || "Não foi possível ativar.",
+                title: "Erro",
+                description: "Não foi possível ativar.",
                 variant: "destructive",
             });
-        } finally {
-            setActivatingIds(prev => {
-                const newSet = new Set(prev);
-                newSet.delete(strategyId);
-                return newSet;
-            });
+            setActivatingIds(prev => prev.filter(id => id !== strategyId));
         }
     };
 
-    const handleRejectStrategy = async (strategyId: string, strategyTitle: string) => {
-        setRejectingIds(prev => new Set(prev).add(strategyId));
+    const handleActivateStrategy = async (strategyId: string, strategyTitle: string) => {
+        if (activatingIds.includes(strategyId) || successIds.includes(strategyId)) return;
+        await activateSingle(strategyId, strategyTitle);
+    };
 
+    const handleBulkActivate = async () => {
+        if (selectedIds.length === 0) return;
+
+        setBulkActivating(true);
+        toast({ title: "Ativando estratégias..." });
+
+        // Ativa todas em paralelo
+        // Para evitar race conditions visuais, marcamos todas como activating
+        setActivatingIds(prev => [...prev, ...selectedIds]);
+
+        const promises = selectedIds.map(id => {
+            const strategy = strategies.find(s => s.id === id);
+            return activateSingle(id, strategy?.title || "Estratégia");
+        });
+
+        await Promise.all(promises);
+        setBulkActivating(false);
+        toast({ title: "✅ Processo finalizado!" });
+    };
+
+    const handleRejectStrategy = async (strategyId: string, strategyTitle: string) => {
         try {
             const response = await fetch(
                 `/api/campaign/${campaignId}/strategies/${strategyId}/reject`,
                 { method: "POST", headers: { "Content-Type": "application/json" } }
             );
 
-            if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.detail || "Falha ao rejeitar");
-            }
+            if (!response.ok) throw new Error("Falha ao rejeitar");
 
             toast({
-                title: "🗑️ Sugestão Removida",
+                title: "🗑️ Sugestão Descartada",
                 description: `"${strategyTitle}" foi removida da lista.`,
             });
 
             setStrategies(prev => prev.filter(s => s.id !== strategyId));
+            setSelectedIds(prev => prev.filter(id => id !== strategyId));
         } catch (error: any) {
             toast({
                 title: "Erro",
-                description: error.message || "Não foi possível rejeitar.",
+                description: "Não foi possível rejeitar.",
                 variant: "destructive",
-            });
-        } finally {
-            setRejectingIds(prev => {
-                const newSet = new Set(prev);
-                newSet.delete(strategyId);
-                return newSet;
             });
         }
     };
 
-    const toggleCard = (id: string) => {
-        setExpandedCards(prev => {
-            const newSet = new Set(prev);
-            if (newSet.has(id)) {
-                newSet.delete(id);
-            } else {
-                newSet.add(id);
-            }
-            return newSet;
-        });
+    const handleCardClick = (strategy: Strategy) => {
+        setSelectedStrategy(strategy);
+        setIsSheetOpen(true);
     };
 
-    // Filtro: ocultar executadas
+    // Filter Logic
     const visibleStrategies = strategies.filter(s => s.status !== "executed");
 
-    // Contadores por fase (usando normalizePhase para compatibilidade com diferentes formatos do banco)
     const counts = {
         all: visibleStrategies.length,
         pre_campaign: visibleStrategies.filter(s => normalizePhase(s.phase) === "pre_campaign").length,
@@ -223,189 +221,232 @@ export function AIStrategiesList({ campaignId }: { campaignId: string }) {
         final_sprint: visibleStrategies.filter(s => normalizePhase(s.phase) === "final_sprint").length,
     };
 
-    // Filtrar por tab ativa (usando normalizePhase)
     const filteredStrategies = activeTab === "all"
         ? visibleStrategies
         : visibleStrategies.filter(s => normalizePhase(s.phase) === activeTab);
 
-    // Agrupar por pilar
-    const groupedByPillar = filteredStrategies.reduce((acc, strategy) => {
-        const pillar = strategy.pillar || "Outros";
-        if (!acc[pillar]) acc[pillar] = [];
-        acc[pillar].push(strategy);
-        return acc;
-    }, {} as Record<string, Strategy[]>);
+    // Bulk Select Logic
+    const allSelected = filteredStrategies.length > 0 && filteredStrategies.every(s => selectedIds.includes(s.id));
+
+    const toggleSelectAll = () => {
+        if (allSelected) {
+            const idsToRemove = filteredStrategies.map(s => s.id);
+            setSelectedIds(prev => prev.filter(id => !idsToRemove.includes(id)));
+        } else {
+            const idsToAdd = filteredStrategies.map(s => s.id);
+            setSelectedIds(prev => Array.from(new Set([...prev, ...idsToAdd])));
+        }
+    };
+
+    const toggleSelection = (id: string) => {
+        setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+    };
 
     if (loading && strategies.length === 0) {
         return (
-            <div className="flex justify-center p-8">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <div className="flex justify-center p-12">
+                <Loader2 className="h-10 w-10 animate-spin text-primary/50" />
             </div>
         );
     }
 
     return (
-        <div className="space-y-6">
-            {/* Header */}
-            <div className="flex items-center justify-between">
+        <div className="space-y-8 pb-20">
+            {/* Header Clean */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                    <h3 className="text-xl font-bold">🧠 Sugestões da Genesis AI</h3>
-                    <p className="text-sm text-muted-foreground">
-                        {visibleStrategies.length} estratégias disponíveis para ativação
+                    <h2 className="text-2xl font-bold tracking-tight text-slate-900">Feed de Oportunidades</h2>
+                    <p className="text-muted-foreground">
+                        Explore e ative estratégias sugeridas pela IA para sua campanha.
                     </p>
                 </div>
-                <Button onClick={handleGenerate} disabled={generating} variant="outline">
-                    {generating ? (
-                        <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Gerando...</>
-                    ) : (
-                        <><RefreshCw className="mr-2 h-4 w-4" /> Gerar Novas</>
-                    )}
-                </Button>
+                <div className="flex items-center gap-3">
+                    <Button onClick={handleGenerate} disabled={generating} size="sm" className="rounded-full shadow-lg shadow-primary/20">
+                        {generating ? (
+                            <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Analisando...</>
+                        ) : (
+                            <><RefreshCw className="mr-2 h-4 w-4" /> Nova Análise</>
+                        )}
+                    </Button>
+                </div>
             </div>
 
-            {/* Tabs por Fase */}
+            {/* Tabs Modernas */}
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                <TabsList className="grid w-full grid-cols-4 h-12">
-                    <TabsTrigger value="all" className="gap-2">
-                        Todas
-                        <Badge variant="secondary" className="ml-1">{counts.all}</Badge>
-                    </TabsTrigger>
-                    <TabsTrigger value="pre_campaign" className="gap-2">
-                        <Target className="h-4 w-4" />
-                        Diagnóstico
-                        <Badge variant="secondary" className="ml-1">{counts.pre_campaign}</Badge>
-                    </TabsTrigger>
-                    <TabsTrigger value="campaign" className="gap-2">
-                        <Users className="h-4 w-4" />
-                        Campanha
-                        <Badge variant="secondary" className="ml-1">{counts.campaign}</Badge>
-                    </TabsTrigger>
-                    <TabsTrigger value="final_sprint" className="gap-2">
-                        <Zap className="h-4 w-4" />
-                        Reta Final
-                        <Badge variant="secondary" className="ml-1">{counts.final_sprint}</Badge>
-                    </TabsTrigger>
-                </TabsList>
+                <div className="flex overflow-auto pb-2 -mx-4 px-4 md:mx-0 md:px-0">
+                    <TabsList className="h-12 w-full md:w-auto p-1 bg-slate-100/50 rounded-full">
+                        <TabsTrigger value="all" className="rounded-full px-6 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                            Todas <span className="ml-2 opacity-50 text-xs">{counts.all}</span>
+                        </TabsTrigger>
+                        <TabsTrigger value="pre_campaign" className="rounded-full px-6 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                            Diagnóstico <span className="ml-2 opacity-50 text-xs">{counts.pre_campaign}</span>
+                        </TabsTrigger>
+                        <TabsTrigger value="campaign" className="rounded-full px-6 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                            Campanha <span className="ml-2 opacity-50 text-xs">{counts.campaign}</span>
+                        </TabsTrigger>
+                        <TabsTrigger value="final_sprint" className="rounded-full px-6 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                            Reta Final <span className="ml-2 opacity-50 text-xs">{counts.final_sprint}</span>
+                        </TabsTrigger>
+                    </TabsList>
+                </div>
 
-                <TabsContent value={activeTab} className="mt-6">
-                    {filteredStrategies.length === 0 ? (
-                        <Card className="bg-muted/50 border-dashed">
-                            <CardContent className="flex flex-col items-center justify-center py-10 text-center">
-                                <CheckCircle2 className="h-12 w-12 text-green-500 mb-4" />
-                                <p className="text-lg font-semibold mb-2">
-                                    {activeTab === "all"
-                                        ? "🎉 Todas as Estratégias Foram Ativadas!"
-                                        : `Nenhuma estratégia pendente nesta fase.`}
-                                </p>
-                                <p className="text-muted-foreground text-sm">
-                                    Gere novas estratégias ou mude de aba.
-                                </p>
-                            </CardContent>
-                        </Card>
-                    ) : (
-                        <div className="space-y-6">
-                            {Object.entries(groupedByPillar).map(([pillar, pillarStrategies]) => (
-                                <div key={pillar} className="space-y-3">
-                                    {/* Título do Pilar */}
-                                    <div className="flex items-center gap-2">
-                                        <div className="h-1 w-1 rounded-full bg-primary" />
-                                        <h4 className="font-semibold text-base text-primary">{pillar}</h4>
-                                        <Badge variant="outline" className="text-xs">
-                                            {pillarStrategies.length} itens
-                                        </Badge>
-                                    </div>
+                <TabsContent value={activeTab} className="mt-8 animate-in fade-in-50 duration-500">
 
-                                    {/* Cards do Pilar */}
-                                    <div className="grid gap-3">
-                                        {pillarStrategies.map((strategy) => {
-                                            const isActivating = activatingIds.has(strategy.id);
-                                            const isRejecting = rejectingIds.has(strategy.id);
-                                            const isExpanded = expandedCards.has(strategy.id);
-                                            const phaseConfig = PHASE_CONFIG[normalizePhase(strategy.phase) as keyof typeof PHASE_CONFIG];
+                    {/* Bulk Action Bar */}
+                    {filteredStrategies.length > 0 && (
+                        <div className="flex items-center justify-between mb-4 px-1">
+                            <div className="flex items-center gap-2">
+                                <Checkbox
+                                    id="select-all"
+                                    checked={allSelected}
+                                    onCheckedChange={toggleSelectAll}
+                                />
+                                <label htmlFor="select-all" className="text-sm text-slate-500 cursor-pointer select-none">
+                                    Selecionar tudo
+                                </label>
+                            </div>
 
-                                            return (
-                                                <Collapsible
-                                                    key={strategy.id}
-                                                    open={isExpanded}
-                                                    onOpenChange={() => toggleCard(strategy.id)}
-                                                >
-                                                    <Card className="border-l-4 border-l-purple-500 hover:shadow-md transition-shadow">
-                                                        {/* Header Sempre Visível */}
-                                                        <CollapsibleTrigger asChild>
-                                                            <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors py-3">
-                                                                <div className="flex items-center justify-between">
-                                                                    <div className="flex items-center gap-3 flex-1">
-                                                                        <ChevronDown
-                                                                            className={`h-5 w-5 text-muted-foreground transition-transform ${isExpanded ? "rotate-180" : ""}`}
-                                                                        />
-                                                                        <div className="flex-1">
-                                                                            <CardTitle className="text-sm font-medium line-clamp-1">
-                                                                                {strategy.title}
-                                                                            </CardTitle>
-                                                                        </div>
-                                                                    </div>
-                                                                    <div className="flex items-center gap-2">
-                                                                        {phaseConfig && (
-                                                                            <Badge className={`text-[10px] ${phaseConfig.color}`}>
-                                                                                {phaseConfig.label}
-                                                                            </Badge>
-                                                                        )}
-                                                                        {/* Botão X para Rejeitar */}
-                                                                        <button
-                                                                            onClick={(e) => {
-                                                                                e.stopPropagation();
-                                                                                handleRejectStrategy(strategy.id, strategy.title);
-                                                                            }}
-                                                                            disabled={isRejecting || isActivating}
-                                                                            className="p-1 rounded-full hover:bg-red-100 text-gray-400 hover:text-red-500 transition-colors disabled:opacity-50"
-                                                                            title="Rejeitar Sugestão"
-                                                                        >
-                                                                            {isRejecting ? (
-                                                                                <Loader2 className="h-4 w-4 animate-spin" />
-                                                                            ) : (
-                                                                                <X className="h-4 w-4" />
-                                                                            )}
-                                                                        </button>
-                                                                    </div>
-                                                                </div>
-                                                            </CardHeader>
-                                                        </CollapsibleTrigger>
-
-                                                        {/* Body Retrátil */}
-                                                        <CollapsibleContent>
-                                                            <CardContent className="pt-0 pb-4">
-                                                                <p className="text-sm text-muted-foreground mb-4">
-                                                                    {strategy.description}
-                                                                </p>
-
-                                                                {/* Footer com Ações */}
-                                                                <div className="flex justify-end gap-2">
-                                                                    <Button
-                                                                        size="sm"
-                                                                        onClick={() => handleActivateStrategy(strategy.id, strategy.title)}
-                                                                        disabled={isActivating || isRejecting}
-                                                                        className="gap-1"
-                                                                    >
-                                                                        {isActivating ? (
-                                                                            <><Loader2 className="h-3 w-3 animate-spin" /> Ativando...</>
-                                                                        ) : (
-                                                                            <><Rocket className="h-3 w-3" /> Ativar Missão</>
-                                                                        )}
-                                                                    </Button>
-                                                                </div>
-                                                            </CardContent>
-                                                        </CollapsibleContent>
-                                                    </Card>
-                                                </Collapsible>
-                                            );
-                                        })}
-                                    </div>
+                            {selectedIds.length > 0 && (
+                                <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-5 duration-300">
+                                    <span className="text-xs text-slate-400 font-medium">
+                                        {selectedIds.length} selecionadas
+                                    </span>
+                                    <Button
+                                        size="sm"
+                                        className="h-8 rounded-full bg-primary text-white shadow-md hover:shadow-lg transition-all"
+                                        onClick={handleBulkActivate}
+                                        disabled={bulkActivating}
+                                    >
+                                        {bulkActivating ? <Loader2 className="w-3 h-3 animate-spin mr-2" /> : <Rocket className="w-3 h-3 mr-2" />}
+                                        Aprovar Seleção
+                                    </Button>
                                 </div>
-                            ))}
+                            )}
+                        </div>
+                    )}
+
+                    {filteredStrategies.length === 0 ? (
+                        <div className="text-center py-20 bg-slate-50/50 rounded-3xl border border-dashed border-slate-200">
+                            <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm">
+                                <CheckCircle2 className="h-8 w-8 text-green-500" />
+                            </div>
+                            <h3 className="text-lg font-medium text-slate-900">Tudo limpo por aqui!</h3>
+                            <p className="text-slate-500 max-w-sm mx-auto mt-2">
+                                Todas as estratégias desta fase já foram processadas. Gere novas análises para continuar.
+                            </p>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                            {filteredStrategies.map((strategy) => {
+                                const phaseConfig = PHASE_CONFIG[normalizePhase(strategy.phase) as keyof typeof PHASE_CONFIG];
+                                const isSelected = selectedIds.includes(strategy.id);
+                                const isActivating = activatingIds.includes(strategy.id);
+                                const isSuccess = successIds.includes(strategy.id);
+
+                                return (
+                                    <div
+                                        key={strategy.id}
+                                        className={`group relative bg-white rounded-2xl p-5 shadow-sm border transition-all duration-300 flex flex-col h-[260px] ${isSelected ? 'border-primary/50 shadow-md bg-primary/5' : 'border-slate-100 hover:shadow-xl hover:shadow-slate-200/50 hover:-translate-y-1'}`}
+                                    >
+                                        {/* Selection Checkbox (Top Left) */}
+                                        <div className="absolute top-3 left-3 z-20">
+                                            <Checkbox
+                                                checked={isSelected}
+                                                onCheckedChange={() => toggleSelection(strategy.id)}
+                                                className="data-[state=checked]:bg-primary data-[state=checked]:border-primary border-slate-300 h-5 w-5 rounded-md"
+                                            />
+                                        </div>
+
+                                        {/* Discrete Reject Button (Top Right) */}
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleRejectStrategy(strategy.id, strategy.title);
+                                            }}
+                                            className="absolute top-3 right-3 p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-full opacity-0 group-hover:opacity-100 transition-all z-20"
+                                            title="Descartar"
+                                        >
+                                            <X className="w-4 h-4" />
+                                        </button>
+
+                                        {/* Clickable Body */}
+                                        <div className="flex-1 cursor-pointer flex flex-col pl-6" onClick={() => handleCardClick(strategy)}>
+                                            {/* Badge Header */}
+                                            <div className="flex items-start justify-end mb-3 pr-8 min-h-[24px]">
+                                                {/* Moved Badge to Right to allow Checkbox on Left */}
+                                                <Badge variant="outline" className="rounded-full font-normal border-purple-100 bg-purple-50 text-purple-700 text-[10px] px-2 py-0.5">
+                                                    {strategy.pillar}
+                                                </Badge>
+                                                {phaseConfig && (
+                                                    <div className={`ml-2 p-1 rounded-full ${phaseConfig.color} bg-opacity-20`}>
+                                                        <phaseConfig.icon className="w-3 h-3" />
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* Content */}
+                                            <div className="flex-1">
+                                                <h3 className="font-bold text-base text-slate-900 mb-2 leading-tight line-clamp-2 group-hover:text-primary transition-colors">
+                                                    {strategy.title}
+                                                </h3>
+                                                <p className="text-sm text-slate-500 line-clamp-4 leading-relaxed">
+                                                    {strategy.description}
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        {/* Minimalist Footer Action Bar */}
+                                        <div className="mt-3 pt-3 border-t border-slate-50 flex items-center justify-between">
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-8 w-8 text-slate-400 hover:text-primary hover:bg-slate-50 rounded-full"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleCardClick(strategy);
+                                                }}
+                                                title="Revisar e Editar"
+                                            >
+                                                <Pencil className="w-4 h-4" />
+                                            </Button>
+
+                                            <Button
+                                                size={isSuccess ? "default" : "icon"}
+                                                className={`h-8 rounded-full shadow-md transition-all active:scale-95 ${isSuccess
+                                                    ? 'bg-green-500 hover:bg-green-600 text-white w-auto px-4'
+                                                    : 'bg-primary hover:bg-primary/90 text-white w-8'
+                                                    }`}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleActivateStrategy(strategy.id, strategy.title);
+                                                }}
+                                                title="Aprovar"
+                                                disabled={isActivating || isSuccess}
+                                            >
+                                                {isSuccess ? (
+                                                    <><CheckCircle2 className="w-4 h-4 mr-2" /> Adicionada!</>
+                                                ) : isActivating ? (
+                                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                                ) : (
+                                                    <Check className="w-4 h-4" />
+                                                )}
+                                            </Button>
+                                        </div>
+                                    </div>
+                                );
+                            })}
                         </div>
                     )}
                 </TabsContent>
             </Tabs>
+
+            <StrategyDetailModal
+                strategy={selectedStrategy}
+                isOpen={isSheetOpen}
+                onClose={() => setIsSheetOpen(false)}
+                onActivate={handleActivateStrategy}
+                onReject={handleRejectStrategy}
+            />
         </div>
     );
 }

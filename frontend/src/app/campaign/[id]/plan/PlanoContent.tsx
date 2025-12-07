@@ -2,12 +2,13 @@
 
 import React, { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { CheckCircle2, Loader2, AlertCircle, Undo2, Trash2 } from "lucide-react";
+import { CheckCircle2, Loader2, AlertCircle, Undo2, ArrowUpRight, Sparkles, ChevronDown, ChevronUp } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { AIStrategiesList } from "@/components/campaign/ai-strategies-list";
 import { CampaignManifesto } from "@/components/campaign/CampaignManifesto";
 import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
+import { TaskDetailsSheet } from "@/components/tasks/task-details-sheet";
 
 interface Task {
     id: string;
@@ -18,6 +19,7 @@ interface Task {
     due_date: string | null;
     created_at: string;
     strategy_id: string | null;
+    tags?: string[];
 }
 
 export default function PlanoContent({ campaignId }: { campaignId: string }) {
@@ -25,16 +27,21 @@ export default function PlanoContent({ campaignId }: { campaignId: string }) {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [revertingTaskId, setRevertingTaskId] = useState<string | null>(null);
+    const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+    const [isSheetOpen, setIsSheetOpen] = useState(false);
+    const [isFeedOpen, setIsFeedOpen] = useState(true);
+
     const supabase = createClient();
     const { toast } = useToast();
 
     // Buscar tarefas ativas do banco
     useEffect(() => {
-        fetchTasks();
+        fetchTasks(true);
     }, [campaignId]);
 
-    const fetchTasks = async () => {
-        setLoading(true);
+    const fetchTasks = async (isInitial = false) => {
+        // Se já tem tarefas, não mostre loading full screen para update silencioso
+        if (tasks.length === 0) setLoading(true);
         setError(null);
         try {
             const { data, error } = await supabase
@@ -44,7 +51,19 @@ export default function PlanoContent({ campaignId }: { campaignId: string }) {
                 .order("created_at", { ascending: false });
 
             if (error) throw error;
-            setTasks(data || []);
+
+            const fetchedTasks = data || [];
+
+            // Auto-collapse logic:
+            // 1. Initial load with tasks -> Collapse
+            // 2. New tasks created (fetched > current) -> Collapse to show new task
+            if (isInitial && fetchedTasks.length > 0) {
+                setIsFeedOpen(false);
+            } else if (fetchedTasks.length > tasks.length && !isInitial) {
+                setIsFeedOpen(false);
+            }
+
+            setTasks(fetchedTasks);
         } catch (err) {
             console.error("Erro ao buscar tarefas:", err);
             setError("Não foi possível carregar as tarefas.");
@@ -54,7 +73,6 @@ export default function PlanoContent({ campaignId }: { campaignId: string }) {
     };
 
     const handleRevertTask = async (taskId: string, taskTitle: string) => {
-        // Confirmação
         const confirm = window.confirm(
             `Tem certeza que deseja remover "${taskTitle}" do Kanban?\n\nA tarefa será devolvida para a lista de sugestões aprovadas.`
         );
@@ -76,15 +94,11 @@ export default function PlanoContent({ campaignId }: { campaignId: string }) {
                 throw new Error(errorData.detail || "Falha ao reverter tarefa");
             }
 
-            const data = await res.json();
-
             toast({
                 title: "✅ Tarefa Revertida!",
                 description: `"${taskTitle}" foi devolvida para as sugestões aprovadas.`,
-                variant: "default",
             });
 
-            // Atualizar lista de tarefas
             await fetchTasks();
         } catch (error: any) {
             console.error("Erro ao reverter tarefa:", error);
@@ -98,50 +112,29 @@ export default function PlanoContent({ campaignId }: { campaignId: string }) {
         }
     };
 
-    const getStatusColor = (status: string) => {
-        switch (status) {
-            case "completed":
-                return "bg-green-100 text-green-800 border-green-200";
-            case "in_progress":
-                return "bg-blue-100 text-blue-800 border-blue-200";
-            case "review":
-                return "bg-yellow-100 text-yellow-800 border-yellow-200";
-            default:
-                return "bg-gray-100 text-gray-800 border-gray-200";
-        }
+    const handleOpenTask = (task: Task) => {
+        setSelectedTask(task);
+        setIsSheetOpen(true);
     };
 
-    const getPriorityColor = (priority: string) => {
-        switch (priority) {
-            case "urgent":
-                return "bg-red-100 text-red-800";
-            case "high":
-                return "bg-orange-100 text-orange-800";
-            case "medium":
-                return "bg-yellow-100 text-yellow-800";
-            default:
-                return "bg-gray-100 text-gray-800";
-        }
-    };
-
-    const getStatusLabel = (status: string) => {
-        const labels: Record<string, string> = {
-            pending: "Pendente",
-            in_progress: "Em Progresso",
-            review: "Em Revisão",
-            completed: "Concluída",
+    const getStatusConfig = (status: string) => {
+        const configs: Record<string, { label: string; color: string }> = {
+            pending: { label: "Pendente", color: "bg-slate-100 text-slate-700 border-slate-200" },
+            in_progress: { label: "Em Progresso", color: "bg-blue-50 text-blue-700 border-blue-200" },
+            review: { label: "Em Revisão", color: "bg-purple-50 text-purple-700 border-purple-200" },
+            completed: { label: "Concluída", color: "bg-green-50 text-green-700 border-green-200" },
         };
-        return labels[status] || status;
+        return configs[status] || configs.pending;
     };
 
-    const getPriorityLabel = (priority: string) => {
-        const labels: Record<string, string> = {
-            urgent: "Urgente",
-            high: "Alta",
-            medium: "Média",
-            low: "Baixa",
+    const getPriorityConfig = (priority: string) => {
+        const configs: Record<string, { label: string; color: string }> = {
+            urgent: { label: "Urgente", color: "bg-red-50 text-red-700 border-red-200" },
+            high: { label: "Alta", color: "bg-orange-50 text-orange-700 border-orange-200" },
+            medium: { label: "Média", color: "bg-yellow-50 text-yellow-700 border-yellow-200" },
+            low: { label: "Baixa", color: "bg-slate-50 text-slate-600 border-slate-200" },
         };
-        return labels[priority] || priority;
+        return configs[priority] || configs.medium;
     };
 
     return (
@@ -149,154 +142,163 @@ export default function PlanoContent({ campaignId }: { campaignId: string }) {
             {/* Dossiê Estratégico - MANIFESTO */}
             <CampaignManifesto campaignId={campaignId} />
 
-            {/* AI Strategies Section - NO TOPO (LOJA DE SUGESTÕES) */}
-            <div className="bg-gradient-to-br from-purple-50 to-indigo-50 dark:from-purple-950/20 dark:to-indigo-950/20 p-6 rounded-xl border-2 border-purple-200 dark:border-purple-800 shadow-md">
-                <AIStrategiesList campaignId={campaignId} />
-            </div>
-
-            {/* Tarefas Ativadas */}
-            <Card className="shadow-lg">
-                <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 border-b">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <CardTitle className="text-2xl font-bold flex items-center gap-2">
-                                <CheckCircle2 className="h-6 w-6 text-blue-600" />
-                                Minhas Tarefas Ativas
-                            </CardTitle>
-                            <p className="text-sm text-muted-foreground mt-1">
-                                Tarefas criadas a partir de estratégias aprovadas
-                            </p>
+            {/* Feed Toggle Section */}
+            <div className="bg-white rounded-xl shadow-sm border border-indigo-100 overflow-hidden transition-all duration-300">
+                <div
+                    onClick={() => setIsFeedOpen(!isFeedOpen)}
+                    className="flex items-center justify-between p-4 bg-gradient-to-r from-indigo-50/50 to-purple-50/50 cursor-pointer hover:from-indigo-100/50 hover:to-purple-100/50 transition-colors select-none group"
+                >
+                    <div className="flex items-center gap-3">
+                        <div className="bg-white p-1.5 rounded-lg shadow-sm group-hover:scale-110 transition-transform">
+                            <Sparkles className="h-4 w-4 text-indigo-600" />
                         </div>
-                        <div className="text-right">
-                            <p className="text-3xl font-bold text-blue-600">{tasks.length}</p>
-                            <p className="text-xs text-muted-foreground uppercase tracking-wider">
-                                Total
-                            </p>
+                        <div className="flex flex-col">
+                            <h3 className="font-bold text-indigo-950 text-sm flex items-center gap-2">
+                                Feed de Oportunidades
+                                {isFeedOpen && <Badge variant="secondary" className="h-5 text-[10px] bg-white text-indigo-600 shadow-none border max-md:hidden">IA Powered</Badge>}
+                            </h3>
+                            {!isFeedOpen && <p className="text-[10px] text-indigo-500 font-medium">Clique para ver sugestões estratégicas</p>}
                         </div>
                     </div>
-                </CardHeader>
-                <CardContent className="p-6">
-                    {loading ? (
-                        <div className="flex items-center justify-center py-12">
-                            <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-                            <span className="ml-3 text-muted-foreground">
-                                Carregando tarefas...
-                            </span>
+                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0 rounded-full text-indigo-400 group-hover:text-indigo-600 group-hover:bg-indigo-100/50">
+                        {isFeedOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                    </Button>
+                </div>
+
+                <div className={`overflow-hidden transition-all duration-500 ease-in-out ${isFeedOpen ? 'max-h-[3000px] opacity-100' : 'max-h-0 opacity-0'}`}>
+                    <div className="p-4 border-t border-indigo-50 bg-slate-50/30">
+                        <AIStrategiesList campaignId={campaignId} onTaskCreated={() => fetchTasks(false)} />
+                    </div>
+                </div>
+            </div>
+
+            {/* Tarefas Ativas */}
+            <div className="space-y-6">
+                <div className="flex items-center justify-between border-b pb-4">
+                    <div>
+                        <h2 className="text-2xl font-bold flex items-center gap-2 text-slate-900">
+                            <CheckCircle2 className="h-6 w-6 text-blue-600" />
+                            Minhas Tarefas Ativas
+                        </h2>
+                        <p className="text-sm text-slate-500 mt-1">
+                            Tarefas em execução criadas a partir do plano
+                        </p>
+                    </div>
+                    <Badge variant="secondary" className="px-3 py-1 text-sm font-semibold bg-blue-50 text-blue-700">
+                        {tasks.length} {tasks.length === 1 ? 'Tarefa' : 'Tarefas'}
+                    </Badge>
+                </div>
+
+                {loading ? (
+                    <div className="flex items-center justify-center py-12">
+                        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+                        <span className="ml-3 text-slate-500">Carregando plano...</span>
+                    </div>
+                ) : error ? (
+                    <div className="flex flex-col items-center justify-center py-12 text-center bg-red-50/50 rounded-xl border border-red-100">
+                        <AlertCircle className="h-10 w-10 text-red-500 mb-3" />
+                        <p className="text-red-600 font-medium">{error}</p>
+                        <Button variant="outline" onClick={() => fetchTasks(false)} className="mt-4 bg-white">
+                            Tentar Novamente
+                        </Button>
+                    </div>
+                ) : tasks.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-20 text-center bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
+                        <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mb-4 shadow-sm">
+                            <CheckCircle2 className="h-8 w-8 text-slate-300" />
                         </div>
-                    ) : error ? (
-                        <div className="flex flex-col items-center justify-center py-12 text-center">
-                            <AlertCircle className="h-12 w-12 text-red-500 mb-3" />
-                            <p className="text-red-600 font-medium">{error}</p>
-                            <Button
-                                variant="outline"
-                                onClick={fetchTasks}
-                                className="mt-4"
-                            >
-                                Tentar Novamente
-                            </Button>
-                        </div>
-                    ) : tasks.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-16 text-center">
-                            <div className="w-24 h-24 bg-gradient-to-br from-purple-100 to-blue-100 dark:from-purple-900/20 dark:to-blue-900/20 rounded-full flex items-center justify-center mb-4">
-                                <CheckCircle2 className="h-12 w-12 text-purple-600" />
-                            </div>
-                            <h3 className="text-xl font-bold mb-2">
-                                Nenhuma tarefa ativada ainda
-                            </h3>
-                            <p className="text-muted-foreground max-w-md mb-6">
-                                Aprove estratégias na seção acima e clique em "Ativar" para
-                                transformá-las em tarefas executáveis.
-                            </p>
-                            <div className="text-sm text-muted-foreground bg-muted p-4 rounded-lg max-w-lg">
-                                <p className="font-medium mb-2">💡 Como funciona:</p>
-                                <ol className="text-left space-y-1 list-decimal list-inside">
-                                    <li>A IA gera sugestões de estratégias</li>
-                                    <li>Admin aprova as melhores no painel de Setup</li>
-                                    <li>Você ativa as aprovadas aqui para criar tarefas</li>
-                                    <li>Tarefas aparecem nesta seção para execução</li>
-                                </ol>
-                            </div>
-                        </div>
-                    ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            {tasks.map((task) => (
-                                <Card
+                        <h3 className="text-lg font-medium text-slate-900 mb-2">Nenhuma tarefa ativa</h3>
+                        <p className="text-slate-500 max-w-md">
+                            Aprove estratégias na seção acima para começar a preencher seu plano de execução.
+                        </p>
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {tasks.map((task) => {
+                            const status = getStatusConfig(task.status);
+                            const priority = getPriorityConfig(task.priority);
+
+                            return (
+                                <div
                                     key={task.id}
-                                    className="hover:shadow-lg transition-shadow border-l-4 border-l-blue-500"
+                                    onClick={() => handleOpenTask(task)}
+                                    className="group relative bg-white rounded-2xl p-5 shadow-sm border border-slate-100 hover:shadow-xl hover:shadow-slate-200/50 hover:-translate-y-1 transition-all duration-300 flex flex-col h-[260px] cursor-pointer"
                                 >
-                                    <CardContent className="p-5 space-y-3">
-                                        <div className="flex items-start justify-between gap-2">
-                                            <span
-                                                className={`text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider border ${getStatusColor(
-                                                    task.status
-                                                )}`}
-                                            >
-                                                {getStatusLabel(task.status)}
-                                            </span>
-                                            <span
-                                                className={`text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider ${getPriorityColor(
-                                                    task.priority
-                                                )}`}
-                                            >
-                                                {getPriorityLabel(task.priority)}
-                                            </span>
-                                        </div>
+                                    {/* Header Badges */}
+                                    <div className="flex items-center justify-between mb-4">
+                                        <Badge variant="outline" className={`font-normal ${status.color}`}>
+                                            {status.label}
+                                        </Badge>
+                                        <Badge variant="outline" className={`font-normal ${priority.color}`}>
+                                            {priority.label}
+                                        </Badge>
+                                    </div>
 
-                                        <div>
-                                            <h5 className="font-bold text-base mb-1">
-                                                {task.title}
-                                            </h5>
-                                            <p className="text-sm text-muted-foreground line-clamp-3">
-                                                {task.description}
-                                            </p>
-                                        </div>
+                                    {/* Content */}
+                                    <div className="flex-1">
+                                        <h3 className="font-bold text-base text-slate-900 mb-2 leading-tight line-clamp-2 group-hover:text-blue-600 transition-colors">
+                                            {task.title}
+                                        </h3>
+                                        <p className="text-sm text-slate-500 line-clamp-3 leading-relaxed">
+                                            {task.description}
+                                        </p>
+                                    </div>
 
-                                        {task.due_date && (
-                                            <div className="text-xs text-muted-foreground">
-                                                📅 Prazo:{" "}
-                                                {new Date(task.due_date).toLocaleDateString(
-                                                    "pt-BR"
-                                                )}
-                                            </div>
-                                        )}
-
-                                        <div className="pt-2 flex gap-2">
+                                    {/* Footer Meta & Actions */}
+                                    <div className="mt-4 pt-4 border-t border-slate-50 flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
                                             <Button
-                                                variant="destructive"
-                                                size="sm"
-                                                className="flex-1 text-xs gap-1"
-                                                onClick={() => handleRevertTask(task.id, task.title)}
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-8 w-8 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-full"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleRevertTask(task.id, task.title);
+                                                }}
                                                 disabled={revertingTaskId === task.id}
-                                                title="Remover do Kanban e devolver para Sugestões"
+                                                title="Devolver para sugestões"
                                             >
                                                 {revertingTaskId === task.id ? (
-                                                    <>
-                                                        <Loader2 className="h-3 w-3 animate-spin" />
-                                                        Revertendo...
-                                                    </>
+                                                    <Loader2 className="h-4 w-4 animate-spin text-red-600" />
                                                 ) : (
-                                                    <>
-                                                        <Undo2 className="h-3 w-3" />
-                                                        Desfazer
-                                                    </>
+                                                    <Undo2 className="h-4 w-4" />
                                                 )}
                                             </Button>
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                className="flex-1 text-xs"
-                                                disabled={revertingTaskId === task.id}
-                                            >
-                                                Gerenciar →
-                                            </Button>
                                         </div>
-                                    </CardContent>
-                                </Card>
-                            ))}
-                        </div>
-                    )}
-                </CardContent>
-            </Card>
+
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            className="h-8 rounded-full text-xs font-medium border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleOpenTask(task);
+                                            }}
+                                        >
+                                            Gerenciar
+                                            <ArrowUpRight className="ml-1.5 h-3.5 w-3.5" />
+                                        </Button>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+            </div>
+
+            {/* Rich Task Modal */}
+            <TaskDetailsSheet
+                task={selectedTask as any}
+                open={isSheetOpen}
+                onOpenChange={(open) => {
+                    setIsSheetOpen(open);
+                    if (!open) {
+                        setSelectedTask(null);
+                        // Atualiza lista ao fechar
+                        fetchTasks(false);
+                    }
+                }}
+            />
         </div>
     );
 }
