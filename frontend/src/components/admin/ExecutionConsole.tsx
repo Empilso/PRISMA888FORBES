@@ -55,15 +55,21 @@ export function ExecutionConsole({ runId, campaignId, isOpen, onToggle, onNewLog
                     event: "INSERT",
                     schema: "public",
                     table: "agent_logs",
-                    filter: `run_id=eq.${runId}`,
+                    // Filtro server-side removido para garantir recebimento.
+                    // Filtraremos no cliente.
                 },
                 (payload) => {
-                    const newLog = payload.new as AgentLog;
-                    setLogs((prev) => [...prev, newLog]);
-                    if (onNewLog) onNewLog(newLog);
+                    const newLog = payload.new as AgentLog & { run_id: string };
+                    // Filtro Client-side
+                    if (newLog.run_id === runId) {
+                        setLogs((prev) => [...prev, newLog]);
+                        if (onNewLog) onNewLog(newLog);
+                    }
                 }
             )
-            .subscribe();
+            .subscribe((status) => {
+                console.log(`🔌 Status da conexão Realtime (Logs): ${status}`);
+            });
 
         return () => {
             supabase.removeChannel(channel);

@@ -304,9 +304,12 @@ export default function AgentesPage() {
         fetchCampaigns();
     }, []);
 
+    const [isSimulating, setIsSimulating] = useState(false); // ⭐ NOVO: Estado de loading da simulação
+
     const handleSimulate = async () => {
         if (!selectedCampaignId || !selectedPersona) return;
 
+        setIsSimulating(true); // Inicia loading
         toast({
             title: "🚀 Iniciando Simulação",
             description: `Disparando Genesis Crew com ${selectedPersona.llm_model}...`
@@ -336,11 +339,14 @@ export default function AgentesPage() {
                 throw new Error("Falha na requisição");
             }
         } catch (e) {
+            console.error(e);
             toast({
                 title: "Erro na simulação",
                 description: "Verifique se o backend está rodando.",
                 variant: "destructive"
             });
+        } finally {
+            setIsSimulating(false); // Finaliza loading
         }
     };
 
@@ -398,8 +404,6 @@ export default function AgentesPage() {
             </div>
         );
     }
-
-
 
     // ... (fetchPersonas, handleSave, updateAgentField logic)
 
@@ -546,10 +550,15 @@ export default function AgentesPage() {
                                     className="w-full bg-green-600 hover:bg-green-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
                                     size="sm"
                                     onClick={handleSimulate}
-                                    disabled={!selectedCampaignId}
+                                    disabled={!selectedCampaignId || isSimulating} // Desabilita durante loading
+                                    type="button" // Previne submit acidental
                                 >
-                                    <Play className="h-4 w-4 mr-2" />
-                                    {selectedCampaignId ? 'Simular Execução' : 'Selecione uma Campanha'}
+                                    {isSimulating ? (
+                                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                    ) : (
+                                        <Play className="h-4 w-4 mr-2" />
+                                    )}
+                                    {isSimulating ? 'Iniciando...' : (selectedCampaignId ? 'Simular Execução' : 'Selecione uma Campanha')}
                                 </Button>
 
                                 {/* Botão para ir ao Setup manualmente */}
@@ -559,9 +568,10 @@ export default function AgentesPage() {
                                         size="sm"
                                         className="w-full mt-2"
                                         onClick={() => router.push(`/admin/campaign/${selectedCampaignId}/setup`)}
+                                        type="button"
                                     >
                                         <ExternalLink className="h-4 w-4 mr-2" />
-                                        Ver Resultado no Setup
+                                        Ver Resultado no Setup ↗️
                                     </Button>
                                 )}
                             </div>

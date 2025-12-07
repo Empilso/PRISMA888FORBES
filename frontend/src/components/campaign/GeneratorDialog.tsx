@@ -35,15 +35,15 @@ interface GeneratorDialogProps {
     campaignId: string;
     trigger?: React.ReactNode;
     onSuccess?: () => void;
+    onRunStarted?: (runId: string) => void;
 }
 
-export function GeneratorDialog({ campaignId, trigger, onSuccess }: GeneratorDialogProps) {
+export function GeneratorDialog({ campaignId, trigger, onSuccess, onRunStarted }: GeneratorDialogProps) {
     const [open, setOpen] = useState(false);
     const [personas, setPersonas] = useState<Persona[]>([]);
     const [selectedPersonaName, setSelectedPersonaName] = useState<string>("");
     const [loadingPersonas, setLoadingPersonas] = useState(false);
     const [generating, setGenerating] = useState(false);
-    const [runId, setRunId] = useState<string | null>(null);
     const { toast } = useToast();
     const supabase = createClient();
 
@@ -96,8 +96,8 @@ export function GeneratorDialog({ campaignId, trigger, onSuccess }: GeneratorDia
             const data = await res.json();
 
             // Captura o run_id retornado pela API
-            if (data.run_id) {
-                setRunId(data.run_id);
+            if (data.run_id && onRunStarted) {
+                onRunStarted(data.run_id);
             }
 
             toast({
@@ -106,9 +106,10 @@ export function GeneratorDialog({ campaignId, trigger, onSuccess }: GeneratorDia
                 variant: "default",
             });
 
-            // Não fecha mais o dialog para o usuário ver o console
-            // setOpen(false);
-            if (onSuccess) onSuccess();
+            setOpen(false);
+            // NÃO chamamos onSuccess() aqui porque a geração é assíncrona.
+            // O handleRunStarted já foi chamado acima para abrir o console.
+            // if (onSuccess) onSuccess();
         } catch (error) {
             toast({
                 title: "Erro",
@@ -170,19 +171,11 @@ export function GeneratorDialog({ campaignId, trigger, onSuccess }: GeneratorDia
                             <p className="text-muted-foreground text-xs">{selectedPersona.description}</p>
                         </div>
                     )}
-
-                    {/* Console de Execução em Tempo Real */}
-                    {runId && (
-                        <div className="space-y-2 animate-in fade-in slide-in-from-bottom-2">
-                            <label className="text-sm font-medium">Logs de Execução</label>
-                            <ExecutionConsole runId={runId} campaignId={campaignId} />
-                        </div>
-                    )}
                 </div>
 
                 <DialogFooter>
                     <Button variant="outline" onClick={() => setOpen(false)} disabled={generating}>
-                        {runId ? "Fechar" : "Cancelar"}
+                        Cancelar
                     </Button>
                     <Button
                         onClick={handleGenerate}

@@ -83,21 +83,26 @@ def process_campaign_pdf(file_url: str, campaign_id: str):
             
             documents_data.append({
                 "campaign_id": campaign_id,
-                "content_text": content,
+                "content": content, # Alterado de content_text para content
                 "embedding": vectors[i],
-                "filename": filename,
-                "file_url": file_url,
-                "file_type": "pdf_chunk",
-                # "metadata": chunk.metadata # Optional, if table has metadata column
+                "metadata": {
+                    "source": file_url,
+                    "filename": filename,
+                    "page": chunk.metadata.get("page", 0)
+                }
             })
             
         # 5. Persist (Upsert)
-        print("Inserting into Supabase...")
+        print("Inserting into Supabase (document_chunks)...")
         # Insert in batches
         batch_size = 50
         for i in range(0, len(documents_data), batch_size):
             batch = documents_data[i:i+batch_size]
-            result = supabase.table("documents").insert(batch).execute()
+            try:
+                result = supabase.table("document_chunks").insert(batch).execute()
+            except Exception as batch_error:
+                print(f"Error inserting batch {i}: {batch_error}")
+                raise batch_error
             
         print("Ingestion complete.")
         return {"status": "success", "chunks_processed": len(chunks)}

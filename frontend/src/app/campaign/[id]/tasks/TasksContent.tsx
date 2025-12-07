@@ -15,6 +15,9 @@ import {
     ArrowRight,
     Edit,
     MoreVertical,
+    CheckCircle2,
+    Circle,
+    Timer,
 } from "lucide-react";
 import {
     DndContext,
@@ -215,6 +218,58 @@ export default function TasksContent({ campaignId }: { campaignId: string }) {
                     <Plus className="h-4 w-4" />
                     Nova Tarefa
                 </Button>
+            </div>
+
+            {/* Dashboard de Métricas */}
+            <div className="grid gap-4 md:grid-cols-4">
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Total de Tarefas</CardTitle>
+                        <LayoutList className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold">{tasks.length}</div>
+                        <p className="text-xs text-muted-foreground">
+                            Nesta campanha
+                        </p>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">A Fazer</CardTitle>
+                        <Circle className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold">{tasks.filter(t => t.status === 'pending').length}</div>
+                        <p className="text-xs text-muted-foreground">
+                            Aguardando início
+                        </p>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Em Progresso</CardTitle>
+                        <Timer className="h-4 w-4 text-blue-500" />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold">{tasks.filter(t => t.status === 'in_progress').length}</div>
+                        <p className="text-xs text-muted-foreground">
+                            Sendo executadas
+                        </p>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Concluídas</CardTitle>
+                        <CheckCircle2 className="h-4 w-4 text-green-500" />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold">{tasks.filter(t => t.status === 'completed').length}</div>
+                        <p className="text-xs text-muted-foreground">
+                            Finalizadas com sucesso
+                        </p>
+                    </CardContent>
+                </Card>
             </div>
 
             {/* Search and Filters */}

@@ -7,7 +7,7 @@ import { DashboardSidebar } from "@/components/dashboard/dashboard-sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Loader2, Sparkles, CheckCircle, Send, GripVertical, Grid3x3, LayoutList, Clock, Bot, RefreshCcw, AlertTriangle, Trash2, ArrowRight, ArrowLeft, Edit } from "lucide-react";
+import { Loader2, Sparkles, CheckCircle, Send, GripVertical, Grid3x3, LayoutList, Clock, Bot, RefreshCcw, AlertTriangle, Trash2, ArrowRight, ArrowLeft, Edit, Calendar } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { useParams } from "next/navigation";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -15,6 +15,7 @@ import { StrategyEditorSheet } from "@/components/campaign/StrategyEditorSheet";
 import { StrategicMatrix } from "@/components/campaign/StrategicMatrix";
 import { CampaignManifesto } from "@/components/campaign/CampaignManifesto";
 import { GeneratorDialog } from "@/components/campaign/GeneratorDialog";
+import { StrategicTimeline } from "@/components/campaign/StrategicTimeline";
 import {
     Select,
     SelectContent,
@@ -22,6 +23,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import { ExecutionConsole } from "@/components/admin/ExecutionConsole";
 
 interface Strategy {
     id: string;
@@ -213,7 +215,7 @@ export default function CampaignSetupPage() {
     const [publishing, setPublishing] = useState(false);
     const [deleting, setDeleting] = useState(false);
     const [approvingAll, setApprovingAll] = useState(false);
-    const [viewMode, setViewMode] = useState<'kanban' | 'matrix'>('kanban');
+    const [viewMode, setViewMode] = useState<'kanban' | 'matrix' | 'timeline'>('kanban');
     const [selectedStrategy, setSelectedStrategy] = useState<Strategy | null>(null);
     const [isEditorOpen, setIsEditorOpen] = useState(false);
     // 🔍 Estados para verificação de saúde dos dados
@@ -221,6 +223,18 @@ export default function CampaignSetupPage() {
     const [chunksCount, setChunksCount] = useState<number | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [documents, setDocuments] = useState<{ file_url: string; file_type: string }[]>([]);
+
+    // 🖥️ Console de Execução Global
+    const [currentRunId, setCurrentRunId] = useState<string | null>(null);
+    const [isConsoleOpen, setIsConsoleOpen] = useState(false);
+
+    const handleRunStarted = (runId: string) => {
+        console.log('🎧 Console listening to:', runId); // DEBUG
+        setCurrentRunId(runId);
+        setIsConsoleOpen(true);
+        toast({ title: "IA Iniciada", description: "Acompanhe o progresso no console abaixo e as estratégias em tempo real." });
+    };
+
     const supabase = createClient();
     const { toast } = useToast();
 
@@ -365,16 +379,20 @@ export default function CampaignSetupPage() {
             const csvDoc = documents.find(d => d.file_type === 'csv');
             if (csvDoc && locationsCount === 0) {
                 console.log('📊 [PROCESS] Processando CSV:', csvDoc.file_url);
-                const csvResponse = await fetch(`${BACKEND_URL}/api/ingest/csv`, {
+                // Rota correta: /api/ingest/locations
+                // Payload correto: file_url
+                const csvResponse = await fetch(`${BACKEND_URL}/api/ingest/locations`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         campaign_id: campaignId,
-                        csv_url: csvDoc.file_url
+                        file_url: csvDoc.file_url // Era csv_url
                     })
                 });
                 if (!csvResponse.ok) {
-                    console.error('Erro ao processar CSV');
+                    const errorData = await csvResponse.json().catch(() => ({}));
+                    console.error('Erro ao processar CSV:', errorData);
+                    throw new Error(`CSV Error: ${csvResponse.status} - ${errorData.detail || 'Unknown'}`);
                 }
             }
 
@@ -382,16 +400,19 @@ export default function CampaignSetupPage() {
             const pdfDoc = documents.find(d => d.file_type === 'pdf');
             if (pdfDoc && chunksCount === 0) {
                 console.log('📄 [PROCESS] Processando PDF:', pdfDoc.file_url);
+                // Payload correto: file_url
                 const pdfResponse = await fetch(`${BACKEND_URL}/api/ingest/pdf`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         campaign_id: campaignId,
-                        pdf_url: pdfDoc.file_url
+                        file_url: pdfDoc.file_url // Era pdf_url
                     })
                 });
                 if (!pdfResponse.ok) {
-                    console.error('Erro ao processar PDF');
+                    const errorData = await pdfResponse.json().catch(() => ({}));
+                    console.error('Erro ao processar PDF:', errorData);
+                    throw new Error(`PDF Error: ${pdfResponse.status} - ${errorData.detail || 'Unknown'}`);
                 }
             }
 
@@ -715,6 +736,21 @@ export default function CampaignSetupPage() {
                                         </SelectContent>
                                     </Select>
 
+                                    {/* Botão de Refresh Manual */}
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => {
+                                            fetchRuns();
+                                            fetchStrategies();
+                                            toast({ title: "Atualizando dados..." });
+                                        }}
+                                        className="h-9 px-2 text-muted-foreground hover:text-primary"
+                                        title="Recarregar dados"
+                                    >
+                                        <RefreshCcw className="h-4 w-4" />
+                                    </Button>
+
                                     {/* Botão de Deletar */}
                                     <Button
                                         variant="outline"
@@ -754,10 +790,23 @@ export default function CampaignSetupPage() {
                                     <Grid3x3 className="h-4 w-4 mr-2" />
                                     Matriz
                                 </Button>
+                                <Button
+                                    variant={viewMode === 'timeline' ? 'secondary' : 'ghost'}
+                                    size="sm"
+                                    onClick={() => setViewMode('timeline')}
+                                    className="h-8"
+                                >
+                                    <Calendar className="h-4 w-4 mr-2" />
+                                    Timeline
+                                </Button>
                             </div>
 
                             {/* Generator Dialog (Novo) */}
-                            <GeneratorDialog campaignId={campaignId} onSuccess={handleGenerationSuccess} />
+                            <GeneratorDialog
+                                campaignId={campaignId}
+                                onSuccess={handleGenerationSuccess}
+                                onRunStarted={handleRunStarted}
+                            />
 
                             {/* Publish Button */}
                             <Button
@@ -779,6 +828,29 @@ export default function CampaignSetupPage() {
                         </div>
                     </div>
                 </div>
+
+                {/* 🔴 Alert de Documentos Não Encontrados */}
+                {documents.length === 0 && locationsCount !== null && (
+                    <div className="px-6 pt-4">
+                        <Alert className="bg-red-50 border-red-200">
+                            <AlertTriangle className="h-4 w-4 text-red-600" />
+                            <AlertTitle className="text-red-800">❌ Nenhum arquivo encontrado</AlertTitle>
+                            <AlertDescription className="text-red-700 flex justify-between items-center">
+                                <span>
+                                    Esta campanha não possui CSV ou PDF cadastrados. Vá em "Editar Candidato" e faça upload dos arquivos.
+                                </span>
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="bg-white border-red-300 hover:bg-red-100 text-red-900 ml-4"
+                                    onClick={() => window.location.href = `/admin/candidatos/novo?id=${campaignId}`}
+                                >
+                                    📂 Ir para Upload
+                                </Button>
+                            </AlertDescription>
+                        </Alert>
+                    </div>
+                )}
 
                 {/* 🟡 Alert de Dados Não Processados */}
                 {locationsCount !== null && chunksCount !== null && (locationsCount === 0 || chunksCount === 0) && documents.length > 0 && (
@@ -946,6 +1018,15 @@ export default function CampaignSetupPage() {
                             )}
                         </>
                     )}
+
+                    {viewMode === 'timeline' && (
+                        <div className="h-full overflow-hidden">
+                            <StrategicTimeline
+                                strategies={strategiesForMatrix}
+                                onStrategyClick={handleStrategyClick}
+                            />
+                        </div>
+                    )}
                 </div>
 
                 {/* Strategy Editor Sheet */}
@@ -954,6 +1035,14 @@ export default function CampaignSetupPage() {
                     isOpen={isEditorOpen}
                     onClose={() => setIsEditorOpen(false)}
                     onSave={handleStrategySave}
+                />
+
+                {/* 🖥️ Console Global */}
+                <ExecutionConsole
+                    key={currentRunId} // FORÇA REMONTAR O COMPONENTE
+                    runId={currentRunId}
+                    isOpen={isConsoleOpen}
+                    onToggle={() => setIsConsoleOpen(!isConsoleOpen)}
                 />
             </div>
         </div>
