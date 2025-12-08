@@ -9,7 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Loader2, Sparkles, CheckCircle, Send, GripVertical, Grid3x3, LayoutList, Clock, Bot, RefreshCcw, AlertTriangle, Trash2, ArrowRight, ArrowLeft, Edit, Calendar } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
-import { useParams } from "next/navigation";
+import { ToastAction } from "@/components/ui/toast";
+import { useParams, useRouter } from "next/navigation";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { StrategyEditorSheet } from "@/components/campaign/StrategyEditorSheet";
 import { StrategicMatrix } from "@/components/campaign/StrategicMatrix";
@@ -227,6 +228,7 @@ function DroppableColumn({
 
 export default function CampaignSetupPage() {
     const params = useParams();
+    const router = useRouter();
     const campaignId = params.id as string;
     const [strategies, setStrategies] = useState<Strategy[]>([]);
     const [runs, setRuns] = useState<AnalysisRun[]>([]);
@@ -441,7 +443,15 @@ export default function CampaignSetupPage() {
 
             toast({
                 title: '✅ Processamento concluído!',
-                description: 'Os dados foram processados. Recarregando...',
+                description: 'Os dados foram processados. Mapa pronto para visualização!',
+                action: (
+                    <ToastAction
+                        altText="Ver Mapa"
+                        onClick={() => router.push(`/campaign/${campaignId}/map`)}
+                    >
+                        🗺️ Ver Mapa
+                    </ToastAction>
+                ),
             });
 
             // Recarregar contagens

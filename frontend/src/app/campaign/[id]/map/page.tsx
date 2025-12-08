@@ -24,6 +24,8 @@ interface Location {
     votes: number;
     meta: number;
     color: string;
+    my_votes: number;  // Votos específicos do candidato da campanha
+    my_share: number;  // Porcentagem de votos do candidato
 }
 
 interface LocationResult {
@@ -52,15 +54,24 @@ export default function MapaInterativoPage() {
     const [locationResults, setLocationResults] = useState<LocationResult[]>([]);
     const [loadingResults, setLoadingResults] = useState(false);
     const [campaignName, setCampaignName] = useState<string>("");
+    const [ballotName, setBallotName] = useState<string>(""); // Nome de urna para match
 
-    // Buscar nome da campanha para destaque
+    // Buscar nome da campanha e nome de urna para destaque
     useEffect(() => {
-        async function fetchCampaignName() {
+        async function fetchCampaignData() {
             if (!campaignId) return;
-            const { data } = await supabase.from('campaigns').select('candidate_name').eq('id', campaignId).single();
-            if (data) setCampaignName(data.candidate_name);
+            const { data } = await supabase
+                .from('campaigns')
+                .select('candidate_name, ballot_name')
+                .eq('id', campaignId)
+                .single();
+            if (data) {
+                setCampaignName(data.candidate_name);
+                setBallotName(data.ballot_name || data.candidate_name); // Fallback para candidate_name
+                console.log('🎯 [MAPA] Candidato:', data.candidate_name, '| Urna:', data.ballot_name);
+            }
         }
-        fetchCampaignName();
+        fetchCampaignData();
     }, [campaignId]);
 
     // Buscar resultados quando um local é selecionado
@@ -93,35 +104,78 @@ export default function MapaInterativoPage() {
     }, [selectedLocation]);
 
     useEffect(() => {
-        const fetchLocations = async () => {
-            if (!campaignId) return;
+        const fetchLocationsWithPerformance = async () => {
+            if (!campaignId || !ballotName) return;
 
             try {
-                // TODO: Implementar Clustering no futuro se houver > 1000 pontos
-                const { data, error } = await supabase
+                // 1. Buscar todas as locations da campanha
+                const { data: locData, error: locError } = await supabase
                     .from("locations")
                     .select("*")
                     .eq("campaign_id", campaignId);
 
-                if (error) throw error;
+                if (locError) throw locError;
+                if (!locData || locData.length === 0) {
+                    setLocations([]);
+                    setIsLoading(false);
+                    return;
+                }
 
-                if (data) {
-                    const mappedLocations: Location[] = data.map((loc: any) => ({
+                // 2. Buscar votos do candidato em todas as locations (usando ILIKE para match flexível)
+                const { data: myVotesData, error: votesError } = await supabase
+                    .from('location_results')
+                    .select('location_id, votes, candidate_name')
+                    .ilike('candidate_name', `%${ballotName}%`);
+
+                if (votesError) {
+                    console.warn('⚠️ Erro ao buscar votos do candidato:', votesError);
+                }
+
+                // 3. Criar mapa de votos do candidato por location_id
+                const myVotesMap: Record<string, number> = {};
+                if (myVotesData) {
+                    myVotesData.forEach((v) => {
+                        myVotesMap[v.location_id] = v.votes;
+                    });
+                    console.log('🗳️ [MAPA] Votos do candidato encontrados em', Object.keys(myVotesMap).length, 'locais');
+                }
+
+                // 4. Calcular cor baseada na % de votos do candidato
+                const getPerformanceColor = (myVotes: number, totalVotes: number): string => {
+                    if (totalVotes === 0) return 'gray'; // Sem dados
+                    const share = (myVotes / totalVotes) * 100;
+
+                    if (share >= 20) return 'green';   // 🟢 Dominante (> 20%)
+                    if (share >= 5) return 'yellow';   // 🟡 Competitivo (5-20%)
+                    return 'red';                       // 🔴 Irrelevante (< 5%)
+                };
+
+                // 5. Montar locations com my_votes, my_share e cor correta
+                const mappedLocations: Location[] = locData.map((loc: any) => {
+                    const totalVotes = loc.votes_count || 0;
+                    const myVotes = myVotesMap[loc.id] || 0;
+                    const myShare = totalVotes > 0 ? (myVotes / totalVotes) * 100 : 0;
+                    const color = getPerformanceColor(myVotes, totalVotes);
+
+                    return {
                         id: loc.id,
                         name: loc.name,
                         address: loc.address || "",
                         position: [Number(loc.lat), Number(loc.lng)],
-                        votes: loc.votes_count || 0,
+                        votes: totalVotes,
                         meta: loc.vote_goal || 0,
-                        color: loc.color || "blue"
-                    }));
-                    setLocations(mappedLocations);
-                    console.log("📍 Dados do Mapa:", mappedLocations);
+                        color: color,
+                        my_votes: myVotes,
+                        my_share: myShare
+                    };
+                });
 
-                    // Se houver locais, centralizar no primeiro
-                    if (mappedLocations.length > 0) {
-                        setCenterPosition(mappedLocations[0].position);
-                    }
+                setLocations(mappedLocations);
+                console.log('📍 [MAPA] Dados com performance:', mappedLocations.slice(0, 3));
+
+                // Se houver locais, centralizar no primeiro
+                if (mappedLocations.length > 0) {
+                    setCenterPosition(mappedLocations[0].position);
                 }
             } catch (error) {
                 console.error("Erro ao buscar locais:", error);
@@ -130,8 +184,8 @@ export default function MapaInterativoPage() {
             }
         };
 
-        fetchLocations();
-    }, [campaignId]);
+        fetchLocationsWithPerformance();
+    }, [campaignId, ballotName]);
 
     const handleLocationClick = (location: any) => {
         setSelectedLocation(location);
@@ -208,19 +262,19 @@ export default function MapaInterativoPage() {
 
             {/* Legenda (Bottom Left) */}
             <div className="absolute bottom-8 left-4 z-[1000] bg-white dark:bg-slate-950 p-3 rounded-lg shadow-md border w-64">
-                <h4 className="text-xs font-bold uppercase text-muted-foreground mb-2">Performance por Região</h4>
+                <h4 className="text-xs font-bold uppercase text-muted-foreground mb-2">Sua Performance por Local</h4>
                 <div className="space-y-1.5">
                     <div className="flex items-center gap-2 text-xs">
                         <div className="w-3 h-3 rounded-full bg-emerald-500 border border-white shadow-sm" />
-                        <span>Alta Performance (&gt; 2000 votos)</span>
+                        <span>🟢 Dominante (&gt; 20% dos votos)</span>
                     </div>
                     <div className="flex items-center gap-2 text-xs">
                         <div className="w-3 h-3 rounded-full bg-amber-400 border border-white shadow-sm" />
-                        <span>Média Performance (1000-2000)</span>
+                        <span>🟡 Competitivo (5% - 20%)</span>
                     </div>
                     <div className="flex items-center gap-2 text-xs">
                         <div className="w-3 h-3 rounded-full bg-rose-500 border border-white shadow-sm" />
-                        <span>Baixa Performance (&lt; 1000)</span>
+                        <span>🔴 Fraco (&lt; 5% dos votos)</span>
                     </div>
                 </div>
             </div>

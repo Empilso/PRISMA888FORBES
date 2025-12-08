@@ -14,15 +14,20 @@ const mapStyles: Record<string, { url: string; attribution: string }> = {
     'carto-dark': { url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', attribution: 'Carto' },
 };
 
-// Lógica de Cor por Performance
-const getPerformanceStyles = (votes: number) => {
-    if (votes > 2000) return 'bg-emerald-500 shadow-emerald-500/40'; // Alta
-    if (votes >= 1000) return 'bg-amber-400 shadow-amber-400/40';   // Média
-    return 'bg-rose-500 shadow-rose-500/40';                        // Baixa
+// Lógica de Cor por Performance do Candidato
+// Usa a cor pré-calculada: green (>20%), yellow (5-20%), red (<5%), gray (sem dados)
+const getPerformanceStyles = (color: string) => {
+    switch (color) {
+        case 'green': return 'bg-emerald-500 shadow-emerald-500/40'; // 🟢 Dominante
+        case 'yellow': return 'bg-amber-400 shadow-amber-400/40';     // 🟡 Competitivo
+        case 'red': return 'bg-rose-500 shadow-rose-500/40';       // 🔴 Fraco
+        case 'gray': return 'bg-slate-400 shadow-slate-400/40';     // ⚪ Sem dados
+        default: return 'bg-blue-500 shadow-blue-500/40';       // Fallback
+    }
 };
 
-const createPerformanceIcon = (votes: number) => {
-    const colorClasses = getPerformanceStyles(votes);
+const createPerformanceIcon = (color: string) => {
+    const colorClasses = getPerformanceStyles(color);
 
     // HTML do Marcador (Puro CSS/Tailwind)
     // Círculo colorido com borda branca grossa e sombra colorida (Glow)
@@ -86,7 +91,7 @@ export default function MapComponent({
                 <Marker
                     key={loc.id}
                     position={loc.position}
-                    icon={createPerformanceIcon(loc.votes || 0)}
+                    icon={createPerformanceIcon(loc.color || 'gray')}
                     eventHandlers={{
                         click: () => onLocationClick(loc),
                     }}

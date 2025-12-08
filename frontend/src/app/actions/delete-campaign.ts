@@ -96,6 +96,12 @@ export async function deleteCampaign(campaignId: string) {
             // Se falhar, provavelmente é FK. Vamos tentar limpar os filhos.
             console.warn("Erro ao deletar campanha (provável FK constraint). Tentando limpar dependências...");
 
+            // Limpar TODAS as tabelas relacionadas à campanha
+            await supabaseAdmin.from("agent_logs").delete().eq("campaign_id", campaignId);
+            await supabaseAdmin.from("strategies").delete().eq("campaign_id", campaignId);
+            await supabaseAdmin.from("analysis_runs").delete().eq("campaign_id", campaignId);
+            await supabaseAdmin.from("location_results").delete().eq("campaign_id", campaignId);
+            await supabaseAdmin.from("document_chunks").delete().eq("campaign_id", campaignId);
             await supabaseAdmin.from("tasks").delete().eq("campaign_id", campaignId);
             await supabaseAdmin.from("documents").delete().eq("campaign_id", campaignId);
             await supabaseAdmin.from("locations").delete().eq("campaign_id", campaignId);

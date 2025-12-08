@@ -114,7 +114,7 @@ export async function createCampaign(formData: FormData) {
 
         console.log("✅ Campanha criada:", campaign.id);
 
-        // 3. Criação do Usuário (Auth)
+        // 3. Criação do Usuário (Auth) - COM ROLLBACK EM CASO DE FALHA
         const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
             email: email || `${slug}@sheepstack.com`, // Fallback se não tiver email
             password: password,
@@ -127,9 +127,27 @@ export async function createCampaign(formData: FormData) {
         });
 
         if (authError) {
-            console.error("Erro ao criar usuário Auth:", authError);
-            // Se falhar o user, talvez devêssemos deletar a campanha (rollback manual), mas por hora retornamos erro
-            return { success: false, error: "Erro ao criar usuário de acesso: " + authError.message };
+            console.error("❌ Erro ao criar usuário Auth:", authError);
+
+            // 🔄 ROLLBACK: Deletar a campanha que foi criada para evitar "zumbis"
+            console.log("🔄 Executando rollback: deletando campanha", campaign.id);
+
+            const { error: rollbackError } = await supabaseAdmin
+                .from("campaigns")
+                .delete()
+                .eq("id", campaign.id);
+
+            if (rollbackError) {
+                console.error("⚠️ Erro no rollback (campanha órfã pode existir):", rollbackError);
+            } else {
+                console.log("✅ Rollback concluído: campanha deletada.");
+            }
+
+            // Retornar erro específico para o frontend
+            return {
+                success: false,
+                error: `Erro ao criar usuário de acesso: ${authError.message}. A campanha foi desfeita.`
+            };
         }
 
         console.log("✅ Usuário Auth criado:", authUser.user.id);

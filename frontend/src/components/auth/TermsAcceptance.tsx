@@ -1,13 +1,13 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Loader2, CheckCircle2, FileText } from "lucide-react";
-import { acceptTerms, hasAcceptedTerms } from "@/lib/profiles";
+import { acceptTerms } from "@/lib/profiles";
 import { useToast } from "@/components/ui/use-toast";
 
 /**
@@ -21,23 +21,9 @@ import { useToast } from "@/components/ui/use-toast";
 export function TermsAcceptance() {
     const [accepted, setAccepted] = useState(false);
     const [loading, setLoading] = useState(false);
-    const [checking, setChecking] = useState(true);
     const router = useRouter();
     const { toast } = useToast();
 
-    useEffect(() => {
-        checkTermsStatus();
-    }, []);
-
-    const checkTermsStatus = async () => {
-        const hasAccepted = await hasAcceptedTerms();
-        if (hasAccepted) {
-            // Usuário já aceitou, redireciona para dashboard
-            router.push("/admin/dashboard");
-        } else {
-            setChecking(false);
-        }
-    };
 
     const handleAccept = async () => {
         if (!accepted) {
@@ -56,13 +42,14 @@ export function TermsAcceptance() {
         if (result.success) {
             toast({
                 title: "✅ Termos aceitos!",
-                description: "Bem-vindo ao Prisma 888. Redirecionando...",
+                description: "Bem-vindo ao Prisma 888. Liberando acesso...",
             });
 
-            // Aguarda 1 segundo e redireciona
+            // Recarrega a página para o TermsGuard reavaliar
             setTimeout(() => {
-                router.push("/admin/dashboard");
-            }, 1000);
+                router.refresh();
+                window.location.reload(); // Força refresh completo para atualizar estado
+            }, 500);
         } else {
             toast({
                 title: "Erro",
@@ -73,13 +60,7 @@ export function TermsAcceptance() {
         }
     };
 
-    if (checking) {
-        return (
-            <div className="flex h-screen items-center justify-center">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            </div>
-        );
-    }
+
 
     return (
         <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 p-4">
