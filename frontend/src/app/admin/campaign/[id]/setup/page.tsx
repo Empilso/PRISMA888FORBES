@@ -767,7 +767,7 @@ export default function CampaignSetupPage() {
                         {/* View Toggle Compacto */}
                         <div className="flex bg-slate-100/50 rounded-lg p-1 gap-1">
                             <Button
-                                variant={viewMode === 'kanban' ? 'white' : 'ghost'}
+                                variant="ghost"
                                 size="sm"
                                 onClick={() => setViewMode('kanban')}
                                 className={`h-8 px-3 text-xs ${viewMode === 'kanban' ? 'bg-white shadow-sm' : 'text-muted-foreground'}`}
@@ -776,7 +776,7 @@ export default function CampaignSetupPage() {
                                 Kanban
                             </Button>
                             <Button
-                                variant={viewMode === 'matrix' ? 'white' : 'ghost'}
+                                variant="ghost"
                                 size="sm"
                                 onClick={() => setViewMode('matrix')}
                                 className={`h-8 px-3 text-xs ${viewMode === 'matrix' ? 'bg-white shadow-sm' : 'text-muted-foreground'}`}
@@ -785,7 +785,7 @@ export default function CampaignSetupPage() {
                                 Matriz
                             </Button>
                             <Button
-                                variant={viewMode === 'timeline' ? 'white' : 'ghost'}
+                                variant="ghost"
                                 size="sm"
                                 onClick={() => setViewMode('timeline')}
                                 className={`h-8 px-3 text-xs ${viewMode === 'timeline' ? 'bg-white shadow-sm' : 'text-muted-foreground'}`}

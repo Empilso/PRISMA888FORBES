@@ -10,8 +10,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Save, Trash2, Loader2, X, Terminal, ChevronUp, Play, ExternalLink } from "lucide-react";
+import { Plus, FloppyDisk, Trash, CircleNotch, X, TerminalWindow, CaretUp, Play, ArrowSquareOut } from "@phosphor-icons/react";
 import { useToast } from "@/components/ui/use-toast";
+import { ToastAction } from "@/components/ui/toast";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -422,8 +423,36 @@ export default function AgentesPage() {
 
         if (agentId) {
             setActiveExecutionAgent(agentId);
-            // Remove o destaque após 3 segundos (tempo suficiente para ler o log)
+            // Remove o destaque após 3 segundos
             setTimeout(() => setActiveExecutionAgent(null), 3000);
+        }
+
+        // DETECÇÃO DE FIM DE PROCESSO (AUTO-STOP)
+        // Se receber sucesso ou mensagem de finalização, para o loading
+        if (log.status === 'success' || log.message.includes("finalizada com sucesso") || log.message.includes("Resultados salvos")) {
+            setIsSimulating(false);
+
+            // Só dispara o toast se ainda estava simulando (para evitar duplicidade)
+            if (isSimulating) {
+                toast({
+                    title: "Simulação Concluída! 🏁",
+                    description: "O Plano Tático foi gerado com sucesso.",
+                    action: (
+                        <ToastAction
+                            altText="Ver no Setup"
+                            onClick={() => router.push(`/admin/campaign/${selectedCampaignId}/setup`)}
+                        >
+                            Ver no Setup
+                        </ToastAction>
+                    ),
+                    duration: 10000, // Fica mais tempo na tela
+                });
+            }
+        }
+
+        // Se der erro crítico
+        if (log.status === 'error') {
+            setIsSimulating(false);
         }
     };
 
@@ -482,7 +511,7 @@ export default function AgentesPage() {
     if (loading) {
         return (
             <div className="flex items-center justify-center h-screen">
-                <Loader2 className="h-8 w-8 animate-spin" />
+                <CircleNotch className="h-8 w-8 animate-spin" />
             </div>
         );
     }
@@ -610,7 +639,7 @@ export default function AgentesPage() {
                         disabled={!selectedCampaignId || !selectedPersona || isSimulating}
                     >
                         {isSimulating ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
+                            <CircleNotch className="h-4 w-4 animate-spin" />
                         ) : (
                             <Play className="h-4 w-4" />
                         )}
@@ -649,7 +678,7 @@ export default function AgentesPage() {
                         }}
                         disabled={!selectedPersona}
                     >
-                        <Terminal className="h-4 w-4" />
+                        <TerminalWindow className="h-4 w-4" />
                     </Button>
                 </div>
             </div>
@@ -705,9 +734,9 @@ export default function AgentesPage() {
                                         title="Salvar (Cmd+S)"
                                     >
                                         {saving ? (
-                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                            <CircleNotch className="h-4 w-4 animate-spin" />
                                         ) : (
-                                            <Save className="h-4 w-4" />
+                                            <FloppyDisk className="h-4 w-4" />
                                         )}
                                         {/* Badge de "não salvo" */}
                                         {hasUnsavedChanges && !saving && (
@@ -1017,7 +1046,7 @@ export default function AgentesPage() {
                                             <AlertDialog>
                                                 <AlertDialogTrigger asChild>
                                                     <Button variant="destructive" className="w-full opacity-90 hover:opacity-100" disabled={saving}>
-                                                        <Trash2 className="mr-2 h-4 w-4" /> Excluir Persona
+                                                        <Trash className="mr-2 h-4 w-4" /> Excluir Persona
                                                     </Button>
                                                 </AlertDialogTrigger>
                                                 <AlertDialogContent>
@@ -1058,6 +1087,7 @@ export default function AgentesPage() {
             {/* Layer 3: Execution Console (Bottom Sheet) - REAL */}
             <ExecutionConsole
                 runId={currentRunId}
+                campaignId={selectedCampaignId} // Passa o ID da campanha para habilitar o Stop
                 isOpen={isConsoleOpen}
                 onToggle={() => setIsConsoleOpen(!isConsoleOpen)}
                 onNewLog={handleNewLog} // ⭐ Callback de logs

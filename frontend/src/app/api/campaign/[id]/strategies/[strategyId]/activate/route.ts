@@ -8,9 +8,9 @@ import { NextRequest, NextResponse } from 'next/server';
  */
 export async function POST(
     request: NextRequest,
-    { params }: { params: { id: string; strategyId: string } }
+    { params }: { params: Promise<{ id: string; strategyId: string }> }
 ) {
-    const { id: campaignId, strategyId } = params;
+    const { id: campaignId, strategyId } = await params;
 
     try {
         // URL do backend FastAPI
@@ -50,9 +50,9 @@ export async function POST(
  */
 export async function GET(
     request: NextRequest,
-    { params }: { params: { id: string; strategyId: string } }
+    { params }: { params: Promise<{ id: string; strategyId: string }> }
 ) {
-    const { id: campaignId, strategyId } = params;
+    const { id: campaignId, strategyId } = await params;
 
     try {
         const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';

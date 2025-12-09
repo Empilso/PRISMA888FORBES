@@ -6,16 +6,19 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
-    LayoutDashboard,
-    Sparkles,
-    Map,
+    SquaresFour,
+    Brain,
+    MapTrifold,
     FolderOpen,
-    Settings,
-    ChevronLeft,
-    ChevronRight,
-    Menu,
+    Gear,
+    CaretLeft,
+    CaretRight,
+    List,
     X,
-} from "lucide-react";
+    Scroll,
+    UsersThree,
+    ShootingStar
+} from "@phosphor-icons/react";
 
 export function DashboardSidebar({ campaignId }: { campaignId?: string }) {
     const pathname = usePathname();
@@ -29,93 +32,88 @@ export function DashboardSidebar({ campaignId }: { campaignId?: string }) {
         {
             name: "Dashboard do Candidato",
             href: campaignId ? `${baseUrl}/dashboard` : baseUrl,
-            icon: LayoutDashboard,
+            icon: SquaresFour,
         },
-        // "Plano Estratégico" removed from main list
         {
             name: "IA & Tarefas",
             href: campaignId ? `${baseUrl}/tasks` : `${baseUrl}/ia-tarefas`,
-            icon: Sparkles,
+            icon: Brain,
         },
         {
             name: "Mapa Interativo",
             href: campaignId ? `${baseUrl}/map` : `${baseUrl}/mapa-interativo`,
-            icon: Map,
+            icon: MapTrifold,
         },
         {
             name: "Repositório",
             href: campaignId ? `${baseUrl}/files` : `${baseUrl}/repositorio`,
             icon: FolderOpen,
         },
+        // Link Admin Global
+        {
+            name: "Agentes & Crews",
+            href: "/admin/agentes",
+            icon: UsersThree,
+        },
     ];
 
     return (
         <>
-            {/* Mobile Toggle Button (Fixed) */}
+            {/* Mobile Toggle Button */}
             <div className="md:hidden fixed top-4 left-4 z-50">
-                <Button variant="outline" size="icon" onClick={() => setIsMobileOpen(!isMobileOpen)} className="bg-white shadow-md">
-                    {isMobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+                <Button variant="outline" size="icon" onClick={() => setIsMobileOpen(!isMobileOpen)} className="bg-white/90 backdrop-blur shadow-md border-slate-200">
+                    {isMobileOpen ? <X className="h-5 w-5 text-slate-600" weight="duotone" /> : <List className="h-5 w-5 text-slate-600" weight="duotone" />}
                 </Button>
             </div>
 
             {/* Mobile Overlay */}
             {isMobileOpen && (
                 <div
-                    className="fixed inset-0 bg-black/50 z-40 md:hidden"
+                    className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm z-40 md:hidden"
                     onClick={() => setIsMobileOpen(false)}
                 />
             )}
 
             <div
                 className={cn(
-                    "fixed md:static inset-y-0 left-0 z-50 flex flex-col border-r bg-card transition-all duration-300 ease-in-out h-full",
-                    isCollapsed ? "w-20" : "w-64",
+                    "fixed md:static inset-y-0 left-0 z-50 flex flex-col bg-white border-r border-slate-100 transition-all duration-300 ease-in-out h-full shadow-[1px_0_20px_rgba(0,0,0,0.02)]",
+                    isCollapsed ? "w-20" : "w-72",
                     isMobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
                 )}
             >
-                {/* Logo & Toggle */}
-                <div className={cn("flex h-16 items-center border-b", isCollapsed ? "justify-center" : "justify-between px-6")}>
-                    {!isCollapsed && (
-                        <div className="flex items-center gap-2">
-                            <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
-                                <span className="text-white font-bold text-sm">P8</span>
+                {/* Header / Logo */}
+                <div className={cn("flex items-center h-24 mb-2 transition-all", isCollapsed ? "justify-center" : "px-8")}>
+                    {!isCollapsed ? (
+                        <div className="flex items-center gap-3">
+                            <div className="h-10 w-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 shadow-lg shadow-blue-200 flex items-center justify-center transform hover:scale-105 transition-transform">
+                                <span className="text-white font-black text-lg">P8</span>
                             </div>
-                            <div>
-                                <h2 className="font-bold text-lg">Prisma 888</h2>
-                                <p className="text-xs text-muted-foreground">Campanha 2024</p>
+                            <div className="flex flex-col">
+                                <h2 className="font-bold text-xl text-slate-900 leading-tight">Prisma 888</h2>
+                                <p className="text-[10px] font-semibold text-slate-400 tracking-wider uppercase">Political OS</p>
                             </div>
                         </div>
-                    )}
-                    {isCollapsed && (
-                        <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
-                            <span className="text-white font-bold text-sm">P8</span>
+                    ) : (
+                        <div className="h-10 w-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 shadow-md flex items-center justify-center">
+                            <span className="text-white font-black text-lg">P8</span>
                         </div>
                     )}
-
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        className="hidden md:flex h-6 w-6 text-muted-foreground hover:text-foreground"
-                        onClick={() => setIsCollapsed(!isCollapsed)}
-                    >
-                        {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-                    </Button>
                 </div>
 
-                {/* Campaign Status */}
-                {!isCollapsed && (
-                    <div className="px-6 py-4">
-                        <p className="text-xs font-semibold text-muted-foreground tracking-wider uppercase">
-                            Campanha Ativa
-                        </p>
+                {/* Campaign Status Check */}
+                {!isCollapsed && campaignId && (
+                    <div className="px-6 mb-6">
+                        <div className="px-4 py-3 bg-slate-50 rounded-2xl border border-slate-100 flex flex-col gap-1">
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Campanha Ativa</span>
+                            <span className="text-xs font-semibold text-slate-700 truncate">Campanha 2024</span>
+                        </div>
                     </div>
                 )}
-                {isCollapsed && <div className="h-4" />}
 
-                {/* Navigation */}
-                <nav className="flex-1 space-y-1 px-4 overflow-y-auto">
+                {/* Navigation Items */}
+                <nav className="flex-1 px-4 space-y-1.5 overflow-y-auto custom-scrollbar">
                     {navigation.map((item) => {
-                        const isActive = pathname === item.href;
+                        const isActive = pathname === item.href || pathname?.startsWith(item.href + '/');
                         const Icon = item.icon;
 
                         return (
@@ -123,16 +121,25 @@ export function DashboardSidebar({ campaignId }: { campaignId?: string }) {
                                 key={item.name}
                                 href={item.href}
                                 className={cn(
-                                    "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                                    "group flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 border border-transparent",
                                     isActive
-                                        ? "bg-primary text-primary-foreground"
-                                        : "text-muted-foreground hover:bg-muted hover:text-foreground",
-                                    isCollapsed && "justify-center px-2"
+                                        ? "bg-blue-50 text-blue-700 font-medium shadow-sm border-blue-100/50"
+                                        : "text-slate-500 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-100",
+                                    isCollapsed && "justify-center px-0 py-3"
                                 )}
                                 title={isCollapsed ? item.name : undefined}
                             >
-                                <Icon className="h-5 w-5 flex-shrink-0" />
-                                {!isCollapsed && <span className="truncate">{item.name}</span>}
+                                <Icon
+                                    weight="duotone"
+                                    className={cn(
+                                        "transition-colors duration-200",
+                                        isActive ? "text-blue-600" : "text-slate-400 group-hover:text-slate-600",
+                                        isCollapsed ? "h-6 w-6" : "h-5 w-5"
+                                    )}
+                                />
+                                {!isCollapsed && (
+                                    <span className="text-sm tracking-tight">{item.name}</span>
+                                )}
                             </Link>
                         );
                     })}
@@ -140,50 +147,60 @@ export function DashboardSidebar({ campaignId }: { campaignId?: string }) {
 
                 {/* PREMIUM BUTTON - PLANO MESTRE */}
                 {campaignId && (
-                    <div className="px-3 pb-2 pt-4">
+                    <div className="p-4 mt-auto">
                         {!isCollapsed ? (
-                            <>
-                                <div className="mb-2 px-4 text-xs font-semibold text-muted-foreground tracking-wider uppercase">
-                                    Estratégia
+                            <Link
+                                href={`/campaign/${campaignId}/plan`}
+                                className="group relative overflow-hidden flex items-center gap-3 rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-700 p-4 text-white shadow-xl shadow-indigo-200/50 transition-all hover:shadow-indigo-300/60 hover:scale-[1.02] active:scale-[0.98]"
+                            >
+                                {/* Decorative elements */}
+                                <div className="absolute top-0 right-0 -mr-4 -mt-4 h-24 w-24 rounded-full bg-white/10 blur-2xl group-hover:bg-white/20 transition-all"></div>
+
+                                <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/20 backdrop-blur-sm border border-white/10 group-hover:bg-white/25 transition-colors">
+                                    <ShootingStar className="h-5 w-5 text-white" weight="duotone" />
                                 </div>
-                                <Link
-                                    href={`/campaign/${campaignId}/plan`}
-                                    className="group flex items-center gap-3 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-3 text-white shadow-lg shadow-indigo-200 transition-all hover:shadow-indigo-300 hover:scale-[1.02]"
-                                >
-                                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/20">
-                                        <Sparkles className="h-4 w-4 text-white" />
-                                    </div>
-                                    <div className="flex flex-col text-left">
-                                        <span className="text-sm font-bold">Plano Mestre</span>
-                                        <span className="text-[10px] text-indigo-100 opacity-90">Ver Dossiê & IA</span>
-                                    </div>
-                                </Link>
-                            </>
+                                <div className="relative flex flex-col min-w-0">
+                                    <span className="text-sm font-bold leading-none mb-1">Plano Mestre</span>
+                                    <span className="text-[10px] text-indigo-100 opacity-80 font-medium truncate">Ver Dossiê Estratégico</span>
+                                </div>
+                            </Link>
                         ) : (
                             <Link
                                 href={`/campaign/${campaignId}/plan`}
-                                className="group flex items-center justify-center rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 p-3 text-white shadow-lg transition-all hover:scale-105"
+                                className="group flex items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-700 p-3 text-white shadow-lg transition-all hover:scale-105"
                                 title="Plano Mestre"
                             >
-                                <Sparkles className="h-5 w-5" />
+                                <ShootingStar className="h-6 w-6" weight="duotone" />
                             </Link>
                         )}
                     </div>
                 )}
 
-                {/* Footer */}
-                <div className="border-t p-4">
-                    <Link
-                        href="/dashboard/configuracoes"
-                        className={cn(
-                            "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors",
-                            isCollapsed && "justify-center px-2"
-                        )}
-                        title={isCollapsed ? "Configurações" : undefined}
-                    >
-                        <Settings className="h-5 w-5 flex-shrink-0" />
-                        {!isCollapsed && <span>Configurações</span>}
-                    </Link>
+                {/* Footer / User / Config */}
+                <div className="p-4 border-t border-slate-50 bg-slate-50/50">
+                    <div className="flex items-center gap-2">
+                        <Link
+                            href="/dashboard/configuracoes"
+                            className={cn(
+                                "flex-1 flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-slate-500 hover:bg-white hover:text-slate-900 hover:shadow-sm transition-all border border-transparent hover:border-slate-100",
+                                isCollapsed && "justify-center px-0"
+                            )}
+                            title="Configurações"
+                        >
+                            <Gear className={cn("text-slate-400 group-hover:text-slate-600", isCollapsed ? "h-6 w-6" : "h-5 w-5")} weight="duotone" />
+                            {!isCollapsed && <span>Configurações</span>}
+                        </Link>
+
+                        {/* Collapse Button */}
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="hidden md:flex h-8 w-8 text-slate-400 hover:text-slate-700 hover:bg-white hover:shadow-sm"
+                            onClick={() => setIsCollapsed(!isCollapsed)}
+                        >
+                            {isCollapsed ? <CaretRight weight="bold" /> : <CaretLeft weight="bold" />}
+                        </Button>
+                    </div>
                 </div>
             </div>
         </>

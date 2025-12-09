@@ -22,7 +22,7 @@ interface Strategy {
     status: "suggested" | "approved";
     start_date?: string | null;
     end_date?: string | null;
-    campaign_id?: string;
+    campaign_id: string;
 }
 
 interface StrategicTimelineProps {

@@ -22,7 +22,21 @@ import {
     Tag,
     CheckCircle2,
 } from "lucide-react";
-import { Task, TaskStatus, TaskPriority } from "./page";
+export type TaskStatus = "pending" | "in_progress" | "review" | "completed";
+export type TaskPriority = "low" | "medium" | "high" | "urgent";
+
+export interface Task {
+    id: string;
+    title: string;
+    description: string;
+    status: TaskStatus;
+    priority: TaskPriority;
+    aiSuggestion?: string;
+    assignee?: { name: string; avatar?: string };
+    dueDate?: string;
+    createdAt: string;
+    tags: string[];
+}
 
 interface TaskDetailsSheetProps {
     task: Task | null;

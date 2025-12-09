@@ -17,6 +17,9 @@ dependencies:
   '@hookform/resolvers':
     specifier: ^3.3.0
     version: 3.10.0(react-hook-form@7.66.1)
+  '@phosphor-icons/react':
+    specifier: ^2.1.10
+    version: 2.1.10(react-dom@19.2.0)(react@19.2.0)
   '@radix-ui/react-alert-dialog':
     specifier: ^1.1.15
     version: 1.1.15(@types/react-dom@18.3.7)(@types/react@18.3.27)(react-dom@19.2.0)(react@19.2.0)
@@ -1762,6 +1765,17 @@ packages:
       - openapi-types
       - supports-color
     dev: true
+
+  /@phosphor-icons/react@2.1.10(react-dom@19.2.0)(react@19.2.0):
+    resolution: {integrity: sha512-vt8Tvq8GLjheAZZYa+YG/pW7HDbov8El/MANW8pOAz4eGxrwhnbfrQZq0Cp4q8zBEu8NIhHdnr+r8thnfRSNYA==}
+    engines: {node: '>=10'}
+    peerDependencies:
+      react: '>= 16.8'
+      react-dom: '>= 16.8'
+    dependencies:
+      react: 19.2.0
+      react-dom: 19.2.0(react@19.2.0)
+    dev: false
 
   /@radix-ui/number@1.1.1:
     resolution: {integrity: sha512-MkKCwxlXTgz6CFoJx3pCwn07GKp36+aZyu/u2Ln2VrA5DcdyCZkASEDBTd8x5whTQQL5CiYf4prXKLcgQdv29g==}

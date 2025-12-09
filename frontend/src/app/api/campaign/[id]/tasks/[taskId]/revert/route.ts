@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(
     request: NextRequest,
-    { params }: { params: { id: string; taskId: string } }
+    { params }: { params: Promise<{ id: string; taskId: string }> }
 ) {
-    const { id: campaignId, taskId } = params;
+    const { id: campaignId, taskId } = await params;
 
     try {
         const backendUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";

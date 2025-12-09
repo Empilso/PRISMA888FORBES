@@ -3,6 +3,16 @@
 import React, { useEffect, useMemo } from 'react';
 import { ReactFlow, Background, Controls, MiniMap, useNodesState, useEdgesState, Position, MarkerType, Node, Edge, ReactFlowProvider, useReactFlow } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
+import {
+    MagnifyingGlass,
+    Brain,
+    Lightning,
+    PenNib,
+    Gavel,
+    Flask,
+    Robot,
+    Smiley
+} from "@phosphor-icons/react";
 
 // Types
 interface AgentConfig {
@@ -44,16 +54,16 @@ interface CrewVisualizerProps {
     onNodeClick: (nodeId: string | null) => void;
 }
 
-// Mapeamento de cores e emojis para agentes
-const AGENT_STYLES: Record<string, { emoji: string; fromColor: string; toColor: string; textColor: string; bgLight: string }> = {
-    analyst: { emoji: '🕵️‍♂️', fromColor: 'from-blue-400', toColor: 'to-blue-700', textColor: 'text-blue-900', bgLight: 'bg-blue-100' },
-    strategist: { emoji: '🧠', fromColor: 'from-purple-400', toColor: 'to-purple-700', textColor: 'text-purple-900', bgLight: 'bg-purple-100' },
-    planner: { emoji: '⚡', fromColor: 'from-emerald-400', toColor: 'to-emerald-700', textColor: 'text-emerald-900', bgLight: 'bg-emerald-100' },
-    writer: { emoji: '✍️', fromColor: 'from-orange-400', toColor: 'to-orange-700', textColor: 'text-orange-900', bgLight: 'bg-orange-100' },
-    psychologist: { emoji: '🧠', fromColor: 'from-pink-400', toColor: 'to-pink-700', textColor: 'text-pink-900', bgLight: 'bg-pink-100' },
-    critic: { emoji: '👹', fromColor: 'from-red-400', toColor: 'to-red-700', textColor: 'text-red-900', bgLight: 'bg-red-100' },
-    researcher: { emoji: '🔬', fromColor: 'from-teal-400', toColor: 'to-teal-700', textColor: 'text-teal-900', bgLight: 'bg-teal-100' },
-    default: { emoji: '🤖', fromColor: 'from-gray-400', toColor: 'to-gray-700', textColor: 'text-gray-900', bgLight: 'bg-gray-100' },
+// Mapeamento de cores e ícones para agentes
+const AGENT_STYLES: Record<string, { icon: React.ElementType; fromColor: string; toColor: string; textColor: string; bgLight: string }> = {
+    analyst: { icon: MagnifyingGlass, fromColor: 'from-blue-400', toColor: 'to-blue-700', textColor: 'text-blue-900', bgLight: 'bg-blue-100' },
+    strategist: { icon: Brain, fromColor: 'from-purple-400', toColor: 'to-purple-700', textColor: 'text-purple-900', bgLight: 'bg-purple-100' },
+    planner: { icon: Lightning, fromColor: 'from-emerald-400', toColor: 'to-emerald-700', textColor: 'text-emerald-900', bgLight: 'bg-emerald-100' },
+    writer: { icon: PenNib, fromColor: 'from-orange-400', toColor: 'to-orange-700', textColor: 'text-orange-900', bgLight: 'bg-orange-100' },
+    psychologist: { icon: Smiley, fromColor: 'from-pink-400', toColor: 'to-pink-700', textColor: 'text-pink-900', bgLight: 'bg-pink-100' },
+    critic: { icon: Gavel, fromColor: 'from-red-400', toColor: 'to-red-700', textColor: 'text-red-900', bgLight: 'bg-red-100' },
+    researcher: { icon: Flask, fromColor: 'from-teal-400', toColor: 'to-teal-700', textColor: 'text-teal-900', bgLight: 'bg-teal-100' },
+    default: { icon: Robot, fromColor: 'from-gray-400', toColor: 'to-gray-700', textColor: 'text-gray-900', bgLight: 'bg-gray-100' },
 };
 
 // Extrai os agentes do config (suporta novo formato dinâmico E legado)
@@ -107,7 +117,7 @@ const CrewVisualizerContent: React.FC<CrewVisualizerProps> = ({ persona, selecte
 
             // Nome do agente para exibição
             const displayName = id.charAt(0).toUpperCase() + id.slice(1);
-            const emoji = agent.icon || style.emoji;
+            const AgentIcon = style.icon;
 
             return {
                 id,
@@ -129,9 +139,9 @@ const CrewVisualizerContent: React.FC<CrewVisualizerProps> = ({ persona, selecte
                             <div className="relative h-full flex flex-col items-center justify-between p-4">
                                 {/* Character "Portrait" Area */}
                                 <div className="flex-1 flex items-center justify-center">
-                                    <div className={`text-7xl transform transition-transform duration-300 ${isSelected ? 'scale-110 rotate-6' : 'hover:scale-105'
+                                    <div className={`transform transition-transform duration-300 text-white ${isSelected ? 'scale-110 rotate-6' : 'hover:scale-105'
                                         }`}>
-                                        {emoji}
+                                        <AgentIcon size={80} weight="duotone" />
                                     </div>
                                 </div>
 
