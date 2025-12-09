@@ -15,10 +15,9 @@ def get_supabase_client():
     return create_client(url, key)
 
 
-class PersonaConfig(BaseModel):
-    analyst: Dict[str, str]
-    strategist: Dict[str, str]
-    planner: Dict[str, str]
+# PersonaConfig agora é um Dict livre para aceitar estruturas dinâmicas
+# Pode conter: agents (dict), template_id, task_count, temperature, max_iter, num_examples, process_type
+# Além dos legados: analyst, strategist, planner
 
 
 class PersonaCreate(BaseModel):
@@ -26,17 +25,19 @@ class PersonaCreate(BaseModel):
     display_name: str
     description: Optional[str] = None
     icon: str = "🎭"
-    config: PersonaConfig
-    llm_model: Optional[str] = "gpt-4o-mini"  # Modelo LLM padrão
-    is_active: Optional[bool] = True  # Ativa por padrão
+    config: Dict[str, Any]  # Aceita qualquer estrutura
+    llm_model: Optional[str] = "gpt-4o-mini"
+    type: Optional[str] = "strategy"
+    is_active: Optional[bool] = True
 
 
 class PersonaUpdate(BaseModel):
     display_name: Optional[str] = None
     description: Optional[str] = None
     icon: Optional[str] = None
-    config: Optional[PersonaConfig] = None
-    llm_model: Optional[str] = None  # Modelo LLM (ex: "gpt-4o-mini", "openrouter/x-ai/grok-beta")
+    config: Optional[Dict[str, Any]] = None  # Aceita qualquer estrutura
+    llm_model: Optional[str] = None
+    type: Optional[str] = None
     is_active: Optional[bool] = None
 
 
@@ -99,32 +100,42 @@ async def create_persona(persona: PersonaCreate):
     Returns:
         Persona criada
     """
-    supabase = get_supabase_client()
+    try:
+        supabase = get_supabase_client()
+        
+        # Verifica se já existe uma persona com esse nome
+        existing = supabase.table("personas") \
+            .select("id") \
+            .eq("name", persona.name) \
+            .execute()
+        
+        if existing.data:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Já existe uma persona com o nome '{persona.name}'"
+            )
+        
+        # Cria a persona (config já é Dict[str, Any])
+        result = supabase.table("personas").insert({
+            "name": persona.name,
+            "display_name": persona.display_name,
+            "description": persona.description,
+            "icon": persona.icon,
+            "config": persona.config,  # Já é dict, não precisa de model_dump()
+            "llm_model": persona.llm_model,
+            "type": persona.type or "strategy",
+            "is_active": persona.is_active
+        }).execute()
+        
+        return result.data[0]
     
-    # Verifica se já existe uma persona com esse nome
-    existing = supabase.table("personas") \
-        .select("id") \
-        .eq("name", persona.name) \
-        .execute()
-    
-    if existing.data:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Já existe uma persona com o nome '{persona.name}'"
-        )
-    
-    # Cria a persona
-    result = supabase.table("personas").insert({
-        "name": persona.name,
-        "display_name": persona.display_name,
-        "description": persona.description,
-        "icon": persona.icon,
-        "config": persona.config.model_dump(),
-        "llm_model": persona.llm_model,  # CORRIGIDO: Adiciona llm_model ao insert
-        "is_active": persona.is_active
-    }).execute()
-    
-    return result.data[0]
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ [PERSONAS API] Erro ao criar persona: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.put("/{persona_id}")
@@ -150,9 +161,11 @@ async def update_persona(persona_id: str, persona: PersonaUpdate):
     if persona.icon is not None:
         update_data["icon"] = persona.icon
     if persona.config is not None:
-        update_data["config"] = persona.config.model_dump()
-    if persona.llm_model is not None:  # CORRIGIDO: Adiciona llm_model ao update
+        update_data["config"] = persona.config  # Já é dict
+    if persona.llm_model is not None:
         update_data["llm_model"] = persona.llm_model
+    if persona.type is not None:
+        update_data["type"] = persona.type
     if persona.is_active is not None:
         update_data["is_active"] = persona.is_active
     

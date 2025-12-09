@@ -9,12 +9,21 @@ import {
     LayoutDashboard,
     Edit,
     Trash2,
-    Loader2
+    Loader2,
+    Bot,
+    Check,
+    CheckCircle2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { createClient } from "@/lib/supabase/client";
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface Campaign {
     id: string;
@@ -26,14 +35,17 @@ interface Campaign {
     number: number;
     created_at: string;
     slug: string;
+    metrics?: {
+        ia_count: number;
+        approved_count: number;
+        has_plan: boolean;
+    };
 }
 
 import { deleteCampaign } from "@/app/actions/delete-campaign";
 import { useToast } from "@/components/ui/use-toast";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-
-// ... (imports remain the same)
 
 export default function CandidatosPage() {
     const [searchQuery, setSearchQuery] = useState("");
@@ -49,13 +61,48 @@ export default function CandidatosPage() {
 
     const fetchCandidates = async () => {
         try {
-            const { data, error } = await supabase
+            const { data: campaigns, error } = await supabase
                 .from("campaigns")
                 .select("*")
                 .order("created_at", { ascending: false });
 
             if (error) throw error;
-            setCandidates(data || []);
+
+            // Enrich with metrics
+            if (campaigns && campaigns.length > 0) {
+                const campaignIds = campaigns.map(c => c.id);
+
+                // 1. Fetch Strategies Counts
+                const { data: strategies } = await supabase
+                    .from("strategies")
+                    .select("campaign_id, status")
+                    .in("campaign_id", campaignIds);
+
+                // 2. Fetch Runs (to check has_plan)
+                const { data: runs } = await supabase
+                    .from("analysis_runs")
+                    .select("campaign_id")
+                    .in("campaign_id", campaignIds);
+
+                const enrichedCandidates = campaigns.map(c => {
+                    const campStrategies = strategies?.filter(s => s.campaign_id === c.id) || [];
+                    const campRuns = runs?.filter(r => r.campaign_id === c.id) || [];
+
+                    return {
+                        ...c,
+                        metrics: {
+                            ia_count: campStrategies.filter(s => s.status === 'suggested').length,
+                            approved_count: campStrategies.filter(s => s.status === 'approved').length,
+                            has_plan: campRuns.length > 0
+                        }
+                    };
+                });
+
+                setCandidates(enrichedCandidates);
+            } else {
+                setCandidates([]);
+            }
+
         } catch (error) {
             console.error("Erro ao buscar candidatos:", error);
             toast({
@@ -164,10 +211,7 @@ export default function CandidatosPage() {
                                     Foto
                                 </th>
                                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                                    Nome Completo
-                                </th>
-                                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                                    Nome de Urna
+                                    Nome / Progresso
                                 </th>
                                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
                                     Partido
@@ -177,9 +221,6 @@ export default function CandidatosPage() {
                                 </th>
                                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
                                     Cargo
-                                </th>
-                                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                                    Número
                                 </th>
                                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
                                     Status
@@ -192,7 +233,7 @@ export default function CandidatosPage() {
                         <tbody className="divide-y divide-gray-200">
                             {isLoading ? (
                                 <tr>
-                                    <td colSpan={9} className="px-4 py-8 text-center text-gray-500">
+                                    <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
                                         <div className="flex items-center justify-center gap-2">
                                             <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
                                             Carregando candidatos...
@@ -201,14 +242,14 @@ export default function CandidatosPage() {
                                 </tr>
                             ) : filteredCandidates.length === 0 ? (
                                 <tr>
-                                    <td colSpan={9} className="px-4 py-8 text-center text-gray-500">
+                                    <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
                                         Nenhum candidato encontrado.
                                     </td>
                                 </tr>
                             ) : (
                                 filteredCandidates.map((candidato) => (
                                     <tr key={candidato.id} className="hover:bg-gray-50">
-                                        <td className="px-4 py-4">
+                                        <td className="px-4 py-4 w-16">
                                             <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
                                                 <span className="text-sm font-semibold text-blue-700">
                                                     {getInitials(candidato.candidate_name)}
@@ -216,15 +257,28 @@ export default function CandidatosPage() {
                                             </div>
                                         </td>
                                         <td className="px-4 py-4">
-                                            <div>
-                                                <div className="text-sm font-medium text-gray-900">
-                                                    {candidato.candidate_name}
+                                            <div className="flex flex-col gap-1.5">
+                                                <div>
+                                                    <div className="text-sm font-medium text-gray-900">
+                                                        {candidato.candidate_name}
+                                                    </div>
+                                                    <div className="text-xs text-gray-500">
+                                                        {candidato.ballot_name || "-"} • Nº {candidato.number}
+                                                    </div>
                                                 </div>
-                                                <div className="text-xs text-gray-500">ID: {candidato.slug}</div>
+
+                                                {/* KPIs / Placar */}
+                                                <div className="flex items-center gap-2">
+                                                    <Badge variant="secondary" className="bg-slate-100 text-slate-600 border-slate-200 px-1.5 py-0 h-5 text-[10px] gap-1 font-medium hover:bg-slate-200">
+                                                        <Bot className="w-3 h-3" />
+                                                        {candidato.metrics?.ia_count}
+                                                    </Badge>
+                                                    <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 border-emerald-100 px-1.5 py-0 h-5 text-[10px] gap-1 font-medium hover:bg-emerald-100">
+                                                        <CheckCircle2 className="w-3 h-3" />
+                                                        {candidato.metrics?.approved_count} Aprov.
+                                                    </Badge>
+                                                </div>
                                             </div>
-                                        </td>
-                                        <td className="px-4 py-4 text-sm text-gray-700">
-                                            {candidato.ballot_name || "-"}
                                         </td>
                                         <td className="px-4 py-4 text-sm text-gray-700">
                                             {candidato.party || "-"}
@@ -235,33 +289,52 @@ export default function CandidatosPage() {
                                         <td className="px-4 py-4 text-sm text-gray-700">
                                             {candidato.role}
                                         </td>
-                                        <td className="px-4 py-4 text-sm font-semibold text-gray-900">
-                                            {candidato.number || "-"}
-                                        </td>
                                         <td className="px-4 py-4">
                                             <Badge className="bg-green-100 text-green-800 border-green-200 hover:bg-green-100">
                                                 Ativo
                                             </Badge>
                                         </td>
-                                        <td className="px-4 py-4">
+                                        <td className="px-4 py-4 text-right">
                                             <div className="flex items-center justify-end gap-1.5">
+                                                <TooltipProvider>
+                                                    <Tooltip>
+                                                        <TooltipTrigger asChild>
+                                                            <span>
+                                                                <Button
+                                                                    size="sm"
+                                                                    className={`h-8 text-xs px-3 ${!candidato.metrics?.has_plan ? 'bg-slate-300 text-slate-500 hover:bg-slate-300 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 text-white'}`}
+                                                                    onClick={(e) => {
+                                                                        if (!candidato.metrics?.has_plan) {
+                                                                            e.preventDefault();
+                                                                            return;
+                                                                        }
+                                                                        router.push(`/campaign/${candidato.id}/dashboard`);
+                                                                    }}
+                                                                    disabled={!candidato.metrics?.has_plan}
+                                                                >
+                                                                    <LayoutDashboard className="h-3.5 w-3.5 mr-1" />
+                                                                    Dashboard
+                                                                </Button>
+                                                            </span>
+                                                        </TooltipTrigger>
+                                                        {!candidato.metrics?.has_plan && (
+                                                            <TooltipContent>
+                                                                <p>Gere a Análise IA primeiro no Setup</p>
+                                                            </TooltipContent>
+                                                        )}
+                                                    </Tooltip>
+                                                </TooltipProvider>
+
                                                 <Link href={`/admin/campaign/${candidato.id}/setup`}>
                                                     <Button
                                                         size="sm"
                                                         className="h-8 bg-purple-600 hover:bg-purple-700 text-white text-xs px-3"
                                                     >
                                                         <BarChart3 className="h-3.5 w-3.5 mr-1" />
-                                                        Análise IA
+                                                        ⚙️ Setup IA
                                                     </Button>
                                                 </Link>
-                                                <Button
-                                                    size="sm"
-                                                    className="h-8 bg-blue-600 hover:bg-blue-700 text-white text-xs px-3"
-                                                    onClick={() => router.push(`/campaign/${candidato.id}/dashboard`)}
-                                                >
-                                                    <LayoutDashboard className="h-3.5 w-3.5 mr-1" />
-                                                    Dashboard
-                                                </Button>
+
                                                 <Button
                                                     size="sm"
                                                     variant="ghost"

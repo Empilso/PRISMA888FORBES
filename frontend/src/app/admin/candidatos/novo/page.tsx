@@ -65,7 +65,7 @@ function CandidateForm() {
             numero: "",
             partido: "",
             cidade: "",
-            electionDate: "2024-10-06" // Data padrão da eleição municipal
+            electionDate: "2026-10-04" // Próxima eleição geral (Padrão)
         }
     });
 
@@ -115,7 +115,7 @@ function CandidateForm() {
                     setValue("cargo", campaign.role || "");
                     setValue("partido", campaign.party || "");
                     setValue("numero", campaign.number?.toString() || "");
-                    setValue("electionDate", campaign.election_date || "2024-10-06");
+                    setValue("electionDate", campaign.election_date || "2026-10-04");
 
                     if (profile) {
                         setValue("email", profile.email || "");
@@ -417,13 +417,13 @@ function CandidateForm() {
                                     </SelectTrigger>
                                     <SelectContent>
                                         <SelectGroup>
-                                            <SelectLabel className="text-xs font-semibold text-blue-600">🏢 Municipais (2028)</SelectLabel>
+                                            <SelectLabel className="text-xs font-semibold text-blue-600">🏘️ Municipais (2028)</SelectLabel>
                                             <SelectItem value="Prefeito">Prefeito</SelectItem>
                                             <SelectItem value="Vice-Prefeito">Vice-Prefeito</SelectItem>
                                             <SelectItem value="Vereador">Vereador</SelectItem>
                                         </SelectGroup>
                                         <SelectGroup>
-                                            <SelectLabel className="text-xs font-semibold text-green-600">🇺🇸 Gerais (2026)</SelectLabel>
+                                            <SelectLabel className="text-xs font-semibold text-green-600">🇧🇷 Gerais (2026)</SelectLabel>
                                             <SelectItem value="Presidente">Presidente</SelectItem>
                                             <SelectItem value="Governador">Governador</SelectItem>
                                             <SelectItem value="Senador">Senador</SelectItem>

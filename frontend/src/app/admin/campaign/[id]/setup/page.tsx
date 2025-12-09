@@ -110,9 +110,9 @@ function DraggableStrategyCard({
         <div ref={setNodeRef} style={style} className="group">
             <Card
                 className={`
-                    cursor-grab active:cursor-grabbing border-none 
-                    bg-white rounded-2xl shadow-sm hover:shadow-md 
-                    transition-all duration-200 hover:-translate-y-0.5
+                    cursor-grab active:cursor-grabbing border border-slate-100
+                    bg-white rounded-xl shadow-sm hover:shadow-md 
+                    transition-all duration-200 hover:border-slate-200
                     ${isDragging ? 'shadow-xl rotate-2 ring-2 ring-primary/20' : ''}
                 `}
             >
@@ -390,6 +390,9 @@ export default function CampaignSetupPage() {
 
     // 🔄 Processar arquivos pendentes
     const handleProcessFiles = async () => {
+        const backendUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+        console.log("🔌 Tentando conectar ao Backend em:", backendUrl);
+
         setIsProcessing(true);
         toast({
             title: '🔄 Processando arquivos...',
@@ -397,26 +400,20 @@ export default function CampaignSetupPage() {
         });
 
         try {
-            const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-            console.log('🔌 [SETUP] API Base URL:', API_BASE);
-
             // Processar CSV (locations)
             const csvDoc = documents.find(d => d.file_type === 'csv');
             if (csvDoc && locationsCount === 0) {
                 console.log('📊 [PROCESS] Processando CSV:', csvDoc.file_url);
-                // Rota correta: /api/ingest/locations
-                // Payload correto: file_url
-                const csvResponse = await fetch(`${API_BASE}/api/ingest/locations`, {
+                const csvResponse = await fetch(`${backendUrl}/api/ingest/locations`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         campaign_id: campaignId,
-                        file_url: csvDoc.file_url // Era csv_url
+                        file_url: csvDoc.file_url
                     })
                 });
                 if (!csvResponse.ok) {
                     const errorData = await csvResponse.json().catch(() => ({}));
-                    console.error('Erro ao processar CSV:', errorData);
                     throw new Error(`CSV Error: ${csvResponse.status} - ${errorData.detail || 'Unknown'}`);
                 }
             }
@@ -425,18 +422,16 @@ export default function CampaignSetupPage() {
             const pdfDoc = documents.find(d => d.file_type === 'pdf');
             if (pdfDoc && chunksCount === 0) {
                 console.log('📄 [PROCESS] Processando PDF:', pdfDoc.file_url);
-                // Payload correto: file_url
-                const pdfResponse = await fetch(`${API_BASE}/api/ingest/pdf`, {
+                const pdfResponse = await fetch(`${backendUrl}/api/ingest/pdf`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         campaign_id: campaignId,
-                        file_url: pdfDoc.file_url // Era pdf_url
+                        file_url: pdfDoc.file_url
                     })
                 });
                 if (!pdfResponse.ok) {
                     const errorData = await pdfResponse.json().catch(() => ({}));
-                    console.error('Erro ao processar PDF:', errorData);
                     throw new Error(`PDF Error: ${pdfResponse.status} - ${errorData.detail || 'Unknown'}`);
                 }
             }
@@ -458,11 +453,11 @@ export default function CampaignSetupPage() {
             await fetchDataHealth();
 
         } catch (error) {
-            console.error('Erro ao processar arquivos:', error);
+            console.error("❌ Erro CRÍTICO de Conexão:", error);
             toast({
-                title: '❌ Erro no processamento',
-                description: 'Não foi possível processar os arquivos.',
-                variant: 'destructive',
+                title: "Erro de Conexão",
+                description: "Não foi possível contatar o servidor Python. Verifique se ele está rodando na porta 8000.",
+                variant: "destructive"
             });
         } finally {
             setIsProcessing(false);
@@ -699,6 +694,9 @@ export default function CampaignSetupPage() {
             console.log('🔄 [VERSION CHANGE] Sugestões filtradas:', suggestedStrategies.length);
             console.log('🔄 [VERSION CHANGE] Aprovados (todas versões):', approvedStrategies.length);
             console.log('🔄 [VERSION CHANGE] Total na Matriz:', strategiesForMatrix.length);
+
+            // Sincroniza console para mostrar logs históricos
+            setCurrentRunId(selectedRunId);
         }
     }, [selectedRunId]);
 
@@ -723,142 +721,106 @@ export default function CampaignSetupPage() {
     return (
         <div className="flex h-screen overflow-hidden bg-background">
             <div className="flex-1 flex flex-col overflow-hidden">
-                {/* Header */}
-                <div className="border-b border-border bg-card/50 backdrop-blur-md px-6 py-4 shadow-sm space-y-4">
-                    {/* Manifesto da Campanha */}
-                    <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-lg p-4">
-                        <h2 className="text-sm font-semibold text-purple-900 mb-1">📜 Manifesto da Campanha</h2>
-                        <p className="text-xs text-purple-700 leading-relaxed">
-                            Uma campanha construída sobre pilares de credibilidade, proximidade e transformação.
-                            Estratégias geradas pela Genesis AI focam em conectar o candidato com a população através
-                            de ações tangíveis nas áreas de saúde, educação e segurança.
-                        </p>
-                    </div>
+                {/* Header Compacto (App Layout) */}
+                <header className="h-16 sticky top-0 z-40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b border-border px-6 flex items-center justify-between gap-4 shrink-0">
+                    <div className="flex items-center gap-4 min-w-0">
+                        <div className="flex items-center gap-2">
+                            <h1 className="text-lg font-bold truncate flex items-center gap-2">
+                                🎯 Simulador
+                                {campaign && (
+                                    <span className="text-muted-foreground font-normal text-base border-l pl-2 ml-2">
+                                        {campaign.candidate_name.split(' ')[0]} <span className="text-xs bg-slate-100 px-1.5 py-0.5 rounded text-slate-500">{campaign.role}</span>
+                                    </span>
+                                )}
+                            </h1>
+                        </div>
 
-                    {/* Controles */}
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-4">
-                            <div>
-                                <h1 className="text-2xl font-bold">
-                                    🎯 Simulador de Homologação
-                                    {campaign && (
-                                        <span className="text-purple-600">: {campaign.candidate_name} - {campaign.role}</span>
-                                    )}
-                                </h1>
-                                <p className="text-sm text-muted-foreground mt-1">
-                                    Revise e aprove as estratégias geradas pela Genesis AI
-                                </p>
-                            </div>
+                        {/* Seletor de Versão Compacto */}
+                        {runs.length > 0 && (
+                            <div className="flex items-center gap-1 border-l pl-4 ml-2">
+                                <Select value={selectedRunId || ""} onValueChange={setSelectedRunId}>
+                                    <SelectTrigger className="h-8 w-[180px] text-xs">
+                                        <SelectValue placeholder="Versão" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {runs.map((run, index) => (
+                                            <SelectItem key={run.id} value={run.id} className="text-xs">
+                                                v{runs.length - index} • {new Date(run.created_at).toLocaleDateString()}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
 
-                            {/* Seletor de Versão */}
-                            {runs.length > 0 && (
-                                <div className="flex items-center gap-2">
-                                    <Clock className="h-4 w-4 text-muted-foreground" />
-                                    <Select value={selectedRunId || ""} onValueChange={setSelectedRunId}>
-                                        <SelectTrigger className="w-[280px]">
-                                            <SelectValue placeholder="Selecione uma versão" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {runs.map((run, index) => (
-                                                <SelectItem key={run.id} value={run.id}>
-                                                    Versão {runs.length - index} - {new Date(run.created_at).toLocaleDateString('pt-BR')} ({run.persona_name})
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-
-                                    {/* Botão de Refresh Manual */}
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => {
-                                            fetchRuns();
-                                            fetchStrategies();
-                                            toast({ title: "Atualizando dados..." });
-                                        }}
-                                        className="h-9 px-2 text-muted-foreground hover:text-primary"
-                                        title="Recarregar dados"
-                                    >
-                                        <RefreshCcw className="h-4 w-4" />
+                                <div className="flex items-center gap-0.5 bg-slate-100 rounded-md p-0.5">
+                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { fetchRuns(); fetchStrategies(); }} title="Recarregar">
+                                        <RefreshCcw className="h-3.5 w-3.5 text-slate-500" />
                                     </Button>
-
-                                    {/* Botão de Deletar */}
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={handleDeleteRun}
-                                        disabled={!selectedRunId || deleting}
-                                        className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-300"
-                                    >
-                                        {deleting ? (
-                                            <Loader2 className="h-4 w-4 animate-spin" />
-                                        ) : (
-                                            <Trash2 className="h-4 w-4" />
-                                        )}
+                                    <Button variant="ghost" size="icon" className="h-7 w-7 hover:text-red-600" onClick={handleDeleteRun} disabled={!selectedRunId || deleting} title="Deletar Versão">
+                                        {deleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
                                     </Button>
                                 </div>
-                            )}
-                        </div>
-
-                        <div className="flex items-center gap-3">
-                            {/* View Toggle */}
-                            <div className="flex gap-1 bg-white border rounded-lg p-1">
-                                <Button
-                                    variant={viewMode === 'kanban' ? 'secondary' : 'ghost'}
-                                    size="sm"
-                                    onClick={() => setViewMode('kanban')}
-                                    className="h-8"
-                                >
-                                    <LayoutList className="h-4 w-4 mr-2" />
-                                    Kanban
-                                </Button>
-                                <Button
-                                    variant={viewMode === 'matrix' ? 'secondary' : 'ghost'}
-                                    size="sm"
-                                    onClick={() => setViewMode('matrix')}
-                                    className="h-8"
-                                >
-                                    <Grid3x3 className="h-4 w-4 mr-2" />
-                                    Matriz
-                                </Button>
-                                <Button
-                                    variant={viewMode === 'timeline' ? 'secondary' : 'ghost'}
-                                    size="sm"
-                                    onClick={() => setViewMode('timeline')}
-                                    className="h-8"
-                                >
-                                    <Calendar className="h-4 w-4 mr-2" />
-                                    Timeline
-                                </Button>
                             </div>
+                        )}
+                    </div>
 
-                            {/* Generator Dialog (Novo) */}
-                            <GeneratorDialog
-                                campaignId={campaignId}
-                                onSuccess={handleGenerationSuccess}
-                                onRunStarted={handleRunStarted}
-                            />
-
-                            {/* Publish Button */}
+                    <div className="flex items-center gap-3 shrink-0">
+                        {/* View Toggle Compacto */}
+                        <div className="flex bg-slate-100/50 rounded-lg p-1 gap-1">
                             <Button
-                                onClick={handlePublish}
-                                disabled={approvedStrategies.length === 0 || publishing}
-                                className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 shadow-md"
-                                size="lg"
+                                variant={viewMode === 'kanban' ? 'white' : 'ghost'}
+                                size="sm"
+                                onClick={() => setViewMode('kanban')}
+                                className={`h-8 px-3 text-xs ${viewMode === 'kanban' ? 'bg-white shadow-sm' : 'text-muted-foreground'}`}
                             >
-                                {publishing ? (
-                                    <>
-                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Publicando...
-                                    </>
-                                ) : (
-                                    <>
-                                        <Send className="mr-2 h-4 w-4" /> Publicar Campanha
-                                    </>
-                                )}
+                                <LayoutList className="h-3.5 w-3.5 mr-2" />
+                                Kanban
+                            </Button>
+                            <Button
+                                variant={viewMode === 'matrix' ? 'white' : 'ghost'}
+                                size="sm"
+                                onClick={() => setViewMode('matrix')}
+                                className={`h-8 px-3 text-xs ${viewMode === 'matrix' ? 'bg-white shadow-sm' : 'text-muted-foreground'}`}
+                            >
+                                <Grid3x3 className="h-3.5 w-3.5 mr-2" />
+                                Matriz
+                            </Button>
+                            <Button
+                                variant={viewMode === 'timeline' ? 'white' : 'ghost'}
+                                size="sm"
+                                onClick={() => setViewMode('timeline')}
+                                className={`h-8 px-3 text-xs ${viewMode === 'timeline' ? 'bg-white shadow-sm' : 'text-muted-foreground'}`}
+                            >
+                                <Calendar className="h-3.5 w-3.5 mr-2" />
+                                Cronograma
                             </Button>
                         </div>
+
+                        <div className="h-6 w-px bg-border mx-1" />
+
+                        {/* Actions */}
+                        <GeneratorDialog
+                            campaignId={campaignId}
+                            onSuccess={handleGenerationSuccess}
+                            onRunStarted={handleRunStarted}
+                            trigger={
+                                <Button size="sm" variant="outline" className="h-9 gap-2 border-purple-200 text-purple-700 hover:bg-purple-50">
+                                    <Sparkles className="h-4 w-4" />
+                                    Gerar Novo
+                                </Button>
+                            }
+                        />
+
+                        <Button
+                            onClick={handlePublish}
+                            disabled={approvedStrategies.length === 0 || publishing}
+                            size="sm"
+                            className="h-9 bg-green-600 hover:bg-green-700 text-white shadow-sm gap-2"
+                        >
+                            {publishing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                            Publicar
+                        </Button>
                     </div>
-                </div>
+                </header>
 
                 {/* 🔴 Alert de Documentos Não Encontrados */}
                 {documents.length === 0 && locationsCount !== null && (
@@ -916,165 +878,219 @@ export default function CampaignSetupPage() {
                     </div>
                 )}
 
-                {/* Content */}
-                <div className="flex-1 p-6 overflow-auto space-y-6">
-                    {loading ? (
-                        <div className="flex items-center justify-center h-full">
-                            <Loader2 className="h-12 w-12 animate-spin text-primary" />
-                        </div>
-                    ) : strategies.length === 0 ? (
-                        // EMPTY STATE
-                        <div className="flex flex-col items-center justify-center h-full space-y-6 text-center animate-in fade-in zoom-in duration-500">
-                            <div className="relative">
-                                <div className="absolute inset-0 bg-purple-500/20 blur-3xl rounded-full" />
-                                <Bot className="h-32 w-32 text-purple-600 relative z-10" />
+                {/* ✅ Data Context Dashboard - Dados Sincronizados */}
+                {locationsCount !== null && chunksCount !== null && locationsCount > 0 && chunksCount > 0 && (
+                    <div className="px-6 pt-4">
+                        <div className="bg-blue-50/50 border border-blue-100 rounded-lg p-3 flex items-center justify-between">
+                            <div className="flex items-center gap-6">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-lg">📍</span>
+                                    <div>
+                                        <span className="text-xs text-blue-600 font-medium">Mapa Tático</span>
+                                        <p className="text-sm font-bold text-blue-900">
+                                            {locationsCount.toLocaleString()} <span className="font-normal text-blue-700">locais</span>
+                                        </p>
+                                    </div>
+                                </div>
+                                <div className="h-8 w-px bg-blue-200" />
+                                <div className="flex items-center gap-2">
+                                    <span className="text-lg">📚</span>
+                                    <div>
+                                        <span className="text-xs text-blue-600 font-medium">Memória Vetorial</span>
+                                        <p className="text-sm font-bold text-blue-900">
+                                            {chunksCount.toLocaleString()} <span className="font-normal text-blue-700">fragmentos</span>
+                                        </p>
+                                    </div>
+                                </div>
                             </div>
-                            <div className="max-w-md space-y-2">
-                                <h3 className="text-2xl font-bold text-slate-900">Nenhuma estratégia gerada</h3>
-                                <p className="text-muted-foreground">
-                                    A IA ainda não analisou o perfil deste candidato. Escolha um estrategista para começar.
-                                </p>
+                            <div className="flex items-center gap-3">
+                                <Badge className="bg-green-100 text-green-800 border-green-300 hover:bg-green-100">
+                                    <CheckCircle className="h-3 w-3 mr-1" />
+                                    Base de Dados Sincronizada
+                                </Badge>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => { fetchDataHealth(); }}
+                                    className="h-8 px-2 text-blue-600 hover:text-blue-800 hover:bg-blue-100"
+                                    title="Recarregar contagens"
+                                >
+                                    <RefreshCcw className="h-3.5 w-3.5" />
+                                </Button>
                             </div>
-                            <GeneratorDialog
-                                campaignId={campaignId}
-                                onSuccess={handleGenerationSuccess}
-                                trigger={
-                                    <Button size="lg" className="gap-2 bg-purple-600 hover:bg-purple-700 text-lg px-8 py-6 h-auto shadow-xl hover:shadow-2xl transition-all hover:-translate-y-1">
-                                        <Sparkles className="h-6 w-6" />
-                                        Iniciar Inteligência Artificial
-                                    </Button>
-                                }
-                            />
                         </div>
-                    ) : (
-                        <>
-                            {/* Dossiê Estratégico - SEMPRE NO TOPO */}
+                    </div>
+                )}
+
+                {/* Content Area - Full Height no Kanban, Auto no resto */}
+                <div className={`flex-1 flex flex-col ${viewMode === 'kanban' ? 'overflow-hidden' : 'overflow-y-auto'}`}>
+                    {/* Dossiê Fixo no Topo (Opcional, pode rolar se quiser, mas aqui vou deixar fixo ou scrollando com conteúdo) */}
+                    {/* Vou colocar dentro do container de conteúdo mas acima do scroll das colunas */}
+
+                    {strategies.length > 0 && (
+                        <div className="px-6 pt-4 pb-2 shrink-0">
                             <CampaignManifesto
                                 campaignId={campaignId}
                                 planContent={selectedRun?.strategic_plan_text}
                             />
-
-                            {/* Visualizações: Kanban ou Matriz */}
-                            {viewMode === 'matrix' ? (
-                                <StrategicMatrix
-                                    strategies={strategiesForMatrix}
-                                    onStrategyClick={handleStrategyClick}
-                                />
-                            ) : (
-                                <DndContext
-                                    sensors={sensors}
-                                    collisionDetection={closestCorners}
-                                    onDragStart={handleDragStart}
-                                    onDragEnd={handleDragEnd}
-                                >
-                                    <div className="grid grid-cols-2 gap-6 h-full">
-                                        {/* Sugestões da IA */}
-                                        <div className="bg-white rounded-xl shadow-md border p-6 overflow-hidden flex flex-col">
-                                            <DroppableColumn
-                                                id="suggested"
-                                                title="Sugestões da IA"
-                                                icon={<Sparkles className="h-5 w-5 text-purple-600" />}
-                                                count={suggestedStrategies.length}
-                                                actionButton={
-                                                    suggestedStrategies.length > 0 && (
-                                                        <Button
-                                                            variant="outline"
-                                                            size="sm"
-                                                            onClick={handleApproveAll}
-                                                            disabled={approvingAll}
-                                                            className="h-8 text-xs border-green-300 text-green-700 hover:bg-green-50"
-                                                        >
-                                                            {approvingAll ? (
-                                                                <>
-                                                                    <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                                                                    Aprovando...
-                                                                </>
-                                                            ) : (
-                                                                <>
-                                                                    <CheckCircle className="h-3 w-3 mr-1" />
-                                                                    Aprovar Todas
-                                                                </>
-                                                            )}
-                                                        </Button>
-                                                    )
-                                                }
-                                            >
-                                                <div className="space-y-3">
-                                                    {suggestedStrategies.map((strategy) => (
-                                                        <DraggableStrategyCard
-                                                            key={strategy.id}
-                                                            strategy={strategy}
-                                                            onClick={() => handleStrategyClick(strategy)}
-                                                            onMove={handleMove}
-                                                        />
-                                                    ))}
-                                                </div>
-                                            </DroppableColumn>
-                                        </div>
-
-                                        {/* Aprovado para Candidato */}
-                                        <div className="bg-gradient-to-br from-emerald-50 to-green-50 rounded-xl shadow-md border-2 border-green-200 p-6 overflow-hidden flex flex-col">
-                                            <DroppableColumn
-                                                id="approved"
-                                                title="Aprovado para Publicação"
-                                                icon={<CheckCircle className="h-5 w-5 text-green-600" />}
-                                                count={approvedStrategies.length}
-                                            >
-                                                <div className="space-y-3">
-                                                    {approvedStrategies.map((strategy) => (
-                                                        <DraggableStrategyCard
-                                                            key={strategy.id}
-                                                            strategy={strategy}
-                                                            onClick={() => handleStrategyClick(strategy)}
-                                                            onMove={handleMove}
-                                                        />
-                                                    ))}
-                                                </div>
-                                            </DroppableColumn>
-                                        </div>
-                                    </div>
-
-                                    <DragOverlay>
-                                        {activeId && strategies.find(s => s.id === activeId) ? (
-                                            <div className="opacity-95 scale-105 rotate-2 shadow-2xl">
-                                                <Card className="border-l-4" style={{ borderLeftColor: strategies.find(s => s.id === activeId)?.pillar === "Credibilidade" ? "#3b82f6" : strategies.find(s => s.id === activeId)?.pillar === "Proximidade" ? "#22c55e" : "#9333ea" }}>
-                                                    <CardHeader className="pb-3">
-                                                        <CardTitle className="text-sm">{strategies.find(s => s.id === activeId)?.title}</CardTitle>
-                                                    </CardHeader>
-                                                </Card>
-                                            </div>
-                                        ) : null}
-                                    </DragOverlay>
-                                </DndContext>
-                            )}
-                        </>
-                    )}
-
-                    {viewMode === 'timeline' && (
-                        <div className="h-full overflow-hidden">
-                            <StrategicTimeline
-                                strategies={strategiesForMatrix}
-                                onStrategyClick={handleStrategyClick}
-                            />
                         </div>
                     )}
+
+                    <div className={`flex-1 px-6 pb-6 ${viewMode === 'kanban' ? 'overflow-hidden' : ''}`}>
+                        {loading ? (
+                            <div className="flex items-center justify-center h-full">
+                                <Loader2 className="h-12 w-12 animate-spin text-primary" />
+                            </div>
+                        ) : strategies.length === 0 ? (
+                            // EMPTY STATE
+                            <div className="flex flex-col items-center justify-center h-full space-y-6 text-center animate-in fade-in zoom-in duration-500">
+                                <div className="relative">
+                                    <div className="absolute inset-0 bg-purple-500/20 blur-3xl rounded-full" />
+                                    <Bot className="h-32 w-32 text-purple-600 relative z-10" />
+                                </div>
+                                <div className="max-w-md space-y-2">
+                                    <h3 className="text-2xl font-bold text-slate-900">Nenhuma estratégia gerada</h3>
+                                    <p className="text-muted-foreground">
+                                        A IA ainda não analisou o perfil deste candidato. Escolha um estrategista para começar.
+                                    </p>
+                                </div>
+                                <GeneratorDialog
+                                    campaignId={campaignId}
+                                    onSuccess={handleGenerationSuccess}
+                                    onRunStarted={handleRunStarted}
+                                    trigger={
+                                        <Button size="lg" className="gap-2 bg-purple-600 hover:bg-purple-700 text-lg px-8 py-6 h-auto shadow-xl hover:shadow-2xl transition-all hover:-translate-y-1">
+                                            <Sparkles className="h-6 w-6" />
+                                            Iniciar Inteligência Artificial
+                                        </Button>
+                                    }
+                                />
+                            </div>
+                        ) : (
+                            <>
+                                {/* Visualizações: Kanban ou Matriz */}
+                                {viewMode === 'matrix' ? (
+                                    <StrategicMatrix
+                                        strategies={strategiesForMatrix}
+                                        onStrategyClick={handleStrategyClick}
+                                    />
+                                ) : (
+                                    <DndContext
+                                        sensors={sensors}
+                                        collisionDetection={closestCorners}
+                                        onDragStart={handleDragStart}
+                                        onDragEnd={handleDragEnd}
+                                    >
+                                        <div className="grid grid-cols-2 gap-6 h-full">
+                                            {/* Sugestões da IA */}
+                                            <div className="bg-white rounded-xl shadow-sm border overflow-hidden flex flex-col h-full">
+                                                <DroppableColumn
+                                                    id="suggested"
+                                                    title="Sugestões da IA"
+                                                    icon={<Sparkles className="h-5 w-5 text-purple-600" />}
+                                                    count={suggestedStrategies.length}
+                                                    actionButton={
+                                                        suggestedStrategies.length > 0 && (
+                                                            <Button
+                                                                variant="outline"
+                                                                size="sm"
+                                                                onClick={handleApproveAll}
+                                                                disabled={approvingAll}
+                                                                className="h-8 text-xs border-green-300 text-green-700 hover:bg-green-50"
+                                                            >
+                                                                {approvingAll ? (
+                                                                    <>
+                                                                        <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                                                                        Aprovando...
+                                                                    </>
+                                                                ) : (
+                                                                    <>
+                                                                        <CheckCircle className="h-3 w-3 mr-1" />
+                                                                        Aprovar Todas
+                                                                    </>
+                                                                )}
+                                                            </Button>
+                                                        )
+                                                    }
+                                                >
+                                                    <div className="space-y-3">
+                                                        {suggestedStrategies.map((strategy) => (
+                                                            <DraggableStrategyCard
+                                                                key={strategy.id}
+                                                                strategy={strategy}
+                                                                onClick={() => handleStrategyClick(strategy)}
+                                                                onMove={handleMove}
+                                                            />
+                                                        ))}
+                                                    </div>
+                                                </DroppableColumn>
+                                            </div>
+
+                                            {/* Aprovado para Candidato */}
+                                            <div className="bg-white rounded-xl shadow-sm border border-l-4 border-l-emerald-500 overflow-hidden flex flex-col h-full">
+                                                <DroppableColumn
+                                                    id="approved"
+                                                    title="Aprovado para Publicação"
+                                                    icon={<CheckCircle className="h-5 w-5 text-emerald-600" />}
+                                                    count={approvedStrategies.length}
+                                                >
+                                                    <div className="space-y-3 pb-4">
+                                                        {approvedStrategies.map((strategy) => (
+                                                            <DraggableStrategyCard
+                                                                key={strategy.id}
+                                                                strategy={strategy}
+                                                                onClick={() => handleStrategyClick(strategy)}
+                                                                onMove={handleMove}
+                                                            />
+                                                        ))}
+                                                    </div>
+                                                </DroppableColumn>
+                                            </div>
+                                        </div>
+
+                                        <DragOverlay>
+                                            {activeId && strategies.find(s => s.id === activeId) ? (
+                                                <div className="opacity-95 scale-105 rotate-2 shadow-2xl">
+                                                    <Card className="border-l-4" style={{ borderLeftColor: strategies.find(s => s.id === activeId)?.pillar === "Credibilidade" ? "#3b82f6" : strategies.find(s => s.id === activeId)?.pillar === "Proximidade" ? "#22c55e" : "#9333ea" }}>
+                                                        <CardHeader className="pb-3">
+                                                            <CardTitle className="text-sm">{strategies.find(s => s.id === activeId)?.title}</CardTitle>
+                                                        </CardHeader>
+                                                    </Card>
+                                                </div>
+                                            ) : null}
+                                        </DragOverlay>
+                                    </DndContext>
+                                )}
+                            </>
+                        )}
+
+                        {viewMode === 'timeline' && (
+                            <div className="h-full overflow-hidden">
+                                <StrategicTimeline
+                                    strategies={strategiesForMatrix}
+                                    onStrategyClick={handleStrategyClick}
+                                    onStrategyUpdate={handleStrategySave}
+                                />
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Strategy Editor Sheet */}
+                    <StrategyEditorSheet
+                        strategy={selectedStrategy}
+                        isOpen={isEditorOpen}
+                        onClose={() => setIsEditorOpen(false)}
+                        onSave={handleStrategySave}
+                    />
+
+                    {/* 🖥️ Console Global */}
+                    <ExecutionConsole
+                        runId={currentRunId}
+                        campaignId={campaignId}
+                        isOpen={isConsoleOpen}
+                        onToggle={() => setIsConsoleOpen(!isConsoleOpen)}
+                    />
                 </div>
-
-                {/* Strategy Editor Sheet */}
-                <StrategyEditorSheet
-                    strategy={selectedStrategy}
-                    isOpen={isEditorOpen}
-                    onClose={() => setIsEditorOpen(false)}
-                    onSave={handleStrategySave}
-                />
-
-                {/* 🖥️ Console Global */}
-                <ExecutionConsole
-                    key={currentRunId} // FORÇA REMONTAR O COMPONENTE
-                    runId={currentRunId}
-                    isOpen={isConsoleOpen}
-                    onToggle={() => setIsConsoleOpen(!isConsoleOpen)}
-                />
             </div>
         </div>
     );

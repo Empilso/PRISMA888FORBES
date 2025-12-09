@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import CrewVisualizer from "@/components/admin/CrewVisualizer";
 import { ExecutionConsole } from "@/components/admin/ExecutionConsole";
+import { CreatePersonaDialog, AVAILABLE_AGENTS } from "@/components/admin/CreatePersonaDialog";
 
 // Opções de modelos LLM disponíveis
 const LLM_OPTIONS = [
@@ -70,7 +71,23 @@ interface AgentConfig {
     backstory: string;
 }
 
+// Tipos de agentes válidos para index
+type AgentName = 'analyst' | 'strategist' | 'planner';
+
 interface PersonaConfig {
+    // Parâmetros de Execução
+    task_count?: number;
+    temperature?: number;
+    max_iter?: number;
+    num_examples?: number;
+    process_type?: 'sequential' | 'hierarchical';
+
+    // Metadados do Template (novo formato dinâmico)
+    template_id?: string;
+    template_name?: string;
+    agents?: Record<string, AgentConfig>;
+
+    // Configuração dos Agentes (legado)
     analyst: AgentConfig;
     strategist: AgentConfig;
     planner: AgentConfig;
@@ -84,6 +101,7 @@ interface Persona {
     icon: string;
     config: PersonaConfig;
     llm_model?: string;  // Modelo LLM (ex: "gpt-4o-mini", "openrouter/x-ai/grok-beta")
+    type?: 'strategy' | 'tactical';  // Tipo: estratégico (Genesis) ou tático (Micro-Targeting)
     is_active: boolean;
 }
 
@@ -91,13 +109,27 @@ export default function AgentesPage() {
     const router = useRouter();
     const [personas, setPersonas] = useState<Persona[]>([]);
     const [selectedPersona, setSelectedPersona] = useState<Persona | null>(null);
+    const [originalPersona, setOriginalPersona] = useState<Persona | null>(null); // Para detectar mudanças
+    const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [typeFilter, setTypeFilter] = useState<'all' | 'strategy' | 'tactical'>('all');
     const { toast } = useToast();
+
+    // Detecta mudanças não salvas
+    useEffect(() => {
+        if (selectedPersona && originalPersona) {
+            const hasChanges = JSON.stringify(selectedPersona) !== JSON.stringify(originalPersona);
+            setHasUnsavedChanges(hasChanges);
+        } else {
+            setHasUnsavedChanges(false);
+        }
+    }, [selectedPersona, originalPersona]);
 
     useEffect(() => {
         fetchPersonas();
     }, []);
+
 
     const fetchPersonas = async () => {
         setLoading(true);
@@ -112,6 +144,7 @@ export default function AgentesPage() {
             setPersonas(personasArray);
             if (personasArray.length > 0 && !selectedPersona) {
                 setSelectedPersona(personasArray[0]);
+                setOriginalPersona(personasArray[0]);
             }
         } catch (error) {
             console.error("Erro ao carregar personas:", error);
@@ -139,6 +172,7 @@ export default function AgentesPage() {
                     icon: selectedPersona.icon,
                     config: selectedPersona.config,
                     llm_model: selectedPersona.llm_model || "gpt-4o-mini",
+                    type: selectedPersona.type || "strategy",  // Inclui o tipo
                 }),
             });
 
@@ -149,6 +183,8 @@ export default function AgentesPage() {
                 description: "Persona atualizada com sucesso.",
             });
 
+            // Reset original para limpar indicador de mudanças
+            setOriginalPersona(JSON.parse(JSON.stringify(selectedPersona)));
             fetchPersonas();
         } catch (error) {
             toast({
@@ -210,10 +246,27 @@ export default function AgentesPage() {
         });
     };
 
+    // Helper para acessar config de agente de forma type-safe
+    const getAgentConfig = (agentName: string): AgentConfig | null => {
+        if (!selectedPersona?.config) return null;
+        if (agentName === 'analyst') return selectedPersona.config.analyst;
+        if (agentName === 'strategist') return selectedPersona.config.strategist;
+        if (agentName === 'planner') return selectedPersona.config.planner;
+        return null;
+    };
+
     // --- NOVAS FUNCIONALIDADES ---
 
-    // 1. Template Padrão para Novas Personas
+    // 1. Template Padrão para Novas Personas (COM PARÂMETROS DE EXECUÇÃO)
     const DEFAULT_PERSONA_CONFIG = {
+        // Parâmetros de Execução
+        task_count: 10,          // Quantidade de tarefas a gerar (5-50)
+        temperature: 0.7,        // Criatividade: 0.3 (baixa), 0.7 (média), 1.0 (alta)
+        max_iter: 15,            // Máximo de iterações por agente (1-50)
+        num_examples: 2,         // Exemplos por tarefa (0-5)
+        process_type: 'sequential' as const,  // Dinâmica: sequential ou hierarchical
+
+        // Configuração dos Agentes
         analyst: {
             role: "Analista Político Sênior",
             goal: "Analisar dados eleitorais e identificar tendências críticas",
@@ -380,18 +433,47 @@ export default function AgentesPage() {
     // Só executa quando o ID da persona muda, NÃO quando campos são editados
     useEffect(() => {
         if (selectedPersona) {
-            setIsRightPanelOpen(true); // Abre o painel em modo "Geral"
-            setSelectedAgent(null); // Garante que estamos no modo Geral, não Inspector
+            setIsRightPanelOpen(true);
+            setSelectedAgent(null);
+            // Salva cópia para detectar mudanças
+            setOriginalPersona(JSON.parse(JSON.stringify(selectedPersona)));
         }
-    }, [selectedPersona?.id]); // ✅ Só observa mudanças no ID, não em todo o objeto
+    }, [selectedPersona?.id]);
+
+    // ⌨️ ATALHOS DE TECLADO
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            // Cmd+S ou Ctrl+S -> Salvar
+            if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+                e.preventDefault();
+                if (selectedPersona && hasUnsavedChanges && !saving) {
+                    handleSave();
+                }
+            }
+            // Cmd+Enter ou Ctrl+Enter -> Simular
+            if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                e.preventDefault();
+                if (selectedPersona && selectedCampaignId && !isSimulating) {
+                    handleSimulate();
+                }
+            }
+            // Esc -> Fechar painel
+            if (e.key === 'Escape') {
+                setIsRightPanelOpen(false);
+                setSelectedAgent(null);
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [selectedPersona, hasUnsavedChanges, saving, selectedCampaignId, isSimulating]);
 
     // Handler para cliques no nó (agente)
     const handleNodeClick = (nodeId: string | null) => {
         if (nodeId) {
-            setIsRightPanelOpen(true); // Abre o painel
-            setSelectedAgent(nodeId); // Modo Inspector
+            setIsRightPanelOpen(true);
+            setSelectedAgent(nodeId);
         } else {
-            // Click no pane (fundo) - fecha tudo
             setIsRightPanelOpen(false);
             setSelectedAgent(null);
         }
@@ -408,176 +490,248 @@ export default function AgentesPage() {
     // ... (fetchPersonas, handleSave, updateAgentField logic)
 
     return (
-        <div className="relative h-[calc(100vh-60px)] w-full overflow-hidden bg-background">
-            {/* Layer 0: The Infinite Canvas (Background) */}
+        <div className="relative h-screen w-full overflow-hidden bg-gradient-to-br from-slate-50 to-slate-100">
+            {/* ============================================= */}
+            {/* LAYER 0: INFINITE CANVAS (Full Screen) */}
+            {/* ============================================= */}
             <div className="absolute inset-0 z-0">
                 <CrewVisualizer
                     persona={selectedPersona}
                     selectedNodeId={selectedAgent}
-                    activeExecutionAgent={activeExecutionAgent} // ⭐ Passando o agente ativo
+                    activeExecutionAgent={activeExecutionAgent}
                     onNodeClick={handleNodeClick}
                 />
             </div>
 
-            {/* Sidebar Toggle Button */}
-            <Button
-                variant="outline"
-                size="icon"
-                className="absolute top-4 left-4 z-20 bg-background/80 backdrop-blur"
-                onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            >
-                {isSidebarOpen ? <ChevronUp className="h-4 w-4 rotate-[-90deg]" /> : <ChevronUp className="h-4 w-4 rotate-90" />}
-            </Button>
+            {/* ============================================= */}
+            {/* LAYER 1: FLOATING ISLAND - Navigation (Top Left) */}
+            {/* ============================================= */}
+            <div className="absolute top-4 left-4 z-20">
+                <div className="bg-white/95 backdrop-blur-lg rounded-2xl shadow-lg border border-white/50 p-2">
+                    <div className="flex items-center gap-2">
+                        {/* Persona Selector */}
+                        <Select
+                            value={selectedPersona?.id || ""}
+                            onValueChange={(id) => {
+                                const p = personas.find(p => p.id === id);
+                                if (p) setSelectedPersona(p);
+                            }}
+                        >
+                            <SelectTrigger className="w-[220px] h-10 bg-transparent border-0 shadow-none hover:bg-slate-100 transition-colors">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-xl">{selectedPersona?.icon || '🤖'}</span>
+                                    <span className="font-medium truncate">
+                                        {selectedPersona?.display_name || 'Selecione uma Equipe'}
+                                    </span>
+                                </div>
+                            </SelectTrigger>
+                            <SelectContent className="max-h-[400px]">
+                                {/* Filter Tabs inside Dropdown */}
+                                <div className="p-2 border-b sticky top-0 bg-white z-10">
+                                    <div className="flex gap-1 p-1 bg-muted rounded-lg">
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); setTypeFilter('all'); }}
+                                            className={`flex-1 py-1 px-2 text-xs font-medium rounded-md transition-all ${typeFilter === 'all' ? 'bg-background shadow-sm' : 'text-muted-foreground'
+                                                }`}
+                                        >
+                                            Todos
+                                        </button>
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); setTypeFilter('strategy'); }}
+                                            className={`flex-1 py-1 px-2 text-xs font-medium rounded-md transition-all ${typeFilter === 'strategy' ? 'bg-purple-600 text-white' : 'text-muted-foreground'
+                                                }`}
+                                        >
+                                            🎯 Estratégia
+                                        </button>
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); setTypeFilter('tactical'); }}
+                                            className={`flex-1 py-1 px-2 text-xs font-medium rounded-md transition-all ${typeFilter === 'tactical' ? 'bg-orange-600 text-white' : 'text-muted-foreground'
+                                                }`}
+                                        >
+                                            ⚔️ Tático
+                                        </button>
+                                    </div>
+                                </div>
 
-            {/* Layer 1: Floating Left Panel (Persona List) */}
-            <div className={`absolute top-16 left-4 w-80 bottom-20 z-10 transition-transform duration-300 ease-in-out ${isSidebarOpen ? 'translate-x-0' : '-translate-x-[120%]'}`}>
-                <Card className="h-full shadow-xl border-border/50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 flex flex-col">
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-lg flex items-center gap-2">
-                            <span className="text-xl">🤖</span> Personas
-                        </CardTitle>
-                        <CardDescription>Gerencie suas equipes de IA</CardDescription>
-                    </CardHeader>
-                    <CardContent className="flex-1 overflow-y-auto space-y-2">
-                        {loading ? (
-                            <div className="flex justify-center p-4">
-                                <Loader2 className="animate-spin" />
-                            </div>
-                        ) : personas && personas.length > 0 ? (
-                            personas.map((persona) => (
-                                <div
-                                    key={persona.id}
-                                    onClick={() => setSelectedPersona(persona)}
-                                    className={`p-3 rounded-lg cursor-pointer transition-all border ${selectedPersona?.id === persona.id
-                                        ? "bg-primary/10 border-primary shadow-sm"
-                                        : "hover:bg-muted border-transparent hover:border-border"
-                                        }`}
-                                >
-                                    <div className="flex items-center gap-3">
-                                        <span className="text-2xl">{persona.icon}</span>
-                                        <div>
-                                            <div className="font-medium">{persona.display_name}</div>
-                                            <div className="text-xs text-muted-foreground line-clamp-1">
-                                                {persona.description}
+                                {personas
+                                    .filter(p => typeFilter === 'all' || p.type === typeFilter || (!p.type && typeFilter === 'strategy'))
+                                    .map((persona) => (
+                                        <SelectItem key={persona.id} value={persona.id}>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-lg">{persona.icon}</span>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="font-medium">{persona.display_name}</span>
+                                                        <Badge
+                                                            variant="outline"
+                                                            className={`text-[9px] px-1 py-0 ${persona.type === 'tactical'
+                                                                ? 'border-orange-400 text-orange-600'
+                                                                : 'border-purple-400 text-purple-600'
+                                                                }`}
+                                                        >
+                                                            {persona.config?.template_name || (persona.type === 'tactical' ? '⚔️' : '🎯')}
+                                                        </Badge>
+                                                    </div>
+                                                </div>
                                             </div>
+                                        </SelectItem>
+                                    ))}
+                            </SelectContent>
+                        </Select>
+
+                        {/* Divider */}
+                        <div className="h-6 w-px bg-slate-200" />
+
+                        {/* Create New Button */}
+                        <CreatePersonaDialog
+                            onPersonaCreated={(newPersona) => {
+                                fetchPersonas();
+                                setSelectedPersona(newPersona);
+                            }}
+                            trigger={
+                                <Button variant="ghost" size="icon" className="h-10 w-10 hover:bg-slate-100">
+                                    <Plus className="h-5 w-5 text-slate-600" />
+                                </Button>
+                            }
+                        />
+                    </div>
+                </div>
+            </div>
+
+            {/* ============================================= */}
+            {/* LAYER 2: FLOATING ISLAND - Actions (Top Right) */}
+            {/* ============================================= */}
+            <div className="absolute top-4 right-4 z-20">
+                <div className="bg-white/95 backdrop-blur-lg rounded-2xl shadow-lg border border-white/50 p-2 flex items-center gap-2">
+                    {/* Simulate Button */}
+                    <Button
+                        className="bg-green-600 hover:bg-green-700 text-white gap-2 shadow-md"
+                        onClick={handleSimulate}
+                        disabled={!selectedCampaignId || !selectedPersona || isSimulating}
+                    >
+                        {isSimulating ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                            <Play className="h-4 w-4" />
+                        )}
+                        {isSimulating ? 'Executando...' : 'Simular'}
+                    </Button>
+
+                    {/* Campaign Selector Mini */}
+                    <Select value={selectedCampaignId} onValueChange={setSelectedCampaignId}>
+                        <SelectTrigger className="w-[160px] h-9 bg-slate-50 border-0">
+                            <SelectValue placeholder="Campanha..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {campaigns.length === 0 ? (
+                                <SelectItem value="none" disabled>Nenhuma campanha</SelectItem>
+                            ) : (
+                                campaigns.map(c => (
+                                    <SelectItem key={c.id} value={c.id}>{c.title}</SelectItem>
+                                ))
+                            )}
+                        </SelectContent>
+                    </Select>
+
+                    {/* Divider */}
+                    <div className="h-6 w-px bg-slate-200" />
+
+                    {/* Settings Toggle */}
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className={`h-9 w-9 transition-colors ${isRightPanelOpen ? 'bg-slate-100' : ''}`}
+                        onClick={() => {
+                            if (selectedPersona) {
+                                setIsRightPanelOpen(!isRightPanelOpen);
+                                setSelectedAgent(null);
+                            }
+                        }}
+                        disabled={!selectedPersona}
+                    >
+                        <Terminal className="h-4 w-4" />
+                    </Button>
+                </div>
+            </div>
+
+            {/* ============================================= */}
+            {/* LAYER 3: RIGHT DRAWER - Settings Panel */}
+            {/* ============================================= */}
+            <div className={`
+                absolute top-4 right-4 bottom-20 w-[420px] z-30
+                transition-all duration-300 ease-out
+                ${selectedPersona && isRightPanelOpen
+                    ? 'translate-x-0 opacity-100 pointer-events-auto'
+                    : 'translate-x-[120%] opacity-0 pointer-events-none'
+                }
+            `}>
+                {selectedPersona && isRightPanelOpen && (
+                    <Card className="h-full flex flex-col rounded-2xl shadow-2xl border-0 bg-white/98 backdrop-blur-xl overflow-hidden">
+                        {/* Header */}
+                        <div className="p-6 pb-4 border-b bg-gradient-to-b from-slate-50 to-white">
+                            <div className="flex items-start justify-between mb-4">
+                                <div className="flex items-center gap-4">
+                                    <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-100 to-indigo-100 flex items-center justify-center text-3xl shadow-sm">
+                                        {selectedPersona.icon}
+                                    </div>
+                                    <div className="space-y-1">
+                                        <Input
+                                            className="text-xl font-bold h-8 px-0 border-0 shadow-none focus-visible:ring-0 bg-transparent"
+                                            value={selectedPersona.display_name}
+                                            onChange={(e) => setSelectedPersona({ ...selectedPersona, display_name: e.target.value })}
+                                        />
+                                        <div className="flex items-center gap-2">
+                                            <Badge variant="secondary" className="text-xs">
+                                                {selectedPersona.config?.template_name || 'Padrão'}
+                                            </Badge>
+                                            <Badge
+                                                variant="outline"
+                                                className={`text-xs ${selectedPersona.config?.process_type === 'hierarchical'
+                                                    ? 'border-amber-400 text-amber-700 bg-amber-50'
+                                                    : 'border-blue-400 text-blue-700 bg-blue-50'
+                                                    }`}
+                                            >
+                                                {selectedPersona.config?.process_type === 'hierarchical' ? '🎩 Hierárquico' : '🔗 Sequencial'}
+                                            </Badge>
                                         </div>
                                     </div>
                                 </div>
-                            ))
-                        ) : (
-                            <div className="flex flex-col items-center justify-center p-8 text-center">
-                                <p className="text-muted-foreground text-sm mb-2">Nenhuma persona encontrada</p>
-                                <p className="text-xs text-muted-foreground">Clique em "Nova Persona" para criar</p>
-                            </div>
-                        )}
-                    </CardContent>
-                    <div className="p-4 border-t mt-auto">
-                        <Button className="w-full" variant="outline" onClick={handleCreatePersona}>
-                            <Plus className="mr-2 h-4 w-4" /> Nova Persona
-                        </Button>
-                    </div>
-                </Card>
-            </div>
-
-            {/* Layer 2: Floating Right Panel (Editor Drawer) */}
-            <div className={`absolute top-4 right-4 bottom-20 w-96 z-20 transition-transform duration-300 ease-in-out ${selectedPersona && isRightPanelOpen ? 'translate-x-0 pointer-events-auto' : 'translate-x-[120%] pointer-events-none'}`}>
-                {selectedPersona && isRightPanelOpen && (
-                    <Card className="h-full flex flex-col shadow-xl border-border/50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-                        <CardHeader className="pb-2 border-b">
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-3 flex-1 mr-4">
-                                    <span className="text-3xl">{selectedPersona.icon}</span>
-                                    <div className="flex-1 space-y-1">
-                                        <Input
-                                            className="text-lg font-bold h-9 px-2 border-transparent hover:border-input focus:border-input transition-all bg-transparent"
-                                            value={selectedPersona.display_name}
-                                            onChange={(e) => setSelectedPersona({ ...selectedPersona, display_name: e.target.value })}
-                                            placeholder="Nome da Persona"
-                                        />
-                                        <Textarea
-                                            className="text-xs text-muted-foreground min-h-[40px] px-2 py-1 border-transparent hover:border-input focus:border-input transition-all resize-none bg-transparent shadow-none focus-visible:ring-1"
-                                            value={selectedPersona.description}
-                                            onChange={(e) => setSelectedPersona({ ...selectedPersona, description: e.target.value })}
-                                            placeholder="Descrição curta da persona..."
-                                            rows={2}
-                                        />
-                                    </div>
-                                </div>
                                 <div className="flex gap-1">
-                                    <Button onClick={handleSave} disabled={saving} size="sm">
+                                    <Button
+                                        onClick={handleSave}
+                                        disabled={saving || !hasUnsavedChanges}
+                                        size="icon"
+                                        className="h-9 w-9 relative"
+                                        title="Salvar (Cmd+S)"
+                                    >
                                         {saving ? (
                                             <Loader2 className="h-4 w-4 animate-spin" />
                                         ) : (
                                             <Save className="h-4 w-4" />
                                         )}
+                                        {/* Badge de "não salvo" */}
+                                        {hasUnsavedChanges && !saving && (
+                                            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse" />
+                                        )}
                                     </Button>
-                                    <Button variant="ghost" size="icon" onClick={() => {
-                                        setIsRightPanelOpen(false);
-                                        setSelectedAgent(null);
-                                    }}>
+                                    <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => { setIsRightPanelOpen(false); setSelectedAgent(null); }}>
                                         <X className="h-4 w-4" />
                                     </Button>
                                 </div>
                             </div>
-                            <div className="pt-2 space-y-2">
-                                {/* Seletor de Campanha */}
-                                <div className="space-y-1">
-                                    <label className="text-[10px] font-medium text-muted-foreground uppercase">
-                                        Campanha para Simulação
-                                    </label>
-                                    <Select value={selectedCampaignId} onValueChange={setSelectedCampaignId}>
-                                        <SelectTrigger className="w-full h-8 text-xs">
-                                            <SelectValue placeholder="Selecione uma campanha..." />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {campaigns.length === 0 ? (
-                                                <SelectItem value="none" disabled>
-                                                    Nenhuma campanha cadastrada
-                                                </SelectItem>
-                                            ) : (
-                                                campaigns.map(c => (
-                                                    <SelectItem key={c.id} value={c.id}>
-                                                        {c.title}
-                                                    </SelectItem>
-                                                ))
-                                            )}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
 
-                                {/* Botão Simular */}
-                                <Button
-                                    className="w-full bg-green-600 hover:bg-green-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                                    size="sm"
-                                    onClick={handleSimulate}
-                                    disabled={!selectedCampaignId || isSimulating} // Desabilita durante loading
-                                    type="button" // Previne submit acidental
-                                >
-                                    {isSimulating ? (
-                                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                    ) : (
-                                        <Play className="h-4 w-4 mr-2" />
-                                    )}
-                                    {isSimulating ? 'Iniciando...' : (selectedCampaignId ? 'Simular Execução' : 'Selecione uma Campanha')}
-                                </Button>
+                            {/* Description */}
+                            <Textarea
+                                className="text-sm text-muted-foreground min-h-[48px] px-0 border-0 shadow-none focus-visible:ring-0 resize-none bg-transparent"
+                                value={selectedPersona.description}
+                                onChange={(e) => setSelectedPersona({ ...selectedPersona, description: e.target.value })}
+                                placeholder="Descrição da equipe..."
+                                rows={2}
+                            />
+                        </div>
 
-                                {/* Botão para ir ao Setup manualmente */}
-                                {selectedCampaignId && (
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="w-full mt-2"
-                                        onClick={() => router.push(`/admin/campaign/${selectedCampaignId}/setup`)}
-                                        type="button"
-                                    >
-                                        <ExternalLink className="h-4 w-4 mr-2" />
-                                        Ver Resultado no Setup ↗️
-                                    </Button>
-                                )}
-                            </div>
-                        </CardHeader>
-
-                        <CardContent className="flex-1 overflow-y-auto p-4">
+                        {/* Content */}
+                        <CardContent className="flex-1 overflow-y-auto p-6">
                             {selectedAgent ? (
                                 // MODO INSPECTOR (AGENTE)
                                 <div key={selectedAgent} className="space-y-4 animate-in slide-in-from-right-4 duration-300">
@@ -602,7 +756,7 @@ export default function AgentesPage() {
                                         <div className="space-y-2">
                                             <label className="text-xs font-medium uppercase text-muted-foreground">Papel (Role)</label>
                                             <Input
-                                                value={selectedPersona.config[selectedAgent as keyof PersonaConfig].role}
+                                                value={getAgentConfig(selectedAgent)?.role || ''}
                                                 onChange={(e) =>
                                                     updateAgentField(selectedAgent as any, "role", e.target.value)
                                                 }
@@ -611,7 +765,7 @@ export default function AgentesPage() {
                                         <div className="space-y-2">
                                             <label className="text-xs font-medium uppercase text-muted-foreground">Objetivo (Goal)</label>
                                             <Textarea
-                                                value={selectedPersona.config[selectedAgent as keyof PersonaConfig].goal}
+                                                value={getAgentConfig(selectedAgent)?.goal || ''}
                                                 onChange={(e) =>
                                                     updateAgentField(selectedAgent as any, "goal", e.target.value)
                                                 }
@@ -621,7 +775,7 @@ export default function AgentesPage() {
                                         <div className="space-y-2">
                                             <label className="text-xs font-medium uppercase text-muted-foreground">História (Backstory)</label>
                                             <Textarea
-                                                value={selectedPersona.config[selectedAgent as keyof PersonaConfig].backstory}
+                                                value={getAgentConfig(selectedAgent)?.backstory || ''}
                                                 onChange={(e) =>
                                                     updateAgentField(selectedAgent as any, "backstory", e.target.value)
                                                 }
@@ -688,35 +842,201 @@ export default function AgentesPage() {
                                                 Modelos com prefixo "openrouter/" usam o OpenRouter. Modelos sem prefixo usam OpenAI nativo.
                                             </p>
                                         </div>
-                                    </div>
 
-                                    <div className="border-t pt-4 space-y-4">
-                                        <p className="text-sm text-muted-foreground">
-                                            💡 <strong>Dica:</strong> Clique em um dos agentes no visualizador para editar suas configurações específicas.
-                                        </p>
+                                        {/* Seletor de Tipo de Agente */}
+                                        <div className="space-y-2 pt-2">
+                                            <label className="text-xs font-medium uppercase text-muted-foreground flex items-center gap-2">
+                                                🎭 Tipo de Agente
+                                            </label>
+                                            <p className="text-xs text-muted-foreground mb-2">
+                                                Agentes <strong>Estratégicos</strong> fazem o plano global (Genesis). Agentes <strong>Táticos</strong> fazem micro-targeting no mapa.
+                                            </p>
+                                            <div className="flex gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setSelectedPersona({ ...selectedPersona, type: 'strategy' })}
+                                                    className={`flex-1 py-3 px-4 rounded-lg border-2 transition-all ${(selectedPersona.type || 'strategy') === 'strategy'
+                                                        ? 'border-purple-500 bg-purple-50 text-purple-700'
+                                                        : 'border-border bg-muted/30 text-muted-foreground hover:border-purple-300'
+                                                        }`}
+                                                >
+                                                    <div className="text-2xl mb-1">🎯</div>
+                                                    <div className="text-xs font-medium">Estratégia</div>
+                                                    <div className="text-[10px] text-muted-foreground">Plano Global</div>
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setSelectedPersona({ ...selectedPersona, type: 'tactical' })}
+                                                    className={`flex-1 py-3 px-4 rounded-lg border-2 transition-all ${selectedPersona.type === 'tactical'
+                                                        ? 'border-orange-500 bg-orange-50 text-orange-700'
+                                                        : 'border-border bg-muted/30 text-muted-foreground hover:border-orange-300'
+                                                        }`}
+                                                >
+                                                    <div className="text-2xl mb-1">⚔️</div>
+                                                    <div className="text-xs font-medium">Tático</div>
+                                                    <div className="text-[10px] text-muted-foreground">Micro-Targeting</div>
+                                                </button>
+                                            </div>
+                                        </div>
 
-                                        <AlertDialog>
-                                            <AlertDialogTrigger asChild>
-                                                <Button variant="destructive" className="w-full opacity-90 hover:opacity-100" disabled={saving}>
-                                                    <Trash2 className="mr-2 h-4 w-4" /> Excluir Persona
-                                                </Button>
-                                            </AlertDialogTrigger>
-                                            <AlertDialogContent>
-                                                <AlertDialogHeader>
-                                                    <AlertDialogTitle>Tem certeza absoluta?</AlertDialogTitle>
-                                                    <AlertDialogDescription>
-                                                        Esta ação marcará a persona <strong>{selectedPersona.display_name}</strong> como inativa.
-                                                        Você poderá restaurá-la posteriormente via banco de dados se necessário.
-                                                    </AlertDialogDescription>
-                                                </AlertDialogHeader>
-                                                <AlertDialogFooter>
-                                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                                    <AlertDialogAction onClick={handleDelete} className="bg-red-600 hover:bg-red-700">
-                                                        Sim, excluir
-                                                    </AlertDialogAction>
-                                                </AlertDialogFooter>
-                                            </AlertDialogContent>
-                                        </AlertDialog>
+                                        {/* ====== PARÂMETROS DE EXECUÇÃO ====== */}
+                                        <div className="space-y-4 pt-4 border-t">
+                                            <label className="text-xs font-medium uppercase text-muted-foreground flex items-center gap-2">
+                                                ⚙️ Parâmetros de Execução
+                                            </label>
+
+                                            {/* Quantidade de Tarefas (Slider) */}
+                                            <div className="space-y-2">
+                                                <div className="flex justify-between items-center">
+                                                    <span className="text-xs text-muted-foreground">📋 Quantidade de Tarefas</span>
+                                                    <span className="text-xs font-bold text-foreground bg-muted px-2 py-0.5 rounded">
+                                                        {selectedPersona.config?.task_count || 10}
+                                                    </span>
+                                                </div>
+                                                <input
+                                                    type="range"
+                                                    min="5"
+                                                    max="50"
+                                                    step="5"
+                                                    value={selectedPersona.config?.task_count || 10}
+                                                    onChange={(e) => setSelectedPersona({
+                                                        ...selectedPersona,
+                                                        config: {
+                                                            ...selectedPersona.config,
+                                                            task_count: parseInt(e.target.value)
+                                                        }
+                                                    })}
+                                                    className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-purple-600"
+                                                />
+                                                <p className="text-[10px] text-muted-foreground">
+                                                    Menos tarefas = mais rápido. Mais tarefas = mais detalhado.
+                                                </p>
+                                            </div>
+
+                                            {/* Criatividade/Temperatura (Select) */}
+                                            <div className="space-y-2">
+                                                <span className="text-xs text-muted-foreground">🎨 Criatividade (Temperatura)</span>
+                                                <div className="flex gap-1">
+                                                    {[
+                                                        { value: 0.3, label: '🎯 Precisa', desc: 'Baixa' },
+                                                        { value: 0.7, label: '⚖️ Balanceada', desc: 'Média' },
+                                                        { value: 1.0, label: '🎲 Criativa', desc: 'Alta' }
+                                                    ].map((opt) => (
+                                                        <button
+                                                            key={opt.value}
+                                                            type="button"
+                                                            onClick={() => setSelectedPersona({
+                                                                ...selectedPersona,
+                                                                config: {
+                                                                    ...selectedPersona.config,
+                                                                    temperature: opt.value
+                                                                }
+                                                            })}
+                                                            className={`flex-1 py-2 px-2 rounded-md border text-xs transition-all ${(selectedPersona.config?.temperature || 0.7) === opt.value
+                                                                ? 'border-purple-500 bg-purple-50 text-purple-700 font-medium'
+                                                                : 'border-border bg-muted/30 text-muted-foreground hover:border-purple-300'
+                                                                }`}
+                                                        >
+                                                            <div>{opt.label}</div>
+                                                            <div className="text-[10px] opacity-70">{opt.desc}</div>
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+
+                                            {/* Max Iterações (Input Number) */}
+                                            <div className="space-y-2">
+                                                <div className="flex justify-between items-center">
+                                                    <div className="flex items-center gap-1">
+                                                        <span className="text-xs text-muted-foreground">🔄 Limite de Raciocínio (Max Iter)</span>
+                                                        <span
+                                                            className="text-[10px] text-muted-foreground cursor-help"
+                                                            title="Evita loops infinitos. Recomendado: 10 ou 15. Valores altos podem consumir mais tokens."
+                                                        >
+                                                            ⓘ
+                                                        </span>
+                                                    </div>
+                                                    <input
+                                                        type="number"
+                                                        min="1"
+                                                        max="50"
+                                                        value={selectedPersona.config?.max_iter || 15}
+                                                        onChange={(e) => setSelectedPersona({
+                                                            ...selectedPersona,
+                                                            config: {
+                                                                ...selectedPersona.config,
+                                                                max_iter: Math.min(50, Math.max(1, parseInt(e.target.value) || 15))
+                                                            }
+                                                        })}
+                                                        className="w-16 h-7 text-xs text-center rounded-md border border-border bg-background focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                                    />
+                                                </div>
+                                                <p className="text-[10px] text-muted-foreground">
+                                                    Quantas vezes cada agente pode "pensar" antes de desistir. Menos = mais rápido.
+                                                </p>
+                                            </div>
+
+                                            {/* Densidade de Exemplos (Input Number) */}
+                                            <div className="space-y-2">
+                                                <div className="flex justify-between items-center">
+                                                    <div className="flex items-center gap-1">
+                                                        <span className="text-xs text-muted-foreground">📝 Exemplos por Tarefa</span>
+                                                        <span
+                                                            className="text-[10px] text-muted-foreground cursor-help"
+                                                            title="Quantos exemplos práticos a IA deve dar para cada estratégia. 0 = sem exemplos, 5 = muito detalhado."
+                                                        >
+                                                            ⓘ
+                                                        </span>
+                                                    </div>
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        max="5"
+                                                        value={selectedPersona.config?.num_examples ?? 2}
+                                                        onChange={(e) => setSelectedPersona({
+                                                            ...selectedPersona,
+                                                            config: {
+                                                                ...selectedPersona.config,
+                                                                num_examples: Math.min(5, Math.max(0, parseInt(e.target.value) || 0))
+                                                            }
+                                                        })}
+                                                        className="w-16 h-7 text-xs text-center rounded-md border border-border bg-background focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                                    />
+                                                </div>
+                                                <p className="text-[10px] text-muted-foreground">
+                                                    0 = estratégia enxuta (rápido), 5 = com muitos exemplos práticos (lento, mais caro).
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <div className="border-t pt-4 space-y-4">
+                                            <p className="text-sm text-muted-foreground">
+                                                💡 <strong>Dica:</strong> Clique em um dos agentes no visualizador para editar suas configurações específicas.
+                                            </p>
+
+                                            <AlertDialog>
+                                                <AlertDialogTrigger asChild>
+                                                    <Button variant="destructive" className="w-full opacity-90 hover:opacity-100" disabled={saving}>
+                                                        <Trash2 className="mr-2 h-4 w-4" /> Excluir Persona
+                                                    </Button>
+                                                </AlertDialogTrigger>
+                                                <AlertDialogContent>
+                                                    <AlertDialogHeader>
+                                                        <AlertDialogTitle>Tem certeza absoluta?</AlertDialogTitle>
+                                                        <AlertDialogDescription>
+                                                            Esta ação marcará a persona <strong>{selectedPersona.display_name}</strong> como inativa.
+                                                            Você poderá restaurá-la posteriormente via banco de dados se necessário.
+                                                        </AlertDialogDescription>
+                                                    </AlertDialogHeader>
+                                                    <AlertDialogFooter>
+                                                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                                        <AlertDialogAction onClick={handleDelete} className="bg-red-600 hover:bg-red-700">
+                                                            Sim, excluir
+                                                        </AlertDialogAction>
+                                                    </AlertDialogFooter>
+                                                </AlertDialogContent>
+                                            </AlertDialog>
+                                        </div>
                                     </div>
                                 </div>
                             )}

@@ -263,7 +263,7 @@ export function CampaignManifesto({ campaignId, planContent }: CampaignManifesto
 
             {/* Conteúdo Expandido */}
             {isOpen && (
-                <div className="bg-white">
+                <div className="bg-white max-h-[60vh] overflow-y-auto pr-2">
                     {/* Mini Sumário (TOC) */}
                     {toc.length > 0 && (
                         <div className="bg-slate-50/80 border-b border-slate-100 px-8 py-4">

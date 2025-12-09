@@ -3,7 +3,8 @@
 import React, { useEffect, useState, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2 } from "lucide-react";
+import { Loader2, StopCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface AgentLog {
     id: string;
@@ -28,51 +29,55 @@ export function ExecutionConsole({ runId, campaignId, isOpen, onToggle, onNewLog
     useEffect(() => {
         if (!runId) return;
 
-        setIsRunning(true);
+        let channel: ReturnType<typeof supabase.channel>;
 
-        // Buscar logs existentes
-        const fetchLogs = async () => {
-            const { data } = await supabase
+        const initConsole = async () => {
+            setIsRunning(true);
+
+            // 1. BUSCA INICIAL (FETCH) - Garante histórico
+            const { data: historyLogs } = await supabase
                 .from("agent_logs")
                 .select("*")
                 .eq("run_id", runId)
                 .order("created_at", { ascending: true });
 
-            if (data) {
-                setLogs(data);
-                // Opcional: Notificar logs antigos se necessário, mas geralmente queremos só os novos para animação
+            if (historyLogs) {
+                // 2. POPULAR ESTADO
+                setLogs(historyLogs);
             }
+
+            // 3. INSCREVER (SUBSCRIBE) - Só depois de ter o histórico
+            channel = supabase
+                .channel(`agent_logs_${runId}`)
+                .on(
+                    "postgres_changes",
+                    {
+                        event: "INSERT",
+                        schema: "public",
+                        table: "agent_logs",
+                    },
+                    (payload) => {
+                        const newLog = payload.new as AgentLog & { run_id: string };
+                        // Filtro Client-side para garantir que o log pertence a esta run
+                        if (newLog.run_id === runId) {
+                            setLogs((prev) => {
+                                // Evitar duplicatas (caso o fetch tenha pego algo que chegou no msmo tempo)
+                                if (prev.some(l => l.id === newLog.id)) return prev;
+                                return [...prev, newLog];
+                            });
+                            if (onNewLog) onNewLog(newLog);
+                        }
+                    }
+                )
+                .subscribe((status) => {
+                    console.log(`🔌 Status da conexão Realtime (Logs): ${status}`);
+                });
         };
 
-        fetchLogs();
-
-        // Inscrever-se para novos logs em tempo real
-        const channel = supabase
-            .channel(`agent_logs_${runId}`)
-            .on(
-                "postgres_changes",
-                {
-                    event: "INSERT",
-                    schema: "public",
-                    table: "agent_logs",
-                    // Filtro server-side removido para garantir recebimento.
-                    // Filtraremos no cliente.
-                },
-                (payload) => {
-                    const newLog = payload.new as AgentLog & { run_id: string };
-                    // Filtro Client-side
-                    if (newLog.run_id === runId) {
-                        setLogs((prev) => [...prev, newLog]);
-                        if (onNewLog) onNewLog(newLog);
-                    }
-                }
-            )
-            .subscribe((status) => {
-                console.log(`🔌 Status da conexão Realtime (Logs): ${status}`);
-            });
+        initConsole();
 
         return () => {
-            supabase.removeChannel(channel);
+            if (channel) supabase.removeChannel(channel);
         };
     }, [runId, supabase]);
 
@@ -108,6 +113,20 @@ export function ExecutionConsole({ runId, campaignId, isOpen, onToggle, onNewLog
                 return "⚙️";
             default:
                 return "🤖";
+        }
+    };
+
+    const handleStop = async (e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (!runId || !campaignId) return;
+
+        try {
+            const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+            await fetch(`${API_BASE}/api/campaign/${campaignId}/run/${runId}/cancel`, {
+                method: "POST",
+            });
+        } catch (err) {
+            console.error("Erro ao cancelar:", err);
         }
     };
 
@@ -166,6 +185,17 @@ export function ExecutionConsole({ runId, campaignId, isOpen, onToggle, onNewLog
                                 <Loader2 className="h-3 w-3 animate-spin" />
                                 <span>Executando</span>
                             </div>
+                        )}
+                        {isRunning && runId && campaignId && (
+                            <Button
+                                variant="destructive"
+                                size="sm"
+                                className="h-6 px-2 text-xs gap-1 border border-red-500/50 bg-red-900/20 hover:bg-red-900/40 text-red-400"
+                                onClick={handleStop}
+                            >
+                                <StopCircle className="h-3 w-3" />
+                                Parar
+                            </Button>
                         )}
                         <span className="text-slate-500 text-xs">▼ Minimizar</span>
                     </div>
@@ -227,6 +257,17 @@ export function ExecutionConsole({ runId, campaignId, isOpen, onToggle, onNewLog
                         <Loader2 className="h-3 w-3 animate-spin" />
                         <span>Executando...</span>
                     </div>
+                )}
+                {isRunning && runId && campaignId && (
+                    <Button
+                        variant="destructive"
+                        size="sm"
+                        className="h-7 px-3 text-xs gap-1 border border-red-500/50 bg-red-900/20 hover:bg-red-900/40 text-red-400 ml-2"
+                        onClick={handleStop}
+                    >
+                        <StopCircle className="h-3 w-3" />
+                        Parar
+                    </Button>
                 )}
             </div>
 

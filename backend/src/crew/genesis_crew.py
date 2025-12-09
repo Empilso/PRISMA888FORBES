@@ -35,7 +35,7 @@ class CampaignOutput(BaseModel):
     )
     strategies: List[Strategy] = Field(
         ..., 
-        description="Lista de 10 estratégias táticas específicas"
+        description="Lista de estratégias táticas específicas (quantidade definida pela persona)"
     )
 
 
@@ -88,10 +88,24 @@ class GenesisCrew:
             
             self.personas = persona_data["config"]
             
+            # ===== PARÂMETROS DE EXECUÇÃO (do config) =====
+            # Lê os parâmetros avançados definidos no frontend
+            self.task_count = self.personas.get("task_count", 10)
+            self.temperature = self.personas.get("temperature", 0.7)
+            self.max_iter = self.personas.get("max_iter", 15)
+            self.num_examples = self.personas.get("num_examples", 2)
+            self.process_type = self.personas.get("process_type", "sequential")
+            
+            self.log(
+                f"📊 Config: {self.task_count} tarefas, temp={self.temperature}, "
+                f"max_iter={self.max_iter}, exemplos={self.num_examples}, processo={self.process_type}", 
+                "System", "info"
+            )
+            
             # Seleciona o modelo LLM baseado na configuração da persona
             llm_model = persona_data.get("llm_model") or "gpt-4o-mini"
             self.log(f"Inicializando LLM: {llm_model}", "System", "info")
-            self.llm = self._create_llm(llm_model)
+            self.llm = self._create_llm(llm_model, self.temperature)
             
         except Exception as e:
             self.log(f"Erro ao inicializar: {e}", "System", "error")
@@ -124,11 +138,15 @@ class GenesisCrew:
         except Exception as e:
             print(f"⚠️ Erro ao salvar log: {e}")
     
-    def _create_llm(self, model_name: str):
+    def _create_llm(self, model_name: str, temperature: float = 0.7):
         """
         Cria a instância do LLM baseado no modelo selecionado.
         O CrewAI usa LiteLLM internamente, então basta passar o modelo corretamente.
         Suporta: OpenRouter, Groq, OpenAI nativo
+        
+        Args:
+            model_name: Nome do modelo (ex: "gpt-4o-mini", "openrouter/x-ai/grok-beta")
+            temperature: Nível de criatividade (0.0 a 1.0)
         """
         # Configura as chaves de API como variáveis de ambiente
         if model_name.startswith("openrouter/"):
@@ -147,7 +165,7 @@ class GenesisCrew:
         # O CrewAI vai detectar o prefixo e rotear via LiteLLM
         return ChatOpenAI(
             model=model_name,  # Mantém o prefixo completo: "groq/llama3-70b-8192"
-            temperature=0.7
+            temperature=temperature  # Usa a temperatura do config
         )
     
     def _log_step(self, step_output: Any):
@@ -220,51 +238,95 @@ class GenesisCrew:
             print(f"⚠️ Erro ao capturar step: {e}")
             self.log(f"⚠️ Erro ao capturar pensamento: {str(e)[:100]}", agent="System", status="error")
     
-    def _create_agents(self) -> tuple:
-        """Cria os 3 agentes da crew"""
+    def _create_agents(self) -> Dict[str, Agent]:
+        """
+        Cria os agentes da crew dinamicamente baseado no config.
+        Suporta tanto o novo formato (config.agents) quanto o legado (analyst/strategist/planner).
+        
+        Returns:
+            Dict[str, Agent]: Dicionário mapeando id -> Agent
+        """
         
         # Define o campaign_id como variável de ambiente para as tools
         os.environ["CURRENT_CAMPAIGN_ID"] = self.campaign_id
         
-        # Pega max_iter da configuração da persona (padrão: 15 tentativas)
-        # self.personas é um dict com analyst/strategist/planner
-        max_iter = self.personas.get("max_iter", 15)
+        max_iter = self.max_iter
+        created_agents = {}
         
-        analyst = Agent(
-            role=self.personas["analyst"]["role"],
-            goal=self.personas["analyst"]["goal"],
-            backstory=self.personas["analyst"]["backstory"],
-            tools=[campaign_vector_search, campaign_stats],
-            llm=self.llm,
-            verbose=True,
-            allow_delegation=False,
-            max_iter=max_iter  # Limita tentativas para economizar tokens
-        )
+        # Novo formato: config.agents é um dicionário
+        if "agents" in self.personas and isinstance(self.personas["agents"], dict):
+            agents_config = self.personas["agents"]
+            self.log(f"🤖 Criando {len(agents_config)} agentes dinâmicos", "System", "info")
+            
+            for agent_id, agent_config in agents_config.items():
+                # Determina se este agente precisa de ferramentas de pesquisa
+                needs_tools = agent_id in ["analyst", "researcher"]
+                tools = [campaign_vector_search, campaign_stats] if needs_tools else []
+                
+                agent = Agent(
+                    role=agent_config.get("role", f"Agente {agent_id}"),
+                    goal=agent_config.get("goal", "Contribuir para a campanha"),
+                    backstory=agent_config.get("backstory", "Membro experiente da equipe."),
+                    tools=tools,
+                    llm=self.llm,
+                    verbose=True,
+                    allow_delegation=False,
+                    max_iter=max_iter
+                )
+                created_agents[agent_id] = agent
+                self.log(f"  ✓ {agent_config.get('role', agent_id)}", "System", "info")
         
-        strategist = Agent(
-            role=self.personas["strategist"]["role"],
-            goal=self.personas["strategist"]["goal"],
-            backstory=self.personas["strategist"]["backstory"],
-            llm=self.llm,
-            verbose=True,
-            allow_delegation=False,
-            max_iter=max_iter  # Limita tentativas para economizar tokens
-        )
+        else:
+            # Fallback: formato legado (3 agentes fixos)
+            self.log("🤖 Criando 3 agentes (formato legado)", "System", "info")
+            
+            created_agents["analyst"] = Agent(
+                role=self.personas.get("analyst", {}).get("role", "Analista"),
+                goal=self.personas.get("analyst", {}).get("goal", "Analisar dados"),
+                backstory=self.personas.get("analyst", {}).get("backstory", "Especialista em dados."),
+                tools=[campaign_vector_search, campaign_stats],
+                llm=self.llm,
+                verbose=True,
+                allow_delegation=False,
+                max_iter=max_iter
+            )
+            
+            created_agents["strategist"] = Agent(
+                role=self.personas.get("strategist", {}).get("role", "Estrategista"),
+                goal=self.personas.get("strategist", {}).get("goal", "Definir estratégia"),
+                backstory=self.personas.get("strategist", {}).get("backstory", "Consultor experiente."),
+                llm=self.llm,
+                verbose=True,
+                allow_delegation=False,
+                max_iter=max_iter
+            )
+            
+            created_agents["planner"] = Agent(
+                role=self.personas.get("planner", {}).get("role", "Planejador"),
+                goal=self.personas.get("planner", {}).get("goal", "Criar planos táticos"),
+                backstory=self.personas.get("planner", {}).get("backstory", "Gerente de projeto."),
+                llm=self.llm,
+                verbose=True,
+                allow_delegation=False,
+                max_iter=max_iter
+            )
         
-        planner = Agent(
-            role=self.personas["planner"]["role"],
-            goal=self.personas["planner"]["goal"],
-            backstory=self.personas["planner"]["backstory"],
-            llm=self.llm,
-            verbose=True,
-            allow_delegation=False,
-            max_iter=max_iter  # Limita tentativas para economizar tokens
-        )
+        # Salva a lista de IDs de agentes para uso posterior
+        self.agent_ids = list(created_agents.keys())
         
-        return analyst, strategist, planner
-    
-    def _create_tasks(self, analyst, strategist, planner) -> List[Task]:
-        """Cria as tarefas sequenciais da crew"""
+        return created_agents
+    def _create_tasks(self, agents: Dict[str, Agent]) -> List[Task]:
+        """
+        Cria as tarefas da crew baseado nos agentes disponíveis.
+        
+        Para templates com mais/menos agentes, adapta as tarefas dinamicamente.
+        Tarefas são atribuídas aos papéis conhecidos ou ao primeiro agente disponível.
+        """
+        
+        # Busca agentes por papel (com fallback)
+        analyst = agents.get("analyst") or agents.get("researcher") or list(agents.values())[0]
+        strategist = agents.get("strategist") or list(agents.values())[min(1, len(agents)-1)]
+        planner = agents.get("planner") or agents.get("writer") or list(agents.values())[-1]
         
         task1 = Task(
             description=f"""
@@ -304,25 +366,36 @@ class GenesisCrew:
             context=[task1]
         )
         
+        # Instrução de exemplos (se configurado)
+        examples_instruction = ""
+        if self.num_examples > 0:
+            examples_instruction = f"""
+            
+            Para cada tática, forneça EXATAMENTE {self.num_examples} exemplo(s) prático(s) de execução.
+            Formato do exemplo: "Ex: [descrição concreta da ação]" """
+        
         task3 = Task(
-            description="""
-            Crie 10 SUGESTÕES TÁTICAS CONCRETAS baseadas nos 3 pilares estratégicos.
+            description=f"""
+            Crie {self.task_count} SUGESTÕES TÁTICAS CONCRETAS baseadas nos 3 pilares estratégicos.
             
             Cada sugestão deve:
             - Estar vinculada a um dos 3 pilares
             - Ser uma ação específica e executável
             - Ter objetivo claro e mensurável
             - Indicar a fase da campanha (pre_campaign, campaign, final_sprint)
+            {examples_instruction}
             
             Formato: Lista JSON de estratégias
+            
+            IMPORTANTE: Gere EXATAMENTE {self.task_count} táticas, nem mais nem menos.
             """,
             agent=planner,
-            expected_output="Lista com 10 táticas específicas",
+            expected_output=f"Lista com {self.task_count} táticas específicas" + (f", cada uma com {self.num_examples} exemplos" if self.num_examples > 0 else ""),
             context=[task1, task2]
         )
         
         task4 = Task(
-            description="""
+            description=f"""
             COMPILE O DOSSIÊ ESTRATÉGICO COMPLETO DA CAMPANHA.
             
             Você deve criar um documento em Markdown unificado que contenha:
@@ -345,7 +418,7 @@ class GenesisCrew:
             [Divisão por fases: Diagnóstico, Campanha de Rua, Reta Final]
             
             ## 6. TÁTICAS PRINCIPAIS
-            [Breve resumo das 10 táticas que serão executadas]
+            [Breve resumo das {self.task_count} táticas que serão executadas]
             
             IMPORTANTE: Use Markdown para formatação (headers, listas, bold, etc.)
             Seja conciso mas completo. Máximo 2000 palavras.
@@ -357,21 +430,21 @@ class GenesisCrew:
         
         # Task final que combina tudo
         task5 = Task(
-            description="""
+            description=f"""
             GERE O OUTPUT FINAL COMBINADO.
             
             Você deve retornar um JSON com dois campos:
             - strategic_plan: O documento Markdown completo do plano estratégico
-            - strategies: A lista de 10 táticas geradas anteriormente
+            - strategies: A lista de {self.task_count} táticas geradas anteriormente
             
             FORMATO OBRIGATÓRIO:
-            {
+            {{
                 "strategic_plan": "# Plano Estratégico\\n\\n## 1. Análise SWOT\\n...",
                 "strategies": [
-                    {"title": "...", "description": "...", "pillar": "...", "phase": "..."},
+                    {{"title": "...", "description": "...", "pillar": "...", "phase": "..."}},
                     ...
                 ]
-            }
+            }}
             """,
             agent=planner,
             expected_output="JSON com strategic_plan e strategies",
@@ -379,7 +452,52 @@ class GenesisCrew:
             output_json=CampaignOutput
         )
         
-        return [task1, task2, task3, task4, task5]
+        # Monta a lista de tarefas base
+        tasks = [task1, task2, task3, task4, task5]
+        
+        # === TAREFAS EXTRAS PARA TEMPLATES MAIORES ===
+        
+        # Tarefa do Psicólogo (se existir)
+        if "psychologist" in agents:
+            task_psychologist = Task(
+                description="""
+                Analise os pilares estratégicos e o público-alvo sob a perspectiva PSICOLÓGICA.
+                
+                Para cada pilar, identifique:
+                - Quais MEDOS do eleitorado ele mitiga?
+                - Quais DESEJOS ele ativa?
+                - Qual é o gatilho emocional mais poderoso?
+                
+                Sugira ajustes de LINGUAGEM para maximizar conexão emocional.
+                """,
+                agent=agents["psychologist"],
+                expected_output="Análise psicológica dos pilares com sugestões de linguagem emocional",
+                context=[task1, task2]
+            )
+            # Insere após task2 (pilares)
+            tasks.insert(2, task_psychologist)
+        
+        # Tarefa do Crítico/Advogado do Diabo (se existir)
+        if "critic" in agents:
+            task_critic = Task(
+                description="""
+                CRITIQUE IMPIEDOSAMENTE as estratégias propostas.
+                
+                Para cada tática:
+                - Como um ADVERSÁRIO poderia atacar ou desconstruir?
+                - Qual é o ponto fraco mais óbvio?
+                - O que a IMPRENSA poderia questionar?
+                
+                Sugira BLINDAGENS e contra-argumentos para cada vulnerabilidade.
+                """,
+                agent=agents["critic"],
+                expected_output="Análise crítica das táticas com blindagens sugeridas",
+                context=[task3]  # Analisa as táticas
+            )
+            # Insere antes da task final
+            tasks.insert(-1, task_critic)
+        
+        return tasks
     
     def run(self) -> Dict:
         """
@@ -390,21 +508,39 @@ class GenesisCrew:
         """
         self.log(f"Iniciando análise da campanha {self.campaign_id}", "System", "info")
         
-        # Cria agentes e tarefas
-        self.log("Criando agentes de IA (Analista, Estrategista, Planejador)", "System", "info")
-        analyst, strategist, planner = self._create_agents()
-        tasks = self._create_tasks(analyst, strategist, planner)
+        # Cria agentes (agora retorna Dict[str, Agent])
+        agents_dict = self._create_agents()
+        self.log(f"🤖 Equipe de {len(agents_dict)} agentes pronta: {', '.join(agents_dict.keys())}", "System", "info")
         
-        # Cria e executa a crew
-        self.log(f"Iniciando trabalho com {len(tasks)} tarefas sequenciais", "System", "info")
-        crew = Crew(
-            agents=[analyst, strategist, planner],
-            tasks=tasks,
-            verbose=True,
-            max_rpm=10,  # Limita a 10 requisições/min para evitar rate limit (Groq, OpenRouter)
-            step_callback=self._log_step,
-            process=Process.sequential
-        )
+        # Cria tarefas (passa o dict de agentes)
+        tasks = self._create_tasks(agents_dict)
+        
+        # Cria e executa a crew com processo configurável
+        process_label = "hierárquico (gerente)" if self.process_type == "hierarchical" else "sequencial (linha de montagem)"
+        self.log(f"Iniciando trabalho com {len(tasks)} tarefas em modo {process_label}", "System", "info")
+        
+        # Define o processo baseado no config
+        crew_process = Process.hierarchical if self.process_type == "hierarchical" else Process.sequential
+        
+        # Lista de agentes para a Crew (valores do dict)
+        agents_list = list(agents_dict.values())
+        
+        # Configura parâmetros da Crew
+        crew_params = {
+            "agents": agents_list,
+            "tasks": tasks,
+            "verbose": True,
+            "max_rpm": 10,  # Limita a 10 requisições/min para evitar rate limit (Groq, OpenRouter)
+            "step_callback": self._log_step,
+            "process": crew_process
+        }
+        
+        # Se hierárquico, adiciona manager_llm (usa o mesmo LLM dos agentes)
+        if self.process_type == "hierarchical":
+            crew_params["manager_llm"] = self.llm
+            self.log("🎩 Modo Hierárquico: Um gerente coordenará os agentes", "System", "info")
+        
+        crew = Crew(**crew_params)
         
         self.log("Equipe iniciada! Agentes começando a trabalhar...", "Analista", "info")
         result = crew.kickoff()

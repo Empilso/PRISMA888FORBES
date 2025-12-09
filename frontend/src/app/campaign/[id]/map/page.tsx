@@ -6,7 +6,8 @@ import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, Filter, Layers, X, Map as MapIcon, Loader2 } from "lucide-react";
+import { Search, Filter, Layers, X, Map as MapIcon, Loader2, Zap } from "lucide-react";
+import { useToast } from "@/components/ui/use-toast";
 import { createClient } from "@/lib/supabase/client";
 import { useParams } from "next/navigation";
 
@@ -55,6 +56,8 @@ export default function MapaInterativoPage() {
     const [loadingResults, setLoadingResults] = useState(false);
     const [campaignName, setCampaignName] = useState<string>("");
     const [ballotName, setBallotName] = useState<string>(""); // Nome de urna para match
+    const [isGeneratingAction, setIsGeneratingAction] = useState(false);
+    const { toast } = useToast();
 
     // Buscar nome da campanha e nome de urna para destaque
     useEffect(() => {
@@ -206,6 +209,37 @@ export default function MapaInterativoPage() {
         }
     };
 
+    const handleGenerateGuerrillaAction = async () => {
+        if (!selectedLocation) return;
+        setIsGeneratingAction(true);
+        try {
+            const response = await fetch(`/api/campaign/${campaignId}/location/${selectedLocation.id}/tactical_action`, {
+                method: 'POST'
+            });
+
+            if (!response.ok) throw new Error('Falha ao gerar ação');
+
+            const data = await response.json();
+
+            toast({
+                title: "🎯 Ação de Guerrilha Criada!",
+                description: `"${data.action_title}" foi adicionada ao Kanban.`,
+            });
+
+            // Opcional: Redirecionar para o Setup para ver a ação?
+            // router.push(...) 
+        } catch (error) {
+            console.error(error);
+            toast({
+                title: "Erro",
+                description: "Não foi possível gerar a ação tática.",
+                variant: "destructive"
+            });
+        } finally {
+            setIsGeneratingAction(false);
+        }
+    };
+
     return (
         <div className="relative h-[calc(100vh-4rem)] w-full overflow-hidden flex flex-col">
             {/* Toolbar Flutuante (Top Left) */}
@@ -337,6 +371,21 @@ export default function MapaInterativoPage() {
                                     <button className="px-4 py-2 text-sm font-medium text-blue-600 border-b-2 border-blue-600">Visão Geral</button>
                                     <button className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground">Candidatos</button>
                                     <button className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground">Demografia</button>
+                                </div>
+
+                                {/* Botão de Ação de Guerrilha */}
+                                <div className="mt-4 mb-2">
+                                    <Button
+                                        className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white shadow-md border border-purple-400/30"
+                                        onClick={handleGenerateGuerrillaAction}
+                                        disabled={isGeneratingAction}
+                                    >
+                                        {isGeneratingAction ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4 fill-yellow-300 text-yellow-100" />}
+                                        ⚡ Gerar Ação de Guerrilha
+                                    </Button>
+                                    <p className="text-[10px] text-center text-muted-foreground mt-1.5 px-4">
+                                        A IA analisará os votos e tarefas deste local para sugerir um plano de ataque imediato.
+                                    </p>
                                 </div>
 
                                 {/* Cards de Métricas */}
