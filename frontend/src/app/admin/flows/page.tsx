@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 export default function FlowsPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [hasError, setHasError] = useState(false);
-    const LANGFLOW_URL = "http://localhost:7860";
+    const LANGFLOW_URL = "https://langflow-production-9787.up.railway.app";
 
     useEffect(() => {
         // Simple check to see if Langflow might be reachable (optional optimization)
@@ -34,7 +34,7 @@ export default function FlowsPage() {
                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-50 z-10">
                     <Loader2 className="h-8 w-8 text-blue-600 animate-spin mb-4" />
                     <p className="text-gray-600 font-medium">Carregando Langflow...</p>
-                    <p className="text-xs text-gray-400 mt-2">Certifique-se que o serviço está rodando na porta 7860</p>
+                    <p className="text-xs text-gray-400 mt-2">Conectando ao servidor de IA...</p>
                 </div>
             )}
 
