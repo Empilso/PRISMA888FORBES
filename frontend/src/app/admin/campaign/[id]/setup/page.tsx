@@ -630,8 +630,9 @@ export default function CampaignSetupPage() {
         setDeleting(true);
 
         try {
+            const backendUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
             const response = await fetch(
-                `http://localhost:8000/api/campaign/${campaignId}/run/${selectedRunId}`,
+                `${backendUrl}/api/campaign/${campaignId}/run/${selectedRunId}`,
                 { method: "DELETE" }
             );
 
