@@ -10,6 +10,8 @@ export const metadata: Metadata = {
     description: "Plataforma de gestão de campanhas políticas com IA avançada",
 };
 
+import Providers from "./providers";
+
 export default function RootLayout({
     children,
 }: Readonly<{
@@ -18,8 +20,10 @@ export default function RootLayout({
     return (
         <html lang="pt-BR" suppressHydrationWarning>
             <body className={inter.className}>
-                {children}
-                <Toaster />
+                <Providers>
+                    {children}
+                    <Toaster />
+                </Providers>
             </body>
         </html>
     );

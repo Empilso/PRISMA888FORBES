@@ -9,8 +9,10 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, FloppyDisk, Trash, CircleNotch, X, TerminalWindow, CaretUp, Play, ArrowSquareOut } from "@phosphor-icons/react";
+import { Plus, FloppyDisk, Trash, CircleNotch, X, TerminalWindow, CaretUp, Play, ArrowSquareOut, BookBookmark } from "@phosphor-icons/react";
 import { useToast } from "@/components/ui/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 import {
@@ -27,6 +29,7 @@ import {
 import CrewVisualizer from "@/components/admin/CrewVisualizer";
 import { ExecutionConsole } from "@/components/admin/ExecutionConsole";
 import { CreatePersonaDialog, AVAILABLE_AGENTS } from "@/components/admin/CreatePersonaDialog";
+import { Agent } from "@/types/agent";
 
 // Opções de modelos LLM disponíveis
 const LLM_OPTIONS = [
@@ -81,6 +84,7 @@ interface PersonaConfig {
     temperature?: number;
     max_iter?: number;
     num_examples?: number;
+    tone?: string;
     process_type?: 'sequential' | 'hierarchical';
 
     // Metadados do Template (novo formato dinâmico)
@@ -115,6 +119,7 @@ export default function AgentesPage() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [typeFilter, setTypeFilter] = useState<'all' | 'strategy' | 'tactical'>('all');
+    const [libraryAgents, setLibraryAgents] = useState<Agent[]>([]); // Agents from Library
     const { toast } = useToast();
 
     // Detecta mudanças não salvas
@@ -129,6 +134,21 @@ export default function AgentesPage() {
 
     useEffect(() => {
         fetchPersonas();
+        // Fetch library agents
+        const fetchLibraryAgents = async () => {
+            try {
+                const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+                const res = await fetch(`${apiUrl}/api/agents`);
+                if (res.ok) {
+                    const data = await res.json();
+                    console.log("[Library Agents] Loaded:", data.length, "agents");
+                    setLibraryAgents(data);
+                } else {
+                    console.warn("[Library Agents] Fetch failed:", res.status);
+                }
+            } catch (e) { console.error("[Library Agents] Failed to fetch:", e); }
+        };
+        fetchLibraryAgents();
     }, []);
 
 
@@ -235,25 +255,51 @@ export default function AgentesPage() {
     ) => {
         if (!selectedPersona) return;
 
-        setSelectedPersona({
-            ...selectedPersona,
-            config: {
-                ...selectedPersona.config,
-                [agentType]: {
-                    ...selectedPersona.config[agentType],
-                    [field]: value,
+        const legacyKeys = ['analyst', 'strategist', 'planner'];
+        const isLegacyKey = legacyKeys.includes(agentType);
+
+        if (isLegacyKey) {
+            // Legacy format
+            setSelectedPersona({
+                ...selectedPersona,
+                config: {
+                    ...selectedPersona.config,
+                    [agentType]: {
+                        ...(selectedPersona.config as any)[agentType],
+                        [field]: value,
+                    },
                 },
-            },
-        });
+            });
+        } else {
+            // Dynamic format: config.agents[key]
+            const currentAgents = selectedPersona.config.agents || {};
+            setSelectedPersona({
+                ...selectedPersona,
+                config: {
+                    ...selectedPersona.config,
+                    agents: {
+                        ...currentAgents,
+                        [agentType]: {
+                            ...(currentAgents[agentType] || {}),
+                            [field]: value,
+                        },
+                    },
+                },
+            });
+        }
     };
 
     // Helper para acessar config de agente de forma type-safe
     const getAgentConfig = (agentName: string): AgentConfig | null => {
         if (!selectedPersona?.config) return null;
-        if (agentName === 'analyst') return selectedPersona.config.analyst;
-        if (agentName === 'strategist') return selectedPersona.config.strategist;
-        if (agentName === 'planner') return selectedPersona.config.planner;
-        return null;
+
+        const legacyKeys = ['analyst', 'strategist', 'planner'];
+        if (legacyKeys.includes(agentName)) {
+            return (selectedPersona.config as any)[agentName] || null;
+        }
+
+        // Dynamic format: config.agents[key]
+        return selectedPersona.config.agents?.[agentName] || null;
     };
 
     // --- NOVAS FUNCIONALIDADES ---
@@ -687,7 +733,7 @@ export default function AgentesPage() {
             {/* LAYER 3: RIGHT DRAWER - Settings Panel */}
             {/* ============================================= */}
             <div className={`
-                absolute top-4 right-4 bottom-20 w-[420px] z-30
+                absolute top-4 right-4 bottom-20 w-[40%] min-w-[420px] max-w-[600px] z-30
                 transition-all duration-300 ease-out
                 ${selectedPersona && isRightPanelOpen
                     ? 'translate-x-0 opacity-100 pointer-events-auto'
@@ -782,6 +828,83 @@ export default function AgentesPage() {
                                     </div>
 
                                     <div className="space-y-4">
+                                        {/* Library Agent Selector */}
+                                        <div className="space-y-2 p-3 rounded-lg border border-dashed border-purple-200 bg-purple-50/30">
+                                            <label className="text-xs font-medium uppercase text-purple-600 flex items-center gap-1.5">
+                                                <BookBookmark className="w-3.5 h-3.5" />
+                                                Carregar da Biblioteca (Opcional)
+                                            </label>
+                                            <Select
+                                                value=""
+                                                onValueChange={(agentId) => {
+                                                    const libAgent = libraryAgents.find(a => a.id === agentId);
+                                                    if (libAgent && selectedAgent && selectedPersona) {
+                                                        const agentKey = selectedAgent;
+                                                        const newAgentData = {
+                                                            role: libAgent.role,
+                                                            goal: libAgent.description || libAgent.role,
+                                                            backstory: libAgent.system_prompt?.slice(0, 500) || '',
+                                                        };
+
+                                                        // Check if it's a legacy key or dynamic agents key
+                                                        const legacyKeys = ['analyst', 'strategist', 'planner'];
+                                                        const isLegacyKey = legacyKeys.includes(agentKey);
+
+                                                        if (isLegacyKey) {
+                                                            // Legacy format: config.analyst, config.strategist, config.planner
+                                                            setSelectedPersona({
+                                                                ...selectedPersona,
+                                                                config: {
+                                                                    ...selectedPersona.config,
+                                                                    [agentKey]: {
+                                                                        ...(selectedPersona.config as any)[agentKey],
+                                                                        ...newAgentData,
+                                                                    },
+                                                                },
+                                                            });
+                                                        } else {
+                                                            // Dynamic format: config.agents[key]
+                                                            const currentAgents = selectedPersona.config.agents || {};
+                                                            setSelectedPersona({
+                                                                ...selectedPersona,
+                                                                config: {
+                                                                    ...selectedPersona.config,
+                                                                    agents: {
+                                                                        ...currentAgents,
+                                                                        [agentKey]: {
+                                                                            ...(currentAgents[agentKey] || {}),
+                                                                            ...newAgentData,
+                                                                        },
+                                                                    },
+                                                                },
+                                                            });
+                                                        }
+                                                        toast({ title: "✅ Modelo Aplicado!", description: `${libAgent.display_name} carregado em ${agentKey.toUpperCase()}.` });
+                                                    }
+                                                }}
+                                            >
+                                                <SelectTrigger className="bg-white border-purple-300 focus:ring-purple-400">
+                                                    <SelectValue placeholder="Selecionar modelo enterprise..." />
+                                                </SelectTrigger>
+                                                <SelectContent className="bg-white shadow-xl border rounded-xl z-[100]">
+                                                    {libraryAgents.length === 0 ? (
+                                                        <SelectItem value="loading" disabled>Carregando...</SelectItem>
+                                                    ) : (
+                                                        libraryAgents.map(agent => (
+                                                            <SelectItem key={agent.id} value={agent.id}>
+                                                                <div className="flex items-center gap-2">
+                                                                    <span className="text-xs font-medium">{agent.display_name}</span>
+                                                                    <Badge variant="outline" className="text-[9px]">{agent.type}</Badge>
+                                                                </div>
+                                                            </SelectItem>
+                                                        ))
+                                                    )}
+                                                </SelectContent>
+                                            </Select>
+                                            <p className="text-[10px] text-muted-foreground">
+                                                Selecione um agente enterprise para herdar Role, Goal e Backstory.
+                                            </p>
+                                        </div>
                                         <div className="space-y-2">
                                             <label className="text-xs font-medium uppercase text-muted-foreground">Papel (Role)</label>
                                             <Input
@@ -814,258 +937,205 @@ export default function AgentesPage() {
                                     </div>
                                 </div>
                             ) : (
-                                // MODO CONFIGURAÇÃO GERAL DA PERSONA
-                                <div className="space-y-6 animate-in fade-in-50 duration-300">
-                                    <div className="flex items-center gap-3 pb-4 border-b">
-                                        <div className="w-10 h-10 rounded-full flex items-center justify-center text-xl bg-gradient-to-br from-purple-100 to-indigo-100 border-2 border-purple-500">
-                                            🤖
+                                // MODO CONFIGURAÇÃO GERAL DA PERSONA (REFACTORED)
+                                <div className="space-y-8 animate-in fade-in-50 duration-300 px-1">
+
+                                    {/* (A) CABEÇALHO DO AGENTE */}
+                                    <div className="space-y-3">
+                                        <div className="flex items-start justify-between">
+                                            <div>
+                                                <h2 className="text-2xl font-semibold tracking-tight text-foreground">
+                                                    {selectedPersona.display_name}
+                                                </h2>
+                                                <div className="flex flex-wrap gap-2 mt-2">
+                                                    <Badge variant="secondary" className="text-[10px] bg-blue-50 text-blue-700 hover:bg-blue-100 border-blue-200 uppercase tracking-widest">
+                                                        {selectedPersona.type === 'tactical' ? 'Tático' : 'Estratégico'}
+                                                    </Badge>
+                                                    <Badge variant="outline" className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                                                        {selectedPersona.config?.process_type === 'hierarchical' ? 'Hierárquico' : 'Sequencial'}
+                                                    </Badge>
+                                                    <Badge variant="outline" className="text-[10px] uppercase tracking-widest text-muted-foreground border-purple-200 text-purple-700 bg-purple-50/50">
+                                                        {selectedPersona.llm_model?.split('/')[1] || selectedPersona.llm_model || 'GPT-4o'}
+                                                    </Badge>
+                                                </div>
+                                            </div>
+                                            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-100 to-indigo-50 border border-purple-100 flex items-center justify-center text-2xl shadow-sm">
+                                                {selectedPersona.icon || '🤖'}
+                                            </div>
                                         </div>
-                                        <div>
-                                            <h3 className="font-bold text-lg">Configuração Geral</h3>
-                                            <p className="text-xs text-muted-foreground">Ajustes da Persona</p>
-                                        </div>
+                                        <p className="text-sm text-muted-foreground">
+                                            {selectedPersona.description?.slice(0, 80) || "Agente de inteligência artificial da campanha."}...
+                                        </p>
                                     </div>
 
+                                    {/* (B) PAPEL & DESCRIÇÃO */}
+                                    <div className="space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <h3 className="text-sm font-semibold text-foreground uppercase tracking-wide">Papel na Crew</h3>
+                                            <span className="text-[10px] text-muted-foreground bg-muted px-2 py-0.5 rounded">Core Identity</span>
+                                        </div>
+                                        <Textarea
+                                            value={selectedPersona.description || ''}
+                                            onChange={(e) => setSelectedPersona({
+                                                ...selectedPersona,
+                                                description: e.target.value
+                                            })}
+                                            className="min-h-[100px] text-sm leading-relaxed resize-none bg-muted/20 border-border/50 focus:border-purple-300 focus:bg-background transition-all"
+                                            placeholder="Descreva o papel detalhado deste agente..."
+                                        />
+                                    </div>
+
+                                    {/* (C) PARÂMETROS DE EXECUÇÃO */}
                                     <div className="space-y-4">
-                                        {/* LLM Model Selector */}
-                                        <div className="space-y-2">
-                                            <label className="text-xs font-medium uppercase text-muted-foreground flex items-center gap-2">
-                                                🧠 Motor de Inteligência (LLM)
-                                            </label>
-                                            <p className="text-xs text-muted-foreground mb-2">
-                                                Escolha qual modelo de IA esta Persona utilizará para processar e gerar conteúdo.
-                                            </p>
-                                            <Select
-                                                value={selectedPersona.llm_model || "gpt-4o-mini"}
-                                                onValueChange={(value) => {
-                                                    setSelectedPersona({
-                                                        ...selectedPersona,
-                                                        llm_model: value
-                                                    });
-                                                }}
-                                            >
-                                                <SelectTrigger className="w-full">
-                                                    <SelectValue placeholder="Selecione um modelo LLM" />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    {LLM_OPTIONS.map((group) => (
-                                                        <SelectGroup key={group.label}>
-                                                            <SelectLabel>{group.label}</SelectLabel>
-                                                            {group.options.map((option) => (
-                                                                <SelectItem key={option.value} value={option.value}>
-                                                                    {option.label}
-                                                                </SelectItem>
-                                                            ))}
-                                                        </SelectGroup>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <h3 className="text-sm font-semibold text-foreground uppercase tracking-wide">Parâmetros de Execução</h3>
                                         </div>
 
-                                        {/* Info sobre o modelo selecionado */}
-                                        <div className="bg-muted/50 p-3 rounded-lg border">
-                                            <p className="text-xs text-muted-foreground">
-                                                <strong>Modelo Atual:</strong> {selectedPersona.llm_model || "gpt-4o-mini"}
-                                            </p>
-                                            <p className="text-[10px] text-muted-foreground mt-1">
-                                                Modelos com prefixo "openrouter/" usam o OpenRouter. Modelos sem prefixo usam OpenAI nativo.
-                                            </p>
-                                        </div>
-
-                                        {/* Seletor de Tipo de Agente */}
-                                        <div className="space-y-2 pt-2">
-                                            <label className="text-xs font-medium uppercase text-muted-foreground flex items-center gap-2">
-                                                🎭 Tipo de Agente
-                                            </label>
-                                            <p className="text-xs text-muted-foreground mb-2">
-                                                Agentes <strong>Estratégicos</strong> fazem o plano global (Genesis). Agentes <strong>Táticos</strong> fazem micro-targeting no mapa.
-                                            </p>
-                                            <div className="flex gap-2">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setSelectedPersona({ ...selectedPersona, type: 'strategy' })}
-                                                    className={`flex-1 py-3 px-4 rounded-lg border-2 transition-all ${(selectedPersona.type || 'strategy') === 'strategy'
-                                                        ? 'border-purple-500 bg-purple-50 text-purple-700'
-                                                        : 'border-border bg-muted/30 text-muted-foreground hover:border-purple-300'
-                                                        }`}
-                                                >
-                                                    <div className="text-2xl mb-1">🎯</div>
-                                                    <div className="text-xs font-medium">Estratégia</div>
-                                                    <div className="text-[10px] text-muted-foreground">Plano Global</div>
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setSelectedPersona({ ...selectedPersona, type: 'tactical' })}
-                                                    className={`flex-1 py-3 px-4 rounded-lg border-2 transition-all ${selectedPersona.type === 'tactical'
-                                                        ? 'border-orange-500 bg-orange-50 text-orange-700'
-                                                        : 'border-border bg-muted/30 text-muted-foreground hover:border-orange-300'
-                                                        }`}
-                                                >
-                                                    <div className="text-2xl mb-1">⚔️</div>
-                                                    <div className="text-xs font-medium">Tático</div>
-                                                    <div className="text-[10px] text-muted-foreground">Micro-Targeting</div>
-                                                </button>
-                                            </div>
-                                        </div>
-
-                                        {/* ====== PARÂMETROS DE EXECUÇÃO ====== */}
-                                        <div className="space-y-4 pt-4 border-t">
-                                            <label className="text-xs font-medium uppercase text-muted-foreground flex items-center gap-2">
-                                                ⚙️ Parâmetros de Execução
-                                            </label>
-
-                                            {/* Quantidade de Tarefas (Slider) */}
-                                            <div className="space-y-2">
-                                                <div className="flex justify-between items-center">
-                                                    <span className="text-xs text-muted-foreground">📋 Quantidade de Tarefas</span>
-                                                    <span className="text-xs font-bold text-foreground bg-muted px-2 py-0.5 rounded">
-                                                        {selectedPersona.config?.task_count || 10}
-                                                    </span>
-                                                </div>
-                                                <input
-                                                    type="range"
-                                                    min="5"
-                                                    max="50"
-                                                    step="5"
-                                                    value={selectedPersona.config?.task_count || 10}
-                                                    onChange={(e) => setSelectedPersona({
-                                                        ...selectedPersona,
-                                                        config: {
-                                                            ...selectedPersona.config,
-                                                            task_count: parseInt(e.target.value)
-                                                        }
-                                                    })}
-                                                    className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-purple-600"
-                                                />
-                                                <p className="text-[10px] text-muted-foreground">
-                                                    Menos tarefas = mais rápido. Mais tarefas = mais detalhado.
-                                                </p>
-                                            </div>
-
-                                            {/* Criatividade/Temperatura (Select) */}
-                                            <div className="space-y-2">
-                                                <span className="text-xs text-muted-foreground">🎨 Criatividade (Temperatura)</span>
-                                                <div className="flex gap-1">
+                                        <div className="grid grid-cols-1 gap-6 p-4 rounded-xl border border-border/50 bg-slate-50/50">
+                                            {/* Temperatura */}
+                                            <div className="space-y-3">
+                                                <div className="flex justify-between items-center bg-white p-1 rounded-full border shadow-sm">
                                                     {[
-                                                        { value: 0.3, label: '🎯 Precisa', desc: 'Baixa' },
-                                                        { value: 0.7, label: '⚖️ Balanceada', desc: 'Média' },
-                                                        { value: 1.0, label: '🎲 Criativa', desc: 'Alta' }
+                                                        { value: 0.3, label: 'Precisa', icon: '🎯' },
+                                                        { value: 0.7, label: 'Balanceada', icon: '⚖️' },
+                                                        { value: 1.0, label: 'Criativa', icon: '🎨' }
                                                     ].map((opt) => (
                                                         <button
                                                             key={opt.value}
                                                             type="button"
                                                             onClick={() => setSelectedPersona({
                                                                 ...selectedPersona,
-                                                                config: {
-                                                                    ...selectedPersona.config,
-                                                                    temperature: opt.value
-                                                                }
+                                                                config: { ...selectedPersona.config, temperature: opt.value }
                                                             })}
-                                                            className={`flex-1 py-2 px-2 rounded-md border text-xs transition-all ${(selectedPersona.config?.temperature || 0.7) === opt.value
-                                                                ? 'border-purple-500 bg-purple-50 text-purple-700 font-medium'
-                                                                : 'border-border bg-muted/30 text-muted-foreground hover:border-purple-300'
+                                                            className={`flex-1 py-1.5 px-3 rounded-full text-xs font-medium transition-all flex items-center justify-center gap-1.5 ${(selectedPersona.config?.temperature || 0.7) === opt.value
+                                                                ? 'bg-purple-600 text-white shadow-md'
+                                                                : 'text-muted-foreground hover:bg-slate-100 hover:text-foreground'
                                                                 }`}
                                                         >
-                                                            <div>{opt.label}</div>
-                                                            <div className="text-[10px] opacity-70">{opt.desc}</div>
+                                                            <span>{opt.icon}</span>
+                                                            <span>{opt.label}</span>
                                                         </button>
                                                     ))}
                                                 </div>
-                                            </div>
-
-                                            {/* Max Iterações (Input Number) */}
-                                            <div className="space-y-2">
-                                                <div className="flex justify-between items-center">
-                                                    <div className="flex items-center gap-1">
-                                                        <span className="text-xs text-muted-foreground">🔄 Limite de Raciocínio (Max Iter)</span>
-                                                        <span
-                                                            className="text-[10px] text-muted-foreground cursor-help"
-                                                            title="Evita loops infinitos. Recomendado: 10 ou 15. Valores altos podem consumir mais tokens."
-                                                        >
-                                                            ⓘ
-                                                        </span>
-                                                    </div>
-                                                    <input
-                                                        type="number"
-                                                        min="1"
-                                                        max="50"
-                                                        value={selectedPersona.config?.max_iter || 15}
-                                                        onChange={(e) => setSelectedPersona({
-                                                            ...selectedPersona,
-                                                            config: {
-                                                                ...selectedPersona.config,
-                                                                max_iter: Math.min(50, Math.max(1, parseInt(e.target.value) || 15))
-                                                            }
-                                                        })}
-                                                        className="w-16 h-7 text-xs text-center rounded-md border border-border bg-background focus:outline-none focus:ring-2 focus:ring-purple-500"
-                                                    />
-                                                </div>
-                                                <p className="text-[10px] text-muted-foreground">
-                                                    Quantas vezes cada agente pode "pensar" antes de desistir. Menos = mais rápido.
+                                                <p className="text-[10px] text-center text-muted-foreground">
+                                                    Define o "calor" da criatividade (Temperatura: {selectedPersona.config?.temperature || 0.7})
                                                 </p>
                                             </div>
 
-                                            {/* Densidade de Exemplos (Input Number) */}
-                                            <div className="space-y-2">
-                                                <div className="flex justify-between items-center">
-                                                    <div className="flex items-center gap-1">
-                                                        <span className="text-xs text-muted-foreground">📝 Exemplos por Tarefa</span>
-                                                        <span
-                                                            className="text-[10px] text-muted-foreground cursor-help"
-                                                            title="Quantos exemplos práticos a IA deve dar para cada estratégia. 0 = sem exemplos, 5 = muito detalhado."
-                                                        >
-                                                            ⓘ
-                                                        </span>
+                                            {/* Inputs Numéricos (Grid) */}
+                                            <div className="grid grid-cols-2 gap-4">
+                                                {/* Tasks */}
+                                                <div className="space-y-1.5">
+                                                    <label className="text-xs font-medium text-slate-600">Qtd. Tarefas</label>
+                                                    <div className="relative">
+                                                        <Input
+                                                            type="number"
+                                                            className="h-9 bg-white text-center font-mono text-sm"
+                                                            value={selectedPersona.config?.task_count || 10}
+                                                            onChange={(e) => setSelectedPersona({
+                                                                ...selectedPersona,
+                                                                config: { ...selectedPersona.config, task_count: parseInt(e.target.value) }
+                                                            })}
+                                                        />
+                                                        <div className="absolute right-2 top-2.5 text-[10px] text-muted-foreground pointer-events-none">itens</div>
                                                     </div>
-                                                    <input
-                                                        type="number"
-                                                        min="0"
-                                                        max="5"
-                                                        value={selectedPersona.config?.num_examples ?? 2}
-                                                        onChange={(e) => setSelectedPersona({
-                                                            ...selectedPersona,
-                                                            config: {
-                                                                ...selectedPersona.config,
-                                                                num_examples: Math.min(5, Math.max(0, parseInt(e.target.value) || 0))
-                                                            }
-                                                        })}
-                                                        className="w-16 h-7 text-xs text-center rounded-md border border-border bg-background focus:outline-none focus:ring-2 focus:ring-purple-500"
-                                                    />
                                                 </div>
-                                                <p className="text-[10px] text-muted-foreground">
-                                                    0 = estratégia enxuta (rápido), 5 = com muitos exemplos práticos (lento, mais caro).
-                                                </p>
+
+                                                {/* Max Iter */}
+                                                <div className="space-y-1.5">
+                                                    <label className="text-xs font-medium text-slate-600">Max Iterações</label>
+                                                    <div className="relative">
+                                                        <Input
+                                                            type="number"
+                                                            className="h-9 bg-white text-center font-mono text-sm"
+                                                            value={selectedPersona.config?.max_iter || 15}
+                                                            onChange={(e) => setSelectedPersona({
+                                                                ...selectedPersona,
+                                                                config: { ...selectedPersona.config, max_iter: parseInt(e.target.value) }
+                                                            })}
+                                                        />
+                                                        <div className="absolute right-2 top-2.5 text-[10px] text-muted-foreground pointer-events-none">loops</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Exemplos Slider */}
+                                            <div className="space-y-3 pt-2 border-t border-dashed">
+                                                <div className="flex justify-between items-center">
+                                                    <label className="text-xs font-medium text-slate-600">Exemplos por Tarefa: <span className="text-purple-600 font-bold">{selectedPersona.config?.num_examples ?? 2}</span></label>
+                                                </div>
+                                                <input
+                                                    type="range"
+                                                    min="0"
+                                                    max="5"
+                                                    step="1"
+                                                    value={selectedPersona.config?.num_examples ?? 2}
+                                                    onChange={(e) => setSelectedPersona({
+                                                        ...selectedPersona,
+                                                        config: { ...selectedPersona.config, num_examples: parseInt(e.target.value) }
+                                                    })}
+                                                    className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-purple-600"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* (D) DIRETRIZES DE ESTILO & PROMPT */}
+                                    <div className="space-y-4 pt-2">
+                                        <div className="flex items-center justify-between">
+                                            <h3 className="text-sm font-semibold text-foreground uppercase tracking-wide">Estilo & Tom</h3>
+                                            <div className="flex items-center gap-2">
+                                                <Label htmlFor="custom-prompt" className="text-[10px] text-muted-foreground cursor-pointer">Prompt Custom</Label>
+                                                <Switch id="custom-prompt" checked={true} disabled />
                                             </div>
                                         </div>
 
-                                        <div className="border-t pt-4 space-y-4">
-                                            <p className="text-sm text-muted-foreground">
-                                                💡 <strong>Dica:</strong> Clique em um dos agentes no visualizador para editar suas configurações específicas.
-                                            </p>
-
-                                            <AlertDialog>
-                                                <AlertDialogTrigger asChild>
-                                                    <Button variant="destructive" className="w-full opacity-90 hover:opacity-100" disabled={saving}>
-                                                        <Trash className="mr-2 h-4 w-4" /> Excluir Persona
-                                                    </Button>
-                                                </AlertDialogTrigger>
-                                                <AlertDialogContent>
-                                                    <AlertDialogHeader>
-                                                        <AlertDialogTitle>Tem certeza absoluta?</AlertDialogTitle>
-                                                        <AlertDialogDescription>
-                                                            Esta ação marcará a persona <strong>{selectedPersona.display_name}</strong> como inativa.
-                                                            Você poderá restaurá-la posteriormente via banco de dados se necessário.
-                                                        </AlertDialogDescription>
-                                                    </AlertDialogHeader>
-                                                    <AlertDialogFooter>
-                                                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                                        <AlertDialogAction onClick={handleDelete} className="bg-red-600 hover:bg-red-700">
-                                                            Sim, excluir
-                                                        </AlertDialogAction>
-                                                    </AlertDialogFooter>
-                                                </AlertDialogContent>
-                                            </AlertDialog>
+                                        <div className="relative group">
+                                            <div className="absolute -inset-0.5 bg-gradient-to-r from-pink-300 via-purple-300 to-indigo-300 rounded-xl opacity-30 blur group-hover:opacity-60 transition duration-1000"></div>
+                                            <div className="relative bg-white rounded-xl">
+                                                <Textarea
+                                                    value={selectedPersona.config?.tone || "Seja formal, analítico e use terminologia política adequada."}
+                                                    onChange={(e) => setSelectedPersona({
+                                                        ...selectedPersona,
+                                                        config: {
+                                                            ...selectedPersona.config,
+                                                            tone: e.target.value
+                                                        }
+                                                    })}
+                                                    placeholder="Ex: 'Seja agressivo, use metáforas de guerra e foque nos erros do adversário...'"
+                                                    className="min-h-[120px] p-4 text-sm resize-none border-0 bg-transparent focus-visible:ring-0"
+                                                />
+                                                <div className="absolute bottom-2 right-3 text-[10px] text-muted-foreground bg-white/80 px-2 py-0.5 rounded-full backdrop-blur-sm border">
+                                                    {selectedPersona.config?.tone?.length || 0} chars
+                                                </div>
+                                            </div>
                                         </div>
+                                        <p className="text-[10px] text-muted-foreground text-center">
+                                            Esta instrução será injetada em <strong>todas</strong> as tarefas da crew.
+                                        </p>
+                                    </div>
+
+                                    {/* FOOTER ACTIONS */}
+                                    <div className="pt-8 pb-4">
+                                        <AlertDialog>
+                                            <AlertDialogTrigger asChild>
+                                                <Button variant="ghost" className="w-full text-red-500 hover:text-red-600 hover:bg-red-50 text-xs h-9">
+                                                    <Trash className="mr-2 h-3.5 w-3.5" /> Excluir esta Persona
+                                                </Button>
+                                            </AlertDialogTrigger>
+                                            <AlertDialogContent>
+                                                <AlertDialogHeader>
+                                                    <AlertDialogTitle>Excluir Persona?</AlertDialogTitle>
+                                                    <AlertDialogDescription>
+                                                        "{selectedPersona.display_name}" será arquivada.
+                                                    </AlertDialogDescription>
+                                                </AlertDialogHeader>
+                                                <AlertDialogFooter>
+                                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                                    <AlertDialogAction onClick={handleDelete} className="bg-red-600">Excluir</AlertDialogAction>
+                                                </AlertDialogFooter>
+                                            </AlertDialogContent>
+                                        </AlertDialog>
                                     </div>
                                 </div>
                             )}

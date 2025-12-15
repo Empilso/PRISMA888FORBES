@@ -6,6 +6,8 @@ from src.api.personas import router as personas_router
 from src.api.strategies import router as strategies_router
 from src.api.campaign import router as campaign_router
 from src.api.tasks import router as tasks_router
+from src.api.agents import router as agents_router
+from src.api.crew_logs import router as crew_logs_router
 
 app = FastAPI()
 
@@ -25,6 +27,8 @@ app.include_router(personas_router)
 app.include_router(strategies_router)
 app.include_router(campaign_router)
 app.include_router(tasks_router)
+app.include_router(agents_router)
+app.include_router(crew_logs_router)
 
 @app.get("/")
 async def root():

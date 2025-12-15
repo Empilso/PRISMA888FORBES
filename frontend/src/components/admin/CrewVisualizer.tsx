@@ -2,7 +2,6 @@
 
 import React, { useEffect, useMemo } from 'react';
 import { ReactFlow, Background, Controls, MiniMap, useNodesState, useEdgesState, Position, MarkerType, Node, Edge, ReactFlowProvider, useReactFlow } from '@xyflow/react';
-import '@xyflow/react/dist/style.css';
 import {
     MagnifyingGlass,
     Brain,

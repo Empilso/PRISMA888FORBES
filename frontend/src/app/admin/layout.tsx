@@ -15,7 +15,8 @@ import {
     CaretRight,
     List,
     X,
-    SignOut
+    SignOut,
+    Robot
 } from "@phosphor-icons/react";
 
 export default function AdminLayout({
@@ -50,6 +51,11 @@ export default function AdminLayout({
                     name: "Agentes & Crews",
                     href: "/admin/agentes",
                     icon: UsersThree
+                },
+                {
+                    name: "Biblioteca de Agentes",
+                    href: "/admin/agentes/library",
+                    icon: Robot
                 },
                 {
                     name: "Editor de Fluxos",

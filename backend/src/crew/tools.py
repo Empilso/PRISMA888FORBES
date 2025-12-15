@@ -63,7 +63,7 @@ class CampaignVectorSearchTool(BaseTool):
     args_schema: type[BaseModel] = VectorSearchInput
     
     def _run(self, query: str, author: str = "me") -> str:
-        """Executa busca vetorial usando LangChain SupabaseVectorStore."""
+        """Executa busca vetorial usando RPC direto do Supabase (compatível com langchain-community 0.4.x)."""
         campaign_id = os.getenv("CURRENT_CAMPAIGN_ID", "")
         
         if not campaign_id:
@@ -74,47 +74,57 @@ class CampaignVectorSearchTool(BaseTool):
             supabase = get_supabase_client()
             embeddings = get_embeddings_model()
             
-            # 2. Inicializar Vector Store apontando para a tabela CORRETA
-            vector_store = SupabaseVectorStore(
-                client=supabase,
-                embedding=embeddings,
-                table_name="document_chunks",      # ✅ Tabela correta
-                query_name="match_documents"       # ✅ Função RPC para busca
-            )
+            # 2. Gerar embedding da query
+            query_embedding = embeddings.embed_query(query)
             
-            # 3. Construir filtro com campaign_id E author_name
-            search_filter = {"campaign_id": campaign_id}
-            if author and author != "all":
-                search_filter["author_name"] = author
+            # 3. Construir filtro de metadata como JSON para o RPC
+            metadata_filter = {"campaign_id": campaign_id}
+            if author and author != "all" and author != "me":
+                metadata_filter["author_name"] = author
             
-            # 4. Realizar busca vetorial com filtro
-            results = vector_store.similarity_search(
-                query=query,
-                k=5,
-                filter=search_filter
-            )
+            # 4. Chamar a função RPC match_documents diretamente
+            # Isso evita o problema do SyncRPCFilterRequestBuilder
+            try:
+                rpc_result = supabase.rpc(
+                    "match_documents",
+                    {
+                        "query_embedding": query_embedding,
+                        "match_count": 5,
+                        "filter": metadata_filter
+                    }
+                ).execute()
+                
+                results = rpc_result.data if rpc_result.data else []
+            except Exception as rpc_error:
+                print(f"[VectorSearch] RPC falhou: {rpc_error}, usando fallback direto")
+                results = []
             
-            # 5. Formatar retorno
+            # 5. Se RPC falhou ou retornou vazio, usar fallback
             if not results:
-                # Fallback: tentar busca direta sem filtro de metadata
-                print(f"[VectorSearch] Busca com filtro retornou vazio, tentando fallback...")
+                print(f"[VectorSearch] Busca vetorial retornou vazio, usando fallback...")
                 results = self._fallback_search(supabase, campaign_id, author)
                 
                 if not results:
                     author_label = "sua campanha" if author == "me" else f"rival '{author}'"
                     return f"Nenhum documento relevante encontrado para {author_label}."
             
-            # Concatenar conteúdo dos chunks encontrados
+            # 6. Formatar retorno
             formatted_results = []
             author_label = "📄 Seu Plano" if author == "me" else f"🎭 Plano de {author}"
             for i, doc in enumerate(results, 1):
-                content = doc.page_content if hasattr(doc, 'page_content') else doc.get('content', str(doc))
+                # Suporta tanto resultados do RPC quanto do fallback
+                if hasattr(doc, 'page_content'):
+                    content = doc.page_content
+                elif isinstance(doc, dict):
+                    content = doc.get('content', doc.get('page_content', str(doc)))
+                else:
+                    content = str(doc)
                 formatted_results.append(f"[{author_label} - Trecho {i}]\n{content}")
             
             return "\n\n---\n\n".join(formatted_results)
             
         except Exception as e:
-            print(f"[VectorSearch] Erro: {str(e)}")
+            print(f"[VectorSearch] Erro crítico: {str(e)}")
             # Tentar fallback em caso de erro
             try:
                 return self._fallback_search_simple(campaign_id, author)

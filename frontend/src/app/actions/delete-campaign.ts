@@ -98,6 +98,9 @@ export async function deleteCampaign(campaignId: string) {
 
             // Limpar TODAS as tabelas relacionadas à campanha
             await supabaseAdmin.from("agent_logs").delete().eq("campaign_id", campaignId);
+            await supabaseAdmin.from("crew_run_logs").delete().eq("campaign_id", campaignId); // [NEW]
+            await supabaseAdmin.from("ai_analysis_results").delete().eq("candidate_id", campaignId); // [NEW] Note column is candidate_id
+            await supabaseAdmin.from("electoral_data_raw").delete().eq("candidate_id", campaignId); // [NEW] Note column is candidate_id
             await supabaseAdmin.from("strategies").delete().eq("campaign_id", campaignId);
             await supabaseAdmin.from("analysis_runs").delete().eq("campaign_id", campaignId);
             await supabaseAdmin.from("location_results").delete().eq("campaign_id", campaignId);

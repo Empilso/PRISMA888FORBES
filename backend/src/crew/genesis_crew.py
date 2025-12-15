@@ -1,5 +1,6 @@
 import os
 import json
+import re
 from typing import List, Dict, Any
 from crewai import Agent, Task, Crew, Process
 from langchain_openai import ChatOpenAI
@@ -20,12 +21,41 @@ def get_supabase_client():
     return create_client(url, key)
 
 
+def parse_examples(text: str) -> Dict[str, Any]:
+    """
+    Extrai exemplos do texto da descrição.
+    
+    Input: "Descrição da tática\n\nEx: Fazer X\nEx: Fazer Y"
+    Output: { "description": "Descrição da tática", "examples": ["Fazer X", "Fazer Y"] }
+    """
+    if not text:
+        return {"description": "", "examples": []}
+    
+    # Pattern to match "Ex:", "Ex 1:", "Exemplo:", "Exemplo 1:" etc.
+    pattern = r'(?:Ex(?:emplo)?(?:\s*\d*)?[:\.])\s*(.+?)(?=\n(?:Ex|Exemplo)|$)'
+    examples = re.findall(pattern, text, re.IGNORECASE | re.DOTALL)
+    
+    # Clean extracted examples
+    examples = [ex.strip() for ex in examples if ex.strip()]
+    
+    # Remove examples from description
+    clean_description = re.sub(
+        r'(?:\n\n?)?(?:Ex(?:emplo)?(?:\s*\d*)?[:\.])\s*.+?(?=\n(?:Ex|Exemplo)|$)',
+        '',
+        text,
+        flags=re.IGNORECASE | re.DOTALL
+    ).strip()
+    
+    return {"description": clean_description, "examples": examples}
+
+
 # --- Pydantic Models ---
 class Strategy(BaseModel):
     title: str = Field(..., description="Nome da ação tática")
-    description: str = Field(..., description="Descrição detalhada da ação")
+    description: str = Field(..., description="Descrição detalhada da ação (sem exemplos)")
     pillar: str = Field(..., description="Pilar estratégico vinculado")
     phase: str = Field(..., description="Fase da campanha (pre_campaign, campaign, final_sprint)")
+    examples: List[str] = Field(default=[], description="Exemplos práticos de execução")
 
 class CampaignOutput(BaseModel):
     """Output completo da Genesis Crew com plano estratégico e táticas"""
@@ -94,11 +124,12 @@ class GenesisCrew:
             self.temperature = self.personas.get("temperature", 0.7)
             self.max_iter = self.personas.get("max_iter", 15)
             self.num_examples = self.personas.get("num_examples", 2)
+            self.tone = self.personas.get("tone", "formal")
             self.process_type = self.personas.get("process_type", "sequential")
             
             self.log(
                 f"📊 Config: {self.task_count} tarefas, temp={self.temperature}, "
-                f"max_iter={self.max_iter}, exemplos={self.num_examples}, processo={self.process_type}", 
+                f"max_iter={self.max_iter}, exemplos={self.num_examples}, tom={self.tone}, processo={self.process_type}", 
                 "System", "info"
             )
             
@@ -111,7 +142,8 @@ class GenesisCrew:
             self.log(f"Erro ao inicializar: {e}", "System", "error")
             raise ValueError(f"Erro ao inicializar persona: {e}")
     
-    def log(self, message: str, agent_name: str = None, status: str = "info", agent: str = None):
+    def log(self, message: str, agent_name: str = None, status: str = "info", agent: str = None, 
+            event_type: str = "system", task_name: str = None, tool_name: str = None, payload: dict = None):
         """
         Registra um log em tempo real no banco de dados para telemetria.
         
@@ -120,6 +152,10 @@ class GenesisCrew:
             agent_name: Nome do agente (Analista, Estrategista, Planejador, System)
             agent: Alias para agent_name (compatibilidade com _log_step)
             status: 'info', 'success', 'error', 'warning'
+            event_type: 'system', 'task_start', 'task_end', 'tool_start', 'tool_end', 'ai_thought', 'error'
+            task_name: Nome da tarefa (opcional)
+            tool_name: Nome da ferramenta (opcional)
+            payload: Dados estruturados adicionais (JSON)
         """
         # Aceita tanto 'agent' quanto 'agent_name' como argumento
         final_agent = agent or agent_name or "System"
@@ -127,7 +163,8 @@ class GenesisCrew:
         try:
             print(f"[{final_agent}] {message}")  # Console local também
             
-            if self.run_id:  # Só loga no banco se tiver run_id
+            # 1. Log legado (agent_logs)
+            if self.run_id:
                 self.supabase.table("agent_logs").insert({
                     "run_id": self.run_id,
                     "campaign_id": self.campaign_id,
@@ -135,6 +172,19 @@ class GenesisCrew:
                     "message": message,
                     "status": status
                 }).execute()
+
+                # 2. Novo Log estruturado (crew_run_logs) para Console Master
+                self.supabase.table("crew_run_logs").insert({
+                    "run_id": self.run_id,
+                    "campaign_id": self.campaign_id,
+                    "event_type": event_type,
+                    "agent_name": final_agent,
+                    "task_name": task_name,
+                    "tool_name": tool_name,
+                    "message": message,
+                    "payload": payload or {}
+                }).execute()
+
         except Exception as e:
             print(f"⚠️ Erro ao salvar log: {e}")
     
@@ -237,7 +287,30 @@ class GenesisCrew:
             # Não falha silenciosamente - reporta o erro mas continua
             print(f"⚠️ Erro ao capturar step: {e}")
             self.log(f"⚠️ Erro ao capturar pensamento: {str(e)[:100]}", agent="System", status="error")
-    
+
+    def _log_task_finish(self, task_output: Any):
+        """
+        🎙️ Captura a conclusão de uma tarefa
+        """
+        try:
+            # O output pode ser uma string ou um objeto TaskOutput
+            output_str = str(task_output)
+            
+            # Se for um objeto TaskOutput, tenta pegar o raw
+            if hasattr(task_output, 'raw'):
+                output_str = task_output.raw
+            
+            # Identifica qual tarefa terminou (heurística básica por conteúdo ou apenas log genérico)
+            # O ideal seria ter o nome da tarefa, mas o callback do CrewAI passa apenas o output.
+            
+            # Trunca para o log não ficar gigante, mas suficiente para leitura
+            preview = output_str[:500] + "..." if len(output_str) > 500 else output_str
+            
+            self.log(f"🏁 Tarefa Concluída! Resultado:\n{preview}", agent="System", status="success", event_type="task_end", payload={"full_output": output_str})
+            
+        except Exception as e:
+            print(f"⚠️ Erro ao logar fim da tarefa: {e}")
+
     def _create_agents(self) -> Dict[str, Agent]:
         """
         Cria os agentes da crew dinamicamente baseado no config.
@@ -341,6 +414,7 @@ class GenesisCrew:
                - 5 OPORTUNIDADES (contexto político, demandas não atendidas)
             
             Formato de saída: Relatório estruturado em tópicos com justificativa para cada item.
+            IMPORTANTE: Utilize um tom {self.tone} na sua análise.
             """,
             agent=analyst,
             expected_output="Relatório detalhado com pontos fortes, fracos e oportunidades"
@@ -376,21 +450,31 @@ class GenesisCrew:
         
         task3 = Task(
             description=f"""
-            Crie {self.task_count} SUGESTÕES TÁTICAS CONCRETAS baseadas nos 3 pilares estratégicos.
+            Crie UMA LISTA NUMERADA com EXATAMENTE {self.task_count} SUGESTÕES TÁTICAS CONCRETAS baseadas nos 3 pilares estratégicos.
+            
+            EXTREMAMENTE IMPORTANTE:
+            1. Você DEVE gerar {self.task_count} itens. Nem menos, nem mais.
+            2. Numere de 1 a {self.task_count}.
             
             Cada sugestão deve:
             - Estar vinculada a um dos 3 pilares
             - Ser uma ação específica e executável
             - Ter objetivo claro e mensurável
             - Indicar a fase da campanha (pre_campaign, campaign, final_sprint)
+            
             {examples_instruction}
             
-            Formato: Lista JSON de estratégias
+            Formato de saída esperado para cada item:
+            "N. [Título da Tática]
+            Descrição completa...
+            Ex: [Exemplo 1]
+            Ex: [Exemplo 2]..."
             
-            IMPORTANTE: Gere EXATAMENTE {self.task_count} táticas, nem mais nem menos.
+            Formato final: Lista de estratégias detalhadas.
+            IMPORTANTE: Escreva todas as táticas com um tom {self.tone}.
             """,
             agent=planner,
-            expected_output=f"Lista com {self.task_count} táticas específicas" + (f", cada uma com {self.num_examples} exemplos" if self.num_examples > 0 else ""),
+            expected_output=f"Lista numerada contendo EXATAMENTE {self.task_count} táticas, cada uma com {self.num_examples} exemplos 'Ex:'",
             context=[task1, task2]
         )
         
@@ -421,6 +505,7 @@ class GenesisCrew:
             [Breve resumo das {self.task_count} táticas que serão executadas]
             
             IMPORTANTE: Use Markdown para formatação (headers, listas, bold, etc.)
+            IMPORTANTE: Mantenha TODO o texto no tom {self.tone}.
             Seja conciso mas completo. Máximo 2000 palavras.
             """,
             agent=strategist,
@@ -431,29 +516,51 @@ class GenesisCrew:
         # Task final que combina tudo
         task5 = Task(
             description=f"""
-            GERE O OUTPUT FINAL COMBINADO.
+            Você está no passo final de uma Genesis Crew política. Sua tarefa é gerar a saída final em JSON seguindo exatamente o formato abaixo.
             
-            Você deve retornar um JSON com dois campos:
-            - strategic_plan: O documento Markdown completo do plano estratégico
-            - strategies: A lista de {self.task_count} táticas geradas anteriormente
-            
-            FORMATO OBRIGATÓRIO:
+            VOCÊ PRECISA INCLUIR EXATAMENTE {self.task_count} ESTRATÉGIAS NO ARRAY 'strategies'.
+            Conte cuidadosamente. Se houver {self.task_count} no texto acima, todas devem estar no JSON.
+
             {{
-                "strategic_plan": "# Plano Estratégico\\n\\n## 1. Análise SWOT\\n...",
-                "strategies": [
-                    {{"title": "...", "description": "...", "pillar": "...", "phase": "..."}},
-                    ...
-                ]
+              "strategic_plan": "string em formato Markdown com o plano estratégico completo",
+              "strategies": [
+                {{
+                  "title": "título da tática",
+                  "description": "descrição da tática (IMPORTANTE: REMOVA as linhas de 'Ex:' daqui)",
+                  "pillar": "nome do pilar estratégico",
+                  "phase": "fase da campanha (ex: pre_campaign, campaign, final_sprint)",
+                  "examples": ["Exemplo 1", "Exemplo 2"]
+                }},
+                ...
+              ]
             }}
+
+            Regras estritas:
+            1. O campo `strategies` é uma lista de objetos JSON.
+            2. COPIE O TEXTO DA DESCRIÇÃO mas REMOVA as linhas que começam com "Ex:".
+            3. MOVA os textos dos "Ex:" para o array `examples`.
+            4. Garanta que o JSON seja válido (escape aspas duplas dentro de strings, etc).
+            5. Nunca omita a vírgula entre campos no JSON.
+            6. Nunca adicione comentários.
+            
+            Verificação Final Obrigatória:
+            - O array `strategies` tem {self.task_count} itens? Se não, corrija agora.
+            - A `description` está LIMPA (sem "Ex:")?
+            - O array `examples` está populado?
+
+            Agora, gere o JSON.
             """,
             agent=planner,
-            expected_output="JSON com strategic_plan e strategies",
+            expected_output=f"JSON válido com strategic_plan e array strategies contendo {self.task_count} itens com exemplos preservados",
             context=[task1, task2, task3, task4],
             output_json=CampaignOutput
         )
         
         # Monta a lista de tarefas base
         tasks = [task1, task2, task3, task4, task5]
+        
+        # === TAREFAS EXTRAS PARA TEMPLATES MAIORES ===
+        
         
         # === TAREFAS EXTRAS PARA TEMPLATES MAIORES ===
         
@@ -476,6 +583,52 @@ class GenesisCrew:
             )
             # Insere após task2 (pilares)
             tasks.insert(2, task_psychologist)
+
+        # ------------------------------------------------------------------
+        # DEMO ENTERPRISE AGENTS (Novos Agentes do Sistema Enterprise)
+        # ------------------------------------------------------------------
+
+        # Tarefa do Policy Modeler (se existir)
+        if "policy-modeler" in agents:
+            task_policy = Task(
+                description="""
+                Analise os 3 pilares estratégicos sob a ótica de POLÍTICAS PÚBLICAS REAIS.
+                
+                Para cada pilar:
+                1. Estime o IMPACTO CAUSAL (Quem ganha? Quem perde?).
+                2. Identifique possíveis efeitos colaterais negativos.
+                3. Sugira uma métrica de sucesso concreta (KPI).
+                
+                O objetivo é garantir que a promessa de campanha seja tecnicamente viável.
+                """,
+                agent=agents["policy-modeler"],
+                expected_output="Análise de viabilidade e impacto das políticas propostas",
+                context=[task2]
+            )
+            # Insere logo após os pilares (antes das táticas)
+            tasks.insert(2, task_policy)
+        
+        # Tarefa do Compliance Agent (se existir)
+        if "compliance-agent" in agents:
+            task_compliance = Task(
+                description="""
+                AUDITORIA FINAL DE COMPLIANCE. 
+                
+                Verifique todo o plano estratégico e as táticas geradas quanto a:
+                1. Discurso de Ódio ou Preconceito (Zero Tolerance).
+                2. Promessas ilegais ou inconstitucionais.
+                3. Risco de reputação grave.
+                
+                Se encontrar problemas, LISTE ELES DE FORMA CLARA. Se estiver tudo ok, valide o plano.
+                """,
+                agent=agents["compliance-agent"],
+                expected_output="Relatório de Conformidade e Riscos Éticos/Legais",
+                context=[task3, task4]
+            )
+            # Insere como PENÚLTIMA tarefa (antes de gerar o JSON final)
+            tasks.insert(-1, task_compliance)
+
+        # ------------------------------------------------------------------
         
         # Tarefa do Crítico/Advogado do Diabo (se existir)
         if "critic" in agents:
@@ -532,6 +685,7 @@ class GenesisCrew:
             "verbose": True,
             "max_rpm": 10,  # Limita a 10 requisições/min para evitar rate limit (Groq, OpenRouter)
             "step_callback": self._log_step,
+            "task_callback": self._log_task_finish,
             "process": crew_process
         }
         
@@ -612,24 +766,51 @@ class GenesisCrew:
         2. Salva estratégias vinculadas ao 'run_id'
         3. Atualiza o plano na campanha (campo legado)
         """
+        import logging
+        logger = logging.getLogger(__name__)
+        
         supabase = get_supabase_client()
         
         strategic_plan = result.get('strategic_plan', '')
         strategies = result.get('strategies', [])
         
-        # 1. Criar registro de execução (VERSÃO)
+        # Log dos dados recebidos para debug
+        self.log(f"📊 Dados recebidos: plano={len(strategic_plan)} chars, estratégias={len(strategies)}", "System", "info")
+        
+        # Validar dados antes de salvar
+        if not strategic_plan:
+            self.log("⚠️ Plano estratégico vazio ou ausente", "System", "warning")
+            logger.warning(f"[save_to_database] Plano estratégico vazio para campanha {self.campaign_id}")
+        
+        if not strategies:
+            self.log("⚠️ Nenhuma estratégia gerada para salvar", "System", "warning")
+            logger.warning(f"[save_to_database] Lista de estratégias vazia para campanha {self.campaign_id}")
+        
+        # 1. Atualizar registro de execução existente (criado pela API genesis)
+        run_id = self.run_id
         try:
-            run_result = supabase.table("analysis_runs").insert({
-                "campaign_id": self.campaign_id,
-                "persona_name": self.persona,
-                "llm_model": self.llm.model_name if hasattr(self.llm, 'model_name') else "unknown",
-                "strategic_plan_text": strategic_plan
-            }).execute()
-            
-            run_id = run_result.data[0]["id"]
-            print(f"📦 Run #{run_id} criada para campanha {self.campaign_id}")
+            if run_id:
+                # Atualiza o run existente com o plano
+                supabase.table("analysis_runs").update({
+                    "strategic_plan_text": strategic_plan,
+                    "status": "completed"
+                }).eq("id", run_id).execute()
+                self.log(f"📦 Run #{run_id[:8]}... atualizado", "System", "info")
+            else:
+                # Fallback: cria novo registro se não houver run_id
+                run_result = supabase.table("analysis_runs").insert({
+                    "campaign_id": self.campaign_id,
+                    "persona_name": self.persona,
+                    "llm_model": self.llm.model_name if hasattr(self.llm, 'model_name') else "unknown",
+                    "strategic_plan_text": strategic_plan,
+                    "status": "completed"
+                }).execute()
+                run_id = run_result.data[0]["id"]
+                self.log(f"📦 Novo Run #{run_id[:8]}... criado (fallback)", "System", "info")
         except Exception as e:
-            print(f"❌ Erro ao criar analysis_run: {e}")
+            error_msg = f"Erro ao criar/atualizar analysis_run: {e}"
+            self.log(f"❌ {error_msg}", "System", "error")
+            logger.error(f"[save_to_database] {error_msg}")
             raise e
         
         # 2. Salvar o plano estratégico na campanha (campo legado - mantém compatibilidade)
@@ -638,11 +819,16 @@ class GenesisCrew:
                 "ai_strategic_plan": strategic_plan
             }).eq("id", self.campaign_id).execute()
             
-            print(f"📄 Plano estratégico salvo na campanha {self.campaign_id}")
+            self.log(f"📄 Plano atualizado na campanha", "System", "info")
         except Exception as e:
-            print(f"⚠️ Erro ao salvar plano estratégico: {e}")
+            self.log(f"⚠️ Erro ao salvar plano legado: {e}", "System", "warning")
+            logger.warning(f"[save_to_database] Erro ao salvar plano legado: {e}")
         
         # 3. Salvar as táticas vinculadas à run
+        if not strategies:
+            self.log("ℹ️ Nenhuma estratégia para salvar, finalizando", "System", "info")
+            return {"run_id": run_id, "strategies_saved": 0}
+        
         # Mapeamento de fases para o enum do banco
         phase_map = {
             "pre_campaign": "diagnostico",
@@ -652,25 +838,45 @@ class GenesisCrew:
         
         # Prepara os dados para inserção
         strategies_data = []
-        for suggestion in strategies:
-            raw_phase = suggestion.get("phase", "campaign")
-            db_phase = phase_map.get(raw_phase, "campanha_rua")
-            
-            strategies_data.append({
-                "campaign_id": self.campaign_id,
-                "run_id": run_id,  # Vínculo com a versão
-                "title": suggestion.get("title", ""),
-                "description": suggestion.get("description", ""),
-                "pillar": suggestion.get("pillar", ""),
-                "phase": db_phase,
-                "status": "suggested"
-            })
+        for idx, suggestion in enumerate(strategies):
+            try:
+                raw_phase = suggestion.get("phase", "campaign")
+                db_phase = phase_map.get(raw_phase, "campanha_rua")
+                
+                title = suggestion.get("title", "")
+                if not title:
+                    self.log(f"⚠️ Estratégia #{idx+1} sem título, ignorando", "System", "warning")
+                    continue
+                
+                strategies_data.append({
+                    "campaign_id": self.campaign_id,
+                    "run_id": run_id,  # Vínculo com a versão
+                    "title": title,
+                    "description": suggestion.get("description", ""),
+                    "pillar": suggestion.get("pillar", ""),
+                    "phase": db_phase,
+                    "status": "suggested",
+                    "examples": suggestion.get("examples", []) or parse_examples(suggestion.get("description", "")).get("examples", [])
+                })
+            except Exception as parse_error:
+                error_msg = f"Erro ao processar estratégia #{idx+1}: {parse_error}"
+                self.log(f"❌ {error_msg}", "System", "error")
+                logger.error(f"[save_to_database] {error_msg} | Dados: {suggestion}")
+        
+        if not strategies_data:
+            self.log("⚠️ Nenhuma estratégia válida após parsing", "System", "warning")
+            return {"run_id": run_id, "strategies_saved": 0}
         
         # Insere no banco
-        result = supabase.table("strategies").insert(strategies_data).execute()
-        
-        print(f"✅ {len(strategies_data)} estratégias salvas no banco (run_id: {run_id})!")
-        return result
+        try:
+            result = supabase.table("strategies").insert(strategies_data).execute()
+            self.log(f"✅ {len(strategies_data)} estratégias salvas (run: {run_id[:8]}...)", "System", "success")
+            return {"run_id": run_id, "strategies_saved": len(strategies_data)}
+        except Exception as insert_error:
+            error_msg = f"Erro ao inserir estratégias no banco: {insert_error}"
+            self.log(f"❌ {error_msg}", "System", "error")
+            logger.error(f"[save_to_database] {error_msg}")
+            raise insert_error
     
     def execute(self):
         """

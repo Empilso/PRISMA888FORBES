@@ -13,6 +13,7 @@ import { ToastAction } from "@/components/ui/toast";
 import { useParams, useRouter } from "next/navigation";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { StrategyEditorSheet } from "@/components/campaign/StrategyEditorSheet";
+import { ExamplesRenderer } from "@/components/tasks/ExamplesRenderer";
 import { StrategicMatrix } from "@/components/campaign/StrategicMatrix";
 import { CampaignManifesto } from "@/components/campaign/CampaignManifesto";
 import { GeneratorDialog } from "@/components/campaign/GeneratorDialog";
@@ -35,6 +36,7 @@ interface Strategy {
     status: "suggested" | "approved";
     campaign_id: string;
     run_id?: string;
+    examples?: string[];
 }
 
 interface AnalysisRun {
@@ -99,8 +101,8 @@ function DraggableStrategyCard({
         }
     };
 
-    const handleEdit = (e: React.MouseEvent) => {
-        e.stopPropagation();
+    const handleEdit = (e?: React.MouseEvent) => {
+        e?.stopPropagation();
         if (onClick) {
             onClick();
         }
@@ -131,6 +133,15 @@ function DraggableStrategyCard({
                 </CardHeader>
                 <CardContent className="p-4 pt-1">
                     <p className="text-sm text-slate-500 line-clamp-3 mb-4 leading-relaxed">{strategy.description}</p>
+
+                    {/* Examples Section */}
+                    <div className="mt-auto">
+                        <ExamplesRenderer
+                            examples={strategy.examples}
+                            mode="card"
+                            onViewAll={handleEdit}
+                        />
+                    </div>
 
                     {/* Botões de Ação Rápida - Invisíveis até hover (exceto em mobile/touch) */}
                     <div className="flex items-center gap-2 pt-3 border-t border-slate-50 opacity-0 group-hover:opacity-100 transition-opacity">

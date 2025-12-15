@@ -22,6 +22,7 @@ import {
     Tag,
     CheckCircle2,
 } from "lucide-react";
+import { ExamplesRenderer } from "@/components/tasks/ExamplesRenderer";
 export type TaskStatus = "pending" | "in_progress" | "review" | "completed";
 export type TaskPriority = "low" | "medium" | "high" | "urgent";
 
@@ -36,6 +37,7 @@ export interface Task {
     dueDate?: string;
     createdAt: string;
     tags: string[];
+    examples?: string[];
 }
 
 interface TaskDetailsSheetProps {
@@ -56,11 +58,13 @@ export function TaskDetailsSheet({
     const [priority, setPriority] = React.useState<TaskPriority>(
         task?.priority || "medium"
     );
+    const [description, setDescription] = React.useState(task?.description || "");
 
     React.useEffect(() => {
         if (task) {
             setStatus(task.status);
             setPriority(task.priority);
+            setDescription(task.description);
         }
     }, [task]);
 
@@ -193,8 +197,22 @@ export function TaskDetailsSheet({
                 <div className="space-y-6">
                     <div>
                         <h3 className="text-sm font-semibold mb-2">Descrição</h3>
-                        <p className="text-sm text-muted-foreground">{task.description}</p>
+                        <Textarea
+                            className="min-h-[120px]"
+                            value={description}
+                            onChange={(e) => setDescription(e.target.value)}
+                        />
                     </div>
+
+
+                    {/* Examples Section */}
+                    {task.examples && task.examples.length > 0 && (
+                        <ExamplesRenderer
+                            examples={task.examples}
+                            mode="workbench"
+                            onInsert={(text) => setDescription(prev => prev + "\n\n" + text)}
+                        />
+                    )}
 
                     {/* AI Suggestion */}
                     {task.aiSuggestion && (
@@ -361,7 +379,7 @@ export function TaskDetailsSheet({
 
                     {/* Actions */}
                     <div className="flex gap-2 pt-4 border-t">
-                        <Button variant="default" className="flex-1 gap-2">
+                        <Button variant="default" className="flex-1 gap-2" onClick={() => console.log({ id: task.id, status, priority, description })}>
                             <CheckCircle2 className="h-4 w-4" />
                             Salvar Alterações
                         </Button>
@@ -371,6 +389,6 @@ export function TaskDetailsSheet({
                     </div>
                 </div>
             </SheetContent>
-        </Sheet>
+        </Sheet >
     );
 }
