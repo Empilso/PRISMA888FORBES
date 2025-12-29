@@ -126,6 +126,7 @@ class GenesisCrew:
             self.num_examples = self.personas.get("num_examples", 2)
             self.tone = self.personas.get("tone", "formal")
             self.process_type = self.personas.get("process_type", "sequential")
+            self.manager_model = self.personas.get("manager_model", "gpt-4o")  # LLM do Manager (hierárquico)
             
             self.log(
                 f"📊 Config: {self.task_count} tarefas, temp={self.temperature}, "
@@ -689,10 +690,11 @@ class GenesisCrew:
             "process": crew_process
         }
         
-        # Se hierárquico, adiciona manager_llm (usa o mesmo LLM dos agentes)
+        # Se hierárquico, adiciona manager_llm (usa modelo configurado pelo admin)
         if self.process_type == "hierarchical":
-            crew_params["manager_llm"] = self.llm
-            self.log("🎩 Modo Hierárquico: Um gerente coordenará os agentes", "System", "info")
+            manager_llm = self._create_llm(self.manager_model, temperature=0.3)  # Baixa criatividade para manager
+            crew_params["manager_llm"] = manager_llm
+            self.log(f"🎩 Modo Hierárquico: Manager usando {self.manager_model}", "System", "info")
         
         crew = Crew(**crew_params)
         

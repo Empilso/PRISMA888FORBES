@@ -86,6 +86,7 @@ interface PersonaConfig {
     num_examples?: number;
     tone?: string;
     process_type?: 'sequential' | 'hierarchical';
+    manager_model?: string;  // LLM do Manager Agent (hierárquico only)
 
     // Metadados do Template (novo formato dinâmico)
     template_id?: string;
@@ -312,6 +313,7 @@ export default function AgentesPage() {
         max_iter: 15,            // Máximo de iterações por agente (1-50)
         num_examples: 2,         // Exemplos por tarefa (0-5)
         process_type: 'sequential' as const,  // Dinâmica: sequential ou hierarchical
+        manager_model: 'gpt-4o', // LLM do Manager (hierárquico only)
 
         // Configuração dos Agentes
         analyst: {
@@ -1077,6 +1079,42 @@ export default function AgentesPage() {
                                                     className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-purple-600"
                                                 />
                                             </div>
+
+                                            {/* Manager Model (apenas para hierárquico) */}
+                                            {selectedPersona.config?.process_type === 'hierarchical' && (
+                                                <div className="space-y-3 pt-4 border-t border-dashed border-amber-200 bg-amber-50/30 -mx-4 px-4 pb-3 mt-3">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-base">🎩</span>
+                                                        <label className="text-xs font-medium text-amber-800">Modelo do Manager (Hierárquico)</label>
+                                                    </div>
+                                                    <Select
+                                                        value={selectedPersona.config?.manager_model || 'gpt-4o'}
+                                                        onValueChange={(value) => setSelectedPersona({
+                                                            ...selectedPersona,
+                                                            config: { ...selectedPersona.config, manager_model: value }
+                                                        })}
+                                                    >
+                                                        <SelectTrigger className="h-9 bg-white border-amber-200">
+                                                            <SelectValue placeholder="Selecione o LLM do Manager" />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            {LLM_OPTIONS.map((group) => (
+                                                                <SelectGroup key={group.label}>
+                                                                    <SelectLabel>{group.label}</SelectLabel>
+                                                                    {group.options.map((opt) => (
+                                                                        <SelectItem key={opt.value} value={opt.value}>
+                                                                            {opt.label}
+                                                                        </SelectItem>
+                                                                    ))}
+                                                                </SelectGroup>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                    <p className="text-[10px] text-amber-700/80">
+                                                        O Manager coordena os agentes. Use um LLM mais inteligente (GPT-4o recomendado) para evitar erros de delegação.
+                                                    </p>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
 
