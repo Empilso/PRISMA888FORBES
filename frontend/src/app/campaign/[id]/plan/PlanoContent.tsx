@@ -9,6 +9,7 @@ import { CampaignManifesto } from "@/components/campaign/CampaignManifesto";
 import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
 import { TaskDetailsSheet } from "@/components/tasks/task-details-sheet";
+import { ExamplesRenderer } from "@/components/tasks/ExamplesRenderer";
 
 interface Task {
     id: string;
@@ -20,6 +21,9 @@ interface Task {
     created_at: string;
     strategy_id: string | null;
     tags?: string[];
+    examples?: string[];
+    pillar?: string | null;
+    phase?: string | null;
 }
 
 export default function PlanoContent({ campaignId }: { campaignId: string }) {
@@ -222,13 +226,20 @@ export default function PlanoContent({ campaignId }: { campaignId: string }) {
                                 <div
                                     key={task.id}
                                     onClick={() => handleOpenTask(task)}
-                                    className="group relative bg-white rounded-2xl p-5 shadow-sm border border-slate-100 hover:shadow-xl hover:shadow-slate-200/50 hover:-translate-y-1 transition-all duration-300 flex flex-col h-[260px] cursor-pointer"
+                                    className="group relative bg-white rounded-2xl p-5 shadow-sm border border-slate-100 hover:shadow-xl hover:shadow-slate-200/50 hover:-translate-y-1 transition-all duration-300 flex flex-col min-h-[260px] cursor-pointer"
                                 >
                                     {/* Header Badges */}
-                                    <div className="flex items-center justify-between mb-4">
-                                        <Badge variant="outline" className={`font-normal ${status.color}`}>
-                                            {status.label}
-                                        </Badge>
+                                    <div className="flex items-center justify-between mb-3 flex-wrap gap-1.5">
+                                        <div className="flex items-center gap-1.5">
+                                            <Badge variant="outline" className={`font-normal ${status.color}`}>
+                                                {status.label}
+                                            </Badge>
+                                            {task.pillar && (
+                                                <Badge variant="secondary" className="bg-indigo-50 text-indigo-700 border-indigo-200 text-[10px] font-medium">
+                                                    {task.pillar}
+                                                </Badge>
+                                            )}
+                                        </div>
                                         <Badge variant="outline" className={`font-normal ${priority.color}`}>
                                             {priority.label}
                                         </Badge>
@@ -239,9 +250,22 @@ export default function PlanoContent({ campaignId }: { campaignId: string }) {
                                         <h3 className="font-bold text-base text-slate-900 mb-2 leading-tight line-clamp-2 group-hover:text-blue-600 transition-colors">
                                             {task.title}
                                         </h3>
-                                        <p className="text-sm text-slate-500 line-clamp-3 leading-relaxed">
+                                        <p className="text-sm text-slate-500 line-clamp-2 leading-relaxed">
                                             {task.description}
                                         </p>
+
+                                        {/* Exemplos - ExamplesRenderer */}
+                                        {(() => {
+                                            const safeExamples = Array.isArray(task.examples) ? task.examples : [];
+                                            return safeExamples.length > 0 ? (
+                                                <ExamplesRenderer
+                                                    examples={safeExamples}
+                                                    mode="card"
+                                                    maxPreview={2}
+                                                    onViewAll={() => handleOpenTask(task)}
+                                                />
+                                            ) : null;
+                                        })()}
                                     </div>
 
                                     {/* Footer Meta & Actions */}
