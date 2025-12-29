@@ -807,6 +807,84 @@ export default function AgentesPage() {
                             />
                         </div>
 
+                        {/* ========== SEÇÃO: MOTOR DE IA ========== */}
+                        <div className="px-6 py-4 border-b bg-gradient-to-r from-purple-50/50 to-indigo-50/50">
+                            <div className="flex items-center gap-2 mb-3">
+                                <span className="text-base">🧠</span>
+                                <h3 className="text-xs font-semibold text-purple-800 uppercase tracking-wide">Motor de IA</h3>
+                            </div>
+
+                            {/* LLM Principal dos Workers */}
+                            <div className="space-y-2 mb-3">
+                                <label className="text-[10px] font-medium text-purple-700 uppercase">LLM dos Agentes (Workers)</label>
+                                <Select
+                                    value={selectedPersona.llm_model || 'gpt-4o-mini'}
+                                    onValueChange={(value) => setSelectedPersona({
+                                        ...selectedPersona,
+                                        llm_model: value
+                                    })}
+                                    disabled={saving || isSimulating}
+                                >
+                                    <SelectTrigger className="h-9 bg-white border-purple-200">
+                                        <SelectValue placeholder="Selecione o LLM" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {LLM_OPTIONS.map((group) => (
+                                            <SelectGroup key={group.label}>
+                                                <SelectLabel>{group.label}</SelectLabel>
+                                                {group.options.map((opt) => (
+                                                    <SelectItem key={opt.value} value={opt.value}>
+                                                        {opt.label}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectGroup>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            {/* LLM do Manager (apenas hierárquico) */}
+                            {selectedPersona.config?.process_type === 'hierarchical' && (
+                                <div className="space-y-2 pt-3 border-t border-dashed border-amber-200">
+                                    <div className="flex items-center justify-between">
+                                        <label className="text-[10px] font-medium text-amber-700 uppercase flex items-center gap-1">
+                                            <span>🎩</span> LLM do Manager (Coordenador)
+                                        </label>
+                                        <Badge variant="outline" className="text-[9px] border-amber-300 text-amber-600 bg-amber-50">
+                                            Hierárquico
+                                        </Badge>
+                                    </div>
+                                    <Select
+                                        value={selectedPersona.config?.manager_model || 'gpt-4o'}
+                                        onValueChange={(value) => setSelectedPersona({
+                                            ...selectedPersona,
+                                            config: { ...selectedPersona.config, manager_model: value }
+                                        })}
+                                        disabled={saving || isSimulating}
+                                    >
+                                        <SelectTrigger className="h-9 bg-white border-amber-200">
+                                            <SelectValue placeholder="Selecione o LLM do Manager" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {LLM_OPTIONS.map((group) => (
+                                                <SelectGroup key={group.label}>
+                                                    <SelectLabel>{group.label}</SelectLabel>
+                                                    {group.options.map((opt) => (
+                                                        <SelectItem key={opt.value} value={opt.value}>
+                                                            {opt.label}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectGroup>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    <p className="text-[9px] text-amber-600/80">
+                                        Recomendado: GPT-4o para evitar erros de delegação.
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+
                         {/* Content */}
                         <CardContent className="flex-1 overflow-y-auto p-6">
                             {selectedAgent ? (
@@ -1080,41 +1158,7 @@ export default function AgentesPage() {
                                                 />
                                             </div>
 
-                                            {/* Manager Model (apenas para hierárquico) */}
-                                            {selectedPersona.config?.process_type === 'hierarchical' && (
-                                                <div className="space-y-3 pt-4 border-t border-dashed border-amber-200 bg-amber-50/30 -mx-4 px-4 pb-3 mt-3">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="text-base">🎩</span>
-                                                        <label className="text-xs font-medium text-amber-800">Modelo do Manager (Hierárquico)</label>
-                                                    </div>
-                                                    <Select
-                                                        value={selectedPersona.config?.manager_model || 'gpt-4o'}
-                                                        onValueChange={(value) => setSelectedPersona({
-                                                            ...selectedPersona,
-                                                            config: { ...selectedPersona.config, manager_model: value }
-                                                        })}
-                                                    >
-                                                        <SelectTrigger className="h-9 bg-white border-amber-200">
-                                                            <SelectValue placeholder="Selecione o LLM do Manager" />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            {LLM_OPTIONS.map((group) => (
-                                                                <SelectGroup key={group.label}>
-                                                                    <SelectLabel>{group.label}</SelectLabel>
-                                                                    {group.options.map((opt) => (
-                                                                        <SelectItem key={opt.value} value={opt.value}>
-                                                                            {opt.label}
-                                                                        </SelectItem>
-                                                                    ))}
-                                                                </SelectGroup>
-                                                            ))}
-                                                        </SelectContent>
-                                                    </Select>
-                                                    <p className="text-[10px] text-amber-700/80">
-                                                        O Manager coordena os agentes. Use um LLM mais inteligente (GPT-4o recomendado) para evitar erros de delegação.
-                                                    </p>
-                                                </div>
-                                            )}
+
                                         </div>
                                     </div>
 
