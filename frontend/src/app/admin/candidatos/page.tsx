@@ -92,7 +92,10 @@ export default function CandidatosPage() {
                         ...c,
                         metrics: {
                             ia_count: campStrategies.filter(s => s.status === 'suggested').length,
-                            approved_count: campStrategies.filter(s => s.status === 'approved').length,
+                            // 🔧 FIX: Incluir published e executed na contagem
+                            approved_count: campStrategies.filter(s =>
+                                s.status === 'approved' || s.status === 'published' || s.status === 'executed'
+                            ).length,
                             has_plan: campRuns.length > 0
                         }
                     };

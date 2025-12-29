@@ -708,15 +708,18 @@ export default function CampaignSetupPage() {
 
     // 🔧 FIX: Filtros com versão correta
     // - "Sugestões da IA": Filtra por run_id (versão selecionada) E status=suggested
-    // - "Aprovados": Mostra TODOS aprovados (de qualquer versão)
+    // - "Aprovados": Mostra TODOS aprovados/publicados/executados (de qualquer versão)
     const suggestedStrategies = strategies.filter((s) =>
         s.status === "suggested" && s.run_id === selectedRunId
     );
-    const approvedStrategies = strategies.filter((s) => s.status === "approved");
+    const approvedStrategies = strategies.filter((s) =>
+        s.status === "approved" || s.status === "published" || s.status === "executed"
+    );
 
-    // 🔧 FIX: Filtro para Matriz - Sugestões da Versão Atual + Todos Aprovados
+    // 🔧 FIX: Filtro para Matriz - Sugestões da Versão Atual + Todos Aprovados/Publicados
     const strategiesForMatrix = strategies.filter((s) =>
-        (s.status === "suggested" && s.run_id === selectedRunId) || s.status === "approved"
+        (s.status === "suggested" && s.run_id === selectedRunId) ||
+        s.status === "approved" || s.status === "published" || s.status === "executed"
     );
 
     // 🔧 DEBUG: Log quando versão muda
