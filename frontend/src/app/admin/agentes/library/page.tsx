@@ -9,7 +9,7 @@ import {
     ChevronLeft, ChevronRight, LayoutGrid,
     FileInput, FileText, Database, Activity,
     Users, MessageSquare, Cpu, CheckCircle2,
-    ShieldAlert, FileCheck, Network, Layers
+    ShieldAlert, FileCheck, Network, Layers, Target, Terminal
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
@@ -35,7 +35,7 @@ import { Separator } from "@/components/ui/separator";
 // --- Types & Constants ---
 
 // Mapping types to PT-BR Labels and Icons
-const CATEGORY_CONFIG: Record<string, { label: string; icon: any }> = {
+const CATEGORY_CONFIG: Record<string, { label: string; icon: React.ElementType }> = {
     ingress: { label: "Entrada", icon: FileInput },
     evidence: { label: "Evidência", icon: FileText }, // Changed from Search to avoid dup
     data_integrator: { label: "Dados", icon: Database },
@@ -47,6 +47,7 @@ const CATEGORY_CONFIG: Record<string, { label: string; icon: any }> = {
     compliance: { label: "Compliance", icon: ShieldAlert },
     auditor: { label: "Auditor", icon: FileCheck },
     orchestrator: { label: "Orquestrador", icon: Network },
+    radar: { label: "Python", icon: Terminal },
     generic: { label: "Geral", icon: Bot },
 };
 
@@ -136,6 +137,9 @@ export default function AgentLibraryPage() {
     // Get unique categories present in the data + predefined ones used in config
     const availableCategories = useMemo(() => {
         const types = new Set(agents.map(a => a.type));
+        // Force 'radar' (Python) category to always appear
+        types.add('radar');
+
         // Sort based on config order if possible, or alphabetical?
         // Let's rely on map iteration order or sort alphabetically by label
         return Array.from(types).sort();

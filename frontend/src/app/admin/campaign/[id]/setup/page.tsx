@@ -527,14 +527,34 @@ export default function CampaignSetupPage() {
             description: "Enviando estratégias aprovadas para o candidato...",
         });
 
-        // Simular envio de email/atualização de status
-        await new Promise((resolve) => setTimeout(resolve, 2000));
+        try {
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/campaign/${campaignId}/publish`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ strategy_ids: null }) // Publish all approved
+            });
 
-        toast({
-            title: "✅ Campanha Publicada!",
-            description: "As estratégias foram disponibilizadas para o candidato.",
-        });
-        setPublishing(false);
+            if (!response.ok) throw new Error("Falha ao publicar");
+
+            const result = await response.json();
+
+            toast({
+                title: "✅ Campanha Publicada!",
+                description: result.message,
+            });
+
+            // Opcional: Recarregar estratégias para atualizar status
+            // fetchStrategies(); 
+        } catch (error) {
+            console.error("Erro ao publicar:", error);
+            toast({
+                title: "Erro",
+                description: "Não foi possível publicar a campanha.",
+                variant: "destructive"
+            });
+        } finally {
+            setPublishing(false);
+        }
     };
 
     const handleGenerationSuccess = async () => {

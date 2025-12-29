@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
+
+import React, { useState, useEffect } from "react";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetFooter } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Loader2, Save } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
+import { ExamplesRenderer } from "@/components/tasks/ExamplesRenderer";
 
 interface Strategy {
     id: string;
@@ -19,6 +21,7 @@ interface Strategy {
     pillar: string;
     phase: string;
     status: "suggested" | "approved";
+    examples?: string[];
     campaign_id: string;
 }
 
@@ -57,7 +60,7 @@ export function StrategyEditorSheet({ strategy, isOpen, onClose, onSave }: Strat
     const supabase = createClient();
     const { toast } = useToast();
 
-    React.useEffect(() => {
+    useEffect(() => {
         setEditedStrategy(strategy);
     }, [strategy]);
 
@@ -127,20 +130,44 @@ export function StrategyEditorSheet({ strategy, isOpen, onClose, onSave }: Strat
                     </div>
 
                     {/* Descrição */}
-                    <div className="space-y-2">
-                        <Label htmlFor="description">Descrição Completa</Label>
-                        <Textarea
-                            id="description"
-                            value={editedStrategy.description}
-                            onChange={(e) => setEditedStrategy({ ...editedStrategy, description: e.target.value })}
-                            rows={8}
-                            placeholder="Descreva o racional completo da estratégia..."
-                            className="resize-none"
-                        />
-                        <p className="text-xs text-muted-foreground">
-                            {editedStrategy.description.length} caracteres
-                        </p>
+                    <div className="space-y-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="description" className="text-slate-600 font-medium">
+                                Descrição Completa
+                            </Label>
+                            <Textarea
+                                id="description"
+                                value={editedStrategy.description}
+                                onChange={(e) => setEditedStrategy({ ...editedStrategy, description: e.target.value })}
+                                placeholder="Descreva a estratégia em detalhes..."
+                                className="min-h-[180px] text-base leading-relaxed bg-slate-50/50 border-slate-200 focus:bg-white transition-all resize-y"
+                            />
+                        </div>
+
+                        {/* Seção de Exemplos Práticos da IA */}
+                        {strategy?.examples && strategy.examples.length > 0 && (
+                            <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
+                                <ExamplesRenderer
+                                    examples={strategy.examples}
+                                    mode="workbench"
+                                    onInsert={(text) => {
+                                        const currentDesc = editedStrategy.description || "";
+                                        const separator = currentDesc ? "\n\n" : "";
+                                        const newText = currentDesc + separator + text;
+                                        setEditedStrategy({ ...editedStrategy, description: newText });
+                                        toast({
+                                            title: "Exemplo inserido",
+                                            description: "O texto foi adicionado à descrição.",
+                                        });
+                                    }}
+                                    maxPreview={3}
+                                />
+                            </div>
+                        )}
                     </div>
+                    <p className="text-xs text-muted-foreground">
+                        {editedStrategy.description.length} caracteres
+                    </p>
 
                     {/* Pilar */}
                     <div className="space-y-2">

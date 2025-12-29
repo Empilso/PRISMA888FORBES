@@ -16,7 +16,10 @@ import {
     List,
     X,
     SignOut,
-    Robot
+    Robot,
+    Crosshair,
+    Buildings,
+    User
 } from "@phosphor-icons/react";
 
 export default function AdminLayout({
@@ -41,6 +44,21 @@ export default function AdminLayout({
                     name: "Lista de Candidatos",
                     href: "/admin/candidatos",
                     icon: ListDashes
+                }
+            ]
+        },
+        {
+            title: "Radar de Promessas",
+            items: [
+                {
+                    name: "Cidades",
+                    href: "/admin/cidades",
+                    icon: Buildings
+                },
+                {
+                    name: "Políticos",
+                    href: "/admin/politicos",
+                    icon: User
                 }
             ]
         },

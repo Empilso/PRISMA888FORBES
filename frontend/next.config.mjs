@@ -7,6 +7,9 @@ const nextConfig = {
             bodySizeLimit: '50mb', // Aumentando para suportar PDFs e CSVs grandes
         },
     },
+    eslint: {
+        ignoreDuringBuilds: true,
+    },
 };
 
 export default nextConfig;

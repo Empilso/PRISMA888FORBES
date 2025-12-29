@@ -4,6 +4,9 @@ import { cookies } from 'next/headers'
 export async function createClient() {
     const cookieStore = await cookies()
 
+    // Debug: Log all cookies to see what's available
+    // console.log("[ServerClient] Cookies Available:", cookieStore.getAll().map(c => c.name));
+
     return createServerClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,

@@ -67,10 +67,11 @@ interface Task {
     };
     ai_suggestion?: string;
     created_at?: string;
+    pillar?: string;
     examples?: string[]; // Parsed examples from AI output
 }
 
-export default function TasksContent({ campaignId }: { campaignId: string }) {
+export default function TasksContent({ campaignId, simpleMode = false }: { campaignId: string; simpleMode?: boolean }) {
     const [searchQuery, setSearchQuery] = useState("");
     const [currentView, setCurrentView] = useQueryState('view', { defaultValue: 'grid' }); // Default alterado para grid para mostrar o redesign
     const [selectedTask, setSelectedTask] = useState<Task | null>(null);
@@ -118,8 +119,9 @@ export default function TasksContent({ campaignId }: { campaignId: string }) {
         const supabase = createClient();
         const { data, error } = await supabase
             .from('tasks')
-            .select('*')
+            .select('*, strategy:strategies!inner(status)')
             .eq('campaign_id', campaignId)
+            .in('strategy.status', ['published', 'executed'])
             .order('created_at', { ascending: false });
 
         if (error) {
@@ -219,17 +221,42 @@ export default function TasksContent({ campaignId }: { campaignId: string }) {
     }
 
     return (
-        <div className="space-y-6 pb-20">
-            {/* Header */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                    <h1 className="text-2xl font-bold tracking-tight">IA & Tarefas</h1>
-                    <p className="text-sm text-muted-foreground">
-                        Gestão tática e operacional da campanha.
-                    </p>
+        <div className="space-y-6">
+            {!simpleMode && (
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                        <h2 className="text-3xl font-bold tracking-tight text-slate-900">Minhas Tarefas</h2>
+                        <p className="text-muted-foreground">
+                            Gerencie a execução da campanha.
+                        </p>
+                    </div>
                 </div>
-                <div className="flex items-center gap-2">
-                    <div className="relative w-full md:w-64">
+            )}
+
+            <div className="flex flex-col sm:flex-row gap-4 items-center justify-between bg-white p-1 rounded-lg">
+                <Tabs value={currentView || 'grid'} onValueChange={(v) => setCurrentView(v)} className="w-full sm:w-auto">
+                    <TabsList className="bg-slate-100/50 p-1 rounded-lg">
+                        <TabsTrigger value="list" className="gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                            <List className="h-4 w-4" />
+                            Lista
+                        </TabsTrigger>
+                        <TabsTrigger value="grid" className="gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                            <Grid className="h-4 w-4" />
+                            Grade
+                        </TabsTrigger>
+                        <TabsTrigger value="kanban" className="gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                            <LayoutGrid className="h-4 w-4" />
+                            Kanban
+                        </TabsTrigger>
+                        <TabsTrigger value="console" className="gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                            <Terminal className="h-4 w-4" />
+                            Console IA
+                        </TabsTrigger>
+                    </TabsList>
+                </Tabs>
+
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                    <div className="relative flex-1">
                         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                         <Input
                             placeholder="Buscar tarefas..."
@@ -375,17 +402,24 @@ export default function TasksContent({ campaignId }: { campaignId: string }) {
                                     <div
                                         key={task.id}
                                         onClick={() => handleTaskClick(task)}
-                                        className="group bg-white rounded-2xl p-6 shadow-sm hover:shadow-md transition-all border-none hover:-translate-y-1 cursor-pointer flex flex-col h-[280px]"
+                                        className="group relative bg-white rounded-2xl p-5 shadow-sm border border-slate-100 hover:shadow-xl hover:shadow-slate-200/50 hover:-translate-y-1 transition-all duration-300 flex flex-col h-auto min-h-[260px] cursor-pointer"
                                     >
                                         {/* Header: Status Pill e Prioridade */}
-                                        <div className="flex items-center justify-between mb-4">
-                                            <TaskStatusSelector
-                                                status={task.status}
-                                                onStatusChange={(s) => handleStatusChange(task.id, s)}
-                                            />
-                                            <Badge variant="outline" className={`font-normal rounded-md ${getPriorityColor(task.priority)}`}>
-                                                {getPriorityLabel(task.priority)}
-                                            </Badge>
+                                        <div className="flex flex-col gap-2 mb-4">
+                                            {task.pillar && (
+                                                <Badge variant="outline" className="w-fit rounded-full font-normal border-purple-100 bg-purple-50 text-purple-700 text-[10px] px-2 py-0.5">
+                                                    {task.pillar}
+                                                </Badge>
+                                            )}
+                                            <div className="flex items-center justify-between">
+                                                <TaskStatusSelector
+                                                    status={task.status}
+                                                    onStatusChange={(s) => handleStatusChange(task.id, s)}
+                                                />
+                                                <Badge variant="outline" className={`font-normal rounded-md ${getPriorityColor(task.priority)}`}>
+                                                    {getPriorityLabel(task.priority)}
+                                                </Badge>
+                                            </div>
                                         </div>
 
                                         {/* Body */}
@@ -398,7 +432,7 @@ export default function TasksContent({ campaignId }: { campaignId: string }) {
                                             </p>
 
                                             {/* Examples Section */}
-                                            <div className="mt-auto"> {/* Push footer down */}
+                                            <div className="mt-auto pt-2">
                                                 <ExamplesRenderer
                                                     examples={task.examples}
                                                     mode="card"

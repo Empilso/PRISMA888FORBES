@@ -1,0 +1,2 @@
+ALTER TABLE tasks ADD COLUMN pillar TEXT;
+ALTER TABLE tasks ADD COLUMN phase TEXT;

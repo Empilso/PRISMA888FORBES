@@ -75,16 +75,19 @@ async def activate_strategy(campaign_id: str, strategy_id: str):
             detail="Esta estratégia já foi transformada em tarefa"
         )
     
-    # 2. Criar tarefa a partir da estratégia
+    # 2. Criar tarefa a partir da estratégia (com examples/tags preservados)
     task_data = {
         "campaign_id": campaign_id,
         "strategy_id": strategy_id,
         "title": strategy.get("title"),
         "description": strategy.get("description"),
-        "status": "pending",  # A Fazer
+        "status": "pending",
         "priority": "medium",
-        "tags": [strategy.get("pillar"), strategy.get("phase")],
-        "ai_suggestion": f"Gerado pela IA Genesis a partir da estratégia: {strategy.get('title')}"
+        # Preservar dados da estratégia (com fallback seguro)
+        "examples": strategy.get("examples") or [],
+        "tags": strategy.get("tags") or [],
+        "pillar": strategy.get("pillar"),
+        "phase": strategy.get("phase"),
     }
     
     task_result = supabase.table("tasks").insert(task_data).execute()
@@ -202,4 +205,47 @@ async def reject_strategy(campaign_id: str, strategy_id: str):
         "success": True,
         "strategy_id": strategy_id,
         "message": f"Estratégia '{strategy.get('title')}' foi rejeitada e removida da lista."
+    }
+
+
+class PublishCampaignRequest(BaseModel):
+    strategy_ids: Optional[list[str]] = None  # Se None, publica todas as 'approved'
+
+
+@router.post("/campaign/{campaign_id}/publish")
+async def publish_campaign(campaign_id: str, request: PublishCampaignRequest):
+    """
+    Publica estratégias aprovadas, tornando-as visíveis para o candidato (cria tasks e seta status 'published').
+    """
+    supabase = get_supabase_client()
+    
+    # 1. Identificar estratégias a publicar
+    query = supabase.table("strategies").select("*").eq("campaign_id", campaign_id)
+    
+    if request.strategy_ids:
+        query = query.in_("id", request.strategy_ids)
+    else:
+        query = query.eq("status", "approved")
+        
+    strategies_res = query.execute()
+    strategies = strategies_res.data
+    
+    if not strategies:
+        return {"success": True, "published_count": 0, "message": "Nenhuma estratégia para publicar."}
+    
+    published_count = 0
+    
+    for strategy in strategies:
+        # Pular se já publicada ou executada
+        if strategy.get("status") in ["published", "executed"]:
+            continue
+            
+        # 3. Atualizar Status para Published
+        supabase.table("strategies").update({"status": "published"}).eq("id", strategy["id"]).execute()
+        published_count += 1
+        
+    return {
+        "success": True, 
+        "published_count": published_count, 
+        "message": f"{published_count} estratégias publicadas com sucesso!"
     }

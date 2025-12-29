@@ -8,6 +8,11 @@ from src.api.campaign import router as campaign_router
 from src.api.tasks import router as tasks_router
 from src.api.agents import router as agents_router
 from src.api.crew_logs import router as crew_logs_router
+from src.api.map_notes import router as map_notes_router
+from src.api.radar_promises import router as radar_promises_router
+from src.api.tcesp_debug import router as tcesp_debug_router
+from src.api.cities_politicians import router as cities_politicians_router
+from src.api.radar_premium import router as radar_premium_router
 
 app = FastAPI()
 
@@ -29,6 +34,11 @@ app.include_router(campaign_router)
 app.include_router(tasks_router)
 app.include_router(agents_router)
 app.include_router(crew_logs_router)
+app.include_router(map_notes_router)
+app.include_router(radar_promises_router)
+app.include_router(tcesp_debug_router)
+app.include_router(cities_politicians_router)
+app.include_router(radar_premium_router)
 
 @app.get("/")
 async def root():

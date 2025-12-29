@@ -34,10 +34,12 @@ export function ExamplesRenderer({
 
         return (
             <div className="mt-3 pt-3 border-t border-slate-100 mb-2">
-                <p className="text-xs font-semibold text-slate-500 mb-2 uppercase tracking-wide flex items-center gap-1">
-                    <Lightbulb className="w-3 h-3 text-yellow-500" />
+                <div className="text-xs font-semibold text-slate-500 mb-2 uppercase tracking-wide flex items-center gap-2">
+                    <div className="bg-yellow-100 p-1 rounded-md">
+                        <Lightbulb className="w-3 h-3 text-yellow-600" />
+                    </div>
                     Exemplos:
-                </p>
+                </div>
                 {visibleExamples.map((ex, i) => (
                     <div key={i} className="text-xs text-slate-600 flex items-start gap-1.5 mb-1.5">
                         <span className="text-primary font-bold">•</span>

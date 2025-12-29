@@ -4,10 +4,11 @@ export interface Agent {
     name: string; // Slug
     display_name: string;
     role: string;
-    type: 'evidence' | 'policy' | 'demographics' | 'validator' | 'compliance' | 'auditor' | 'simulator' | 'generic';
+    type: 'evidence' | 'policy' | 'demographics' | 'validator' | 'compliance' | 'auditor' | 'simulator' | 'radar' | 'generic';
     description?: string;
     system_prompt: string;
     tools: string[]; // Array of tool identifiers
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     knowledge_base: any[]; // Placeholder for KB structure - ex: { type: 'pdf', url: '...' }
     compliance_rules: string[]; // Array of rule identifiers
     is_active: boolean;
@@ -26,6 +27,7 @@ export const AGENT_TYPES = [
     { value: 'compliance', label: 'Auditor de Compliance', icon: 'ShieldCheck' },
     { value: 'auditor', label: 'Auditor Geral', icon: 'ClipboardText' },
     { value: 'simulator', label: 'Simulador de Cenários', icon: 'GameController' },
+    { value: 'radar', label: 'Radar Premium (Python)', icon: 'Terminal' },
     { value: 'generic', label: 'Genérico', icon: 'Robot' },
 ];
 

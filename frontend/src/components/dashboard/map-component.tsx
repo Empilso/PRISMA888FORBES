@@ -61,7 +61,8 @@ export default function MapComponent({
     locations,
     onLocationClick,
     mapStyle = 'osm-bright',
-    centerPosition
+    centerPosition,
+    children
 }: any) {
     // Fix para o mapa renderizar corretamente (invalidar size ao montar)
     useEffect(() => {
@@ -97,6 +98,7 @@ export default function MapComponent({
                     }}
                 />
             ))}
+            {children}
         </MapContainer>
     );
 }

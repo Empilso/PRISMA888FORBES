@@ -206,13 +206,16 @@ export function TaskDetailsSheet({
 
 
                     {/* Examples Section */}
-                    {task.examples && task.examples.length > 0 && (
-                        <ExamplesRenderer
-                            examples={task.examples}
-                            mode="workbench"
-                            onInsert={(text) => setDescription(prev => prev + "\n\n" + text)}
-                        />
-                    )}
+                    {(() => {
+                        const safeExamples = Array.isArray(task?.examples) ? task.examples : [];
+                        return safeExamples.length > 0 ? (
+                            <ExamplesRenderer
+                                examples={safeExamples}
+                                mode="workbench"
+                                onInsert={(text) => setDescription(prev => prev + "\n\n" + text)}
+                            />
+                        ) : null;
+                    })()}
 
                     {/* AI Suggestion */}
                     {task.aiSuggestion && (
@@ -269,7 +272,7 @@ export function TaskDetailsSheet({
                                 <span>Tags</span>
                             </div>
                             <div className="flex gap-1 flex-wrap">
-                                {task.tags.map((tag) => (
+                                {(Array.isArray(task?.tags) ? task.tags : []).map((tag) => (
                                     <Badge key={tag} variant="secondary" className="text-xs">
                                         {tag}
                                     </Badge>

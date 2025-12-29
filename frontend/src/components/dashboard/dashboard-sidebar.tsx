@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
+import NextImage from "next/image";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -17,7 +18,8 @@ import {
     X,
     Scroll,
     UsersThree,
-    ShootingStar
+    ShootingStar,
+    Crosshair
 } from "@phosphor-icons/react";
 
 export function DashboardSidebar({ campaignId }: { campaignId?: string }) {
@@ -45,15 +47,9 @@ export function DashboardSidebar({ campaignId }: { campaignId?: string }) {
             icon: MapTrifold,
         },
         {
-            name: "Repositório",
-            href: campaignId ? `${baseUrl}/files` : `${baseUrl}/repositorio`,
-            icon: FolderOpen,
-        },
-        // Link Admin Global
-        {
-            name: "Agentes & Crews",
-            href: "/admin/agentes",
-            icon: UsersThree,
+            name: "Radar de Promessas",
+            href: campaignId ? `${baseUrl}/promises` : `${baseUrl}/promessas`,
+            icon: Crosshair,
         },
     ];
 
@@ -85,17 +81,26 @@ export function DashboardSidebar({ campaignId }: { campaignId?: string }) {
                 <div className={cn("flex items-center h-24 mb-2 transition-all", isCollapsed ? "justify-center" : "px-8")}>
                     {!isCollapsed ? (
                         <div className="flex items-center gap-3">
-                            <div className="h-10 w-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 shadow-lg shadow-blue-200 flex items-center justify-center transform hover:scale-105 transition-transform">
-                                <span className="text-white font-black text-lg">P8</span>
-                            </div>
-                            <div className="flex flex-col">
-                                <h2 className="font-bold text-xl text-slate-900 leading-tight">Prisma 888</h2>
-                                <p className="text-[10px] font-semibold text-slate-400 tracking-wider uppercase">Political OS</p>
+                            <div className="relative h-12 w-auto">
+                                <NextImage
+                                    src="/images/logo-prisma.png"
+                                    alt="Prisma 888"
+                                    width={180}
+                                    height={48}
+                                    className="h-12 w-auto object-contain"
+                                    priority
+                                />
                             </div>
                         </div>
                     ) : (
-                        <div className="h-10 w-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 shadow-md flex items-center justify-center">
-                            <span className="text-white font-black text-lg">P8</span>
+                        <div className="relative h-10 w-10 flex items-center justify-center">
+                            <NextImage
+                                src="/images/logo-prisma.png"
+                                alt="P8"
+                                width={40}
+                                height={40}
+                                className="h-10 w-10 object-contain"
+                            />
                         </div>
                     )}
                 </div>
@@ -145,9 +150,35 @@ export function DashboardSidebar({ campaignId }: { campaignId?: string }) {
                     })}
                 </nav>
 
-                {/* PREMIUM BUTTON - PLANO MESTRE */}
+                {/* BOTTOM SECTION - REPOSITÓRIO + PLANO MESTRE */}
                 {campaignId && (
-                    <div className="p-4 mt-auto">
+                    <div className="p-4 mt-auto space-y-3">
+                        {/* Repositório */}
+                        <Link
+                            href={`/campaign/${campaignId}/files`}
+                            className={cn(
+                                "group flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 border border-transparent",
+                                pathname?.includes('/files')
+                                    ? "bg-blue-50 text-blue-700 font-medium shadow-sm border-blue-100/50"
+                                    : "text-slate-500 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-100",
+                                isCollapsed && "justify-center px-0 py-3"
+                            )}
+                            title={isCollapsed ? "Repositório" : undefined}
+                        >
+                            <FolderOpen
+                                weight="duotone"
+                                className={cn(
+                                    "transition-colors duration-200",
+                                    pathname?.includes('/files') ? "text-blue-600" : "text-slate-400 group-hover:text-slate-600",
+                                    isCollapsed ? "h-6 w-6" : "h-5 w-5"
+                                )}
+                            />
+                            {!isCollapsed && (
+                                <span className="text-sm tracking-tight">Repositório</span>
+                            )}
+                        </Link>
+
+                        {/* Plano Mestre */}
                         {!isCollapsed ? (
                             <Link
                                 href={`/campaign/${campaignId}/plan`}
