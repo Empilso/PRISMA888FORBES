@@ -25,12 +25,44 @@ class RadarCrew:
         self.campaign_id = campaign_id
         self.run_id = run_id
         self.supabase = get_supabase_client()
-        self.llm = self._create_llm("gpt-4o") # Default, can be overridden by persona config
+        self.llm = self._create_llm("deepseek/deepseek-chat") # Default, can be overridden by persona config
     
+        # GLOBAL DEEPSEEK ALIGNMENT (Alignment with GenesisCrew)
+        self.log(f"Inicializando RadarCrew LLM: {self.llm.model_name}", "System")
+
     def _create_llm(self, model_name: str, temperature: float = 0.3):
+        # 1. Default Handling
         if not model_name:
-            model_name = "gpt-4o"
+            model_name = "deepseek/deepseek-chat"
             
+        # 2. Safeguard: Detect OpenAI and Force DeepSeek
+        if "gpt-4" in model_name or "gpt-3.5" in model_name:
+            print(f"[DEBUG] ⚠️ RadarCrew detected OpenAI model '{model_name}'. Forcing DeepSeek override.")
+            model_name = "deepseek/deepseek-chat"
+
+        # 3. Provider Specifics
+        api_key = None
+        base_url = None
+        
+        if "deepseek" in model_name:
+            api_key = os.getenv("DEEPSEEK_API_KEY")
+            base_url = "https://api.deepseek.com/v1"
+            if not model_name.startswith("deepseek/"): # Fix prefix if needed
+                 model_name = f"deepseek/{model_name}" if "/" not in model_name else model_name
+            # clean for ChatOpenAI param
+            clean_model = model_name.replace("deepseek/", "")
+            
+            # Audit
+            print(f"[System] LLM_AUDIT create provider=deepseek base_url={base_url} model={clean_model} source=radar_crew.py")
+            
+            return ChatOpenAI(
+                model=clean_model,
+                api_key=api_key,
+                base_url=base_url,
+                temperature=temperature
+            )
+
+        # Legacy / Other providers
         if model_name.startswith("openrouter/"):
             os.environ["OPENROUTER_API_KEY"] = os.getenv("OPENROUTER_API_KEY")
         elif model_name.startswith("groq/"):

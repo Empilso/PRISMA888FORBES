@@ -45,11 +45,23 @@ const LLM_OPTIONS = [
         ]
     },
     {
+        label: "🐋 DeepSeek (Nativo)",
+        options: [
+            // Modelos de Chat / Geral
+            { value: "deepseek/deepseek-chat", label: "DeepSeek V3 (Chat - Padrão) ⚡" },
+
+            // Modelos de Raciocínio (Reasoning)
+            { value: "deepseek/deepseek-reasoner", label: "DeepSeek R1 (Reasoner - Raciocínio) 🧠" },
+
+            // Modelos de Código
+            { value: "deepseek/deepseek-coder", label: "DeepSeek Coder V2 (Especialista em Código) 💻" },
+        ]
+    },
+    {
         label: "✨ Gratuitos / Experimental (OpenRouter)",
         options: [
             // O Gemini 2.0 é o novo rei do Free Tier (Contexto gigante)
             { value: "openrouter/google/gemini-2.0-flash-exp:free", label: "Gemini 2.0 Flash Exp (Free) 🚀" },
-            { value: "openrouter/deepseek/deepseek-r1:free", label: "DeepSeek R1 (Free)" },
             { value: "openrouter/meta-llama/llama-3.3-70b-instruct:free", label: "Llama 3.3 70B (Free)" }
         ]
     },
@@ -64,7 +76,6 @@ const LLM_OPTIONS = [
         label: "Alta Performance (OpenRouter)",
         options: [
             { value: "openrouter/anthropic/claude-3.5-sonnet", label: "Claude 3.5 Sonnet (Melhor Texto)" },
-            { value: "openrouter/deepseek/deepseek-chat", label: "DeepSeek V3 (Custo/Benefício)" }
         ]
     }
 ];

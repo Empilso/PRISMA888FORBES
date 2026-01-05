@@ -1,0 +1,62 @@
+    def _validate_and_fix_language(self, result: Any) -> Any:
+        """
+        Valida se o output está em Português e corrige se necessário usando LLM.
+        """
+        self.log("🔍 Validando idioma da resposta...", "System", "info")
+        
+        # Extract content to check
+        content_to_check = ""
+        if hasattr(result, 'raw'):
+            content_to_check = result.raw
+        elif isinstance(result, str):
+            content_to_check = result
+        else:
+            # Try pydantic or json
+            try:
+                if hasattr(result, 'pydantic') and result.pydantic:
+                    content_to_check = str(result.pydantic.model_dump())
+                elif hasattr(result, 'json_dict') and result.json_dict:
+                    content_to_check = str(result.json_dict)
+                else:
+                    content_to_check = str(result)
+            except:
+                content_to_check = str(result)
+
+        # Heuristic check for English (common words)
+        english_indicators = [" the ", " to ", " and ", " of ", " is ", " in ", " for ", " strategies ", " strategic plan "]
+        matches = [word for word in english_indicators if word in content_to_check.lower()]
+        
+        # Threshold: se encontrar mais de 3 palavras comuns em inglês, considera suspeito
+        if len(matches) > 3: 
+            self.log(f"⚠️ Idioma incorreto detectado (Inglês). Iniciando reparo automático...", "System", "warning")
+            
+            try:
+                # Use a specific repair agent/task via LLM directly
+                repair_llm = self._create_llm(self.manager_model, temperature=0.1)
+                
+                prompt = f"""
+                CRITICAL INSTRUCTION: TRANSLATE THE FOLLOWING CONTENT TO BRAZILIAN PORTUGUESE (pt-BR).
+                KEEP THE EXACT SYSTEM JSON/MARKDOWN FORMAT. DO NOT CHANGE STRUCTURE, ONLY LANGUAGE.
+                
+                CONTENT TO FIX:
+                {content_to_check}
+                
+                OUTPUT ONLY THE TRANSLATED CONTENT. NO PLEASANTRIES.
+                """
+                
+                response = repair_llm.invoke(prompt)
+                fixed_content = response.content
+                
+                self.log("✅ Conteúdo traduzido para PT-BR com sucesso.", "System", "success")
+                
+                # Return fixed content as raw string 
+                # A lógica em run() sabe lidar com retorno string
+                return fixed_content 
+                
+            except Exception as e:
+                self.log(f"❌ Falha no reparo de idioma: {e}", "System", "error")
+                return result
+        else:
+            self.log("✅ Idioma validado (PT-BR).", "System", "success")
+            return result
+

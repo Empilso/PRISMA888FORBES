@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Query, Body, Depends
 from typing import List, Optional
 from uuid import UUID
 from datetime import datetime
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 import os
 from supabase import create_client
 
@@ -13,20 +13,29 @@ def get_supabase_client():
         raise ValueError("Supabase credentials not found")
     return create_client(url, key)
 
-router = APIRouter()
+router = APIRouter(prefix="/api", tags=["map_notes"])
 
 # --- Models ---
 
 class MapNoteBase(BaseModel):
     title: str
     body: str
-    type: str = "note"
-    status: str = "open"
-    priority: str = "medium"
+    type: str = "alerta"
+    status: str = "aberta"
+    priority: int = 3
     lat: float
     lng: float
     location_id: Optional[int] = None # BigInt in DB, int in Pydantic
     assignee_id: Optional[UUID] = None
+    color: str = "#F59E0B"
+    shape: str = "circle"
+
+    @field_validator('priority')
+    @classmethod
+    def validate_priority(cls, v: int) -> int:
+        if v < 1 or v > 5:
+            raise ValueError('Priority must be between 1 and 5')
+        return v
 
 class MapNoteCreate(MapNoteBase):
     pass
@@ -36,8 +45,11 @@ class MapNoteUpdate(BaseModel):
     body: Optional[str] = None
     type: Optional[str] = None
     status: Optional[str] = None
-    priority: Optional[str] = None
+    priority: Optional[int] = None
     assignee_id: Optional[UUID] = None
+    location_id: Optional[int] = None
+    color: Optional[str] = None
+    shape: Optional[str] = None
 
 class MapNoteResponse(MapNoteBase):
     id: UUID
@@ -51,7 +63,7 @@ class MapNoteResponse(MapNoteBase):
 
 # --- Endpoints ---
 
-@router.get("/campaigns/{campaign_id}/map-notes", response_model=List[MapNoteResponse])
+@router.get("/campaign/{campaign_id}/map_notes", response_model=List[MapNoteResponse])
 async def list_map_notes(
     campaign_id: UUID,
     status: Optional[str] = None,
@@ -77,7 +89,7 @@ async def list_map_notes(
     
     return result.data
 
-@router.post("/campaigns/{campaign_id}/map-notes", response_model=MapNoteResponse)
+@router.post("/campaign/{campaign_id}/map_notes", response_model=MapNoteResponse)
 async def create_map_note(
     campaign_id: UUID,
     note: MapNoteCreate,
@@ -97,7 +109,7 @@ async def create_map_note(
         
     return result.data[0]
 
-@router.patch("/campaigns/{campaign_id}/map-notes/{note_id}", response_model=MapNoteResponse)
+@router.patch("/campaign/{campaign_id}/map_notes/{note_id}", response_model=MapNoteResponse)
 async def update_map_note(
     campaign_id: UUID,
     note_id: UUID,
@@ -116,7 +128,7 @@ async def update_map_note(
         
     return result.data[0]
 
-@router.delete("/campaigns/{campaign_id}/map-notes/{note_id}")
+@router.delete("/campaign/{campaign_id}/map_notes/{note_id}")
 async def delete_map_note(
     campaign_id: UUID,
     note_id: UUID
@@ -131,7 +143,7 @@ async def delete_map_note(
 
     return {"success": True, "message": "Map note deleted"}
 
-@router.post("/campaigns/{campaign_id}/map-notes/{note_id}/ai-action")
+@router.post("/campaign/{campaign_id}/map_notes/{note_id}/ai_action")
 async def generate_note_action(
     campaign_id: UUID,
     note_id: UUID

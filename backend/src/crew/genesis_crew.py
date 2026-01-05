@@ -1,17 +1,19 @@
 import os
 import json
 import re
-from typing import List, Dict, Any
-from crewai import Agent, Task, Crew, Process
-from langchain_openai import ChatOpenAI
+from typing import List, Dict, Any, Sequence
 from supabase import create_client
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
+import httpx
+
+# Agora importamos o resto que depende de litellm/crewai
+from crewai import Agent, Task, Crew, Process
+from langchain_openai import ChatOpenAI
 
 from src.crew.tools import campaign_vector_search, campaign_stats
 
 load_dotenv()
-
 
 def get_supabase_client():
     url = os.getenv("SUPABASE_URL")
@@ -49,6 +51,284 @@ def parse_examples(text: str) -> Dict[str, Any]:
     return {"description": clean_description, "examples": examples}
 
 
+def clean_json_output(raw_text: str) -> str:
+    """
+    Limpa e tenta reparar JSONs gerados por LLMs.
+    Corrigie markdown wrapping, vírgulas soltas e chaves não fechadas.
+    """
+    if not raw_text:
+        return "{}"
+
+    # Remove Markdown wrapping
+    text = raw_text.strip()
+    if text.startswith("```json"):
+        text = text[7:]
+    elif text.startswith("```"):
+        text = text[3:]
+    if text.endswith("```"):
+        text = text[:-3]
+    
+    text = text.strip()
+    
+    # Remove textos antes da primeira { ou [
+    start_bracket = text.find('{')
+    if start_bracket == -1:
+        start_bracket = text.find('[')
+    
+    if start_bracket != -1:
+        text = text[start_bracket:]
+        
+    # Remove textos após a última } ou ]
+    end_bracket = text.rfind('}')
+    if end_bracket == -1:
+        end_bracket = text.rfind(']')
+        
+    if end_bracket != -1:
+        text = text[:end_bracket+1]
+
+    # Tenta reparar JSON quebrado (comum em truncamento)
+    # Adiciona chaves de fechamento se estiverem faltando
+    open_braces = text.count('{') - text.count('}')
+    if open_braces > 0:
+        text += '}' * open_braces
+        
+    open_brackets = text.count('[') - text.count(']')
+    if open_brackets > 0:
+        text += ']' * open_brackets
+        
+    return text
+
+
+def recover_data_from_broken_json(raw_text: str) -> Dict[str, Any]:
+    """
+    Tenta recuperar dados de um JSON quebrado/truncado usando Regex.
+    Salva o que der para salvar (Plano + Estratégias sobreviventes).
+    
+    Args:
+        raw_text: Texto original do LLM (pode estar incompleto)
+        
+    Returns:
+        Dict com 'strategic_plan' e 'strategies' (parcial)
+    """
+    if not raw_text:
+        return {"strategic_plan": "", "strategies": []}
+        
+    recovered_data = {
+        "strategic_plan": "# Plano Estratégico (Recuperado)\n\n" + raw_text, # Default
+        "strategies": []
+    }
+    
+    # 1. Tenta extrair o Strategic Plan
+    # Procura por "strategic_plan": "..."
+    # Regex gancioso para pegar conteudo até o começo das strategies ou fim
+    plan_match = re.search(r'"strategic_plan"\s*:\s*"(.*?)(?=",\s*"strategies")', raw_text, re.DOTALL)
+    if plan_match:
+        # Desescapa strings JSON básicas (ex: \n, \")
+        decoded_plan = plan_match.group(1).replace('\\n', '\n').replace('\\"', '"')
+        recovered_data["strategic_plan"] = decoded_plan
+    
+    # 2. Tenta extrair Estratégias Individuais
+    # Procura por blocos que parecem objetos de estratégia: { ... "title": ... "description": ... }
+    # O regex busca chaves balanceadas de forma simplificada (assume que não há } dentro de strings, o que é um risco aceitável para fallback)
+    
+    # Padrão: { [qualquer coisa exceto }] "title" [qualquer coisa] "description" [qualquer coisa] }
+    # Limitamos o greedy para não comer tudo
+    strategy_matches = re.findall(r'(\{[^{}]*"title"\s*:.*?"description"\s*:.*?[^{}]*\})', raw_text, re.DOTALL)
+    
+    successful_recoveries = 0
+    for match in strategy_matches:
+        try:
+            # Tenta limpar e parsear o pedaço individualmente
+            # Pode precisar fechar chaves se o regex pegou algo incompleto (improvável com o regex acima, mas possível se aninhado)
+            strat_obj = json.loads(match)
+            recovered_data["strategies"].append(strat_obj)
+            successful_recoveries += 1
+        except:
+            # Se falhar o load direto, tenta limpar trailing commas
+            try:
+                clean_match = re.sub(r',\s*\}', '}', match)
+                strat_obj = json.loads(clean_match)
+                recovered_data["strategies"].append(strat_obj)
+                successful_recoveries += 1
+            except:
+                pass # Pula estratégia irrecuperável
+                
+    print(f"[Guardrail] 🩹 Regex Recovery: {successful_recoveries} estratégias salvas de {len(strategy_matches)} encontradas.")
+    
+    return recovered_data
+
+
+# ... resto do arquivo segue ...
+
+
+
+
+class SimpleDeepSeekClient:
+    """
+    Cliente HTTP direto para DeepSeek para evitar incompatibilidades de payload
+    que ocorrem com langchain_openai.ChatOpenAI e CrewAI.
+    """
+    def __init__(self, api_key: str, model: str = "deepseek-chat", temperature: float = 0.7):
+        self.api_key = api_key
+        self.model = model
+        self.temperature = temperature
+        self.base_url = "https://api.deepseek.com/v1/chat/completions"
+
+    def chat_completion(self, messages: List[Dict[str, str]]) -> str:
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "model": self.model,
+            "messages": messages,
+            "temperature": self.temperature,
+            "max_tokens": 4000
+        }
+        
+        try:
+            response = httpx.post(self.base_url, headers=headers, json=payload, timeout=60.0)
+            if response.status_code != 200:
+                print(f"[DeepSeek ERROR] Status: {response.status_code} Body: {response.text}")
+                raise ValueError(f"DeepSeek API Error: {response.status_code} - {response.text}")
+            
+            data = response.json()
+            return data["choices"][0]["message"]["content"]
+        except Exception as e:
+            print(f"[DeepSeek FAIL] {str(e)}")
+            raise e
+
+from langchain_core.language_models.chat_models import BaseChatModel
+from langchain_core.messages import BaseMessage, AIMessage, HumanMessage, SystemMessage
+from langchain_core.outputs import ChatResult, ChatGeneration
+from pydantic import PrivateAttr, ConfigDict
+
+# Mock classes para enganar chamadas diretas ao client OpenAI
+class MockCompletions:
+    def __init__(self, deepseek_client, model_name):
+        self.deepseek = deepseek_client
+        self.model_name = model_name
+
+    def create(self, messages, model=None, **kwargs):
+        print(f"[DeepSeekLLM] 🕵️ MockClient intercepted call for {model or self.model_name}")
+        
+        # Converte formato OpenAI (dicts) -> SimpleDeepSeekClient
+        # Na verdade o SimpleDeepSeekClient já espera dicts/list of dicts
+        
+        response_content = self.deepseek.chat_completion(messages)
+        
+        # Cria resposta fake compatível com OpenAI object
+        # Precisamos retornar um objeto que tenha .choices[0].message.content
+        return MockResponse(response_content, model or self.model_name)
+
+class MockChat:
+    def __init__(self, deepseek_client, model_name):
+        self.completions = MockCompletions(deepseek_client, model_name)
+
+class MockClient:
+    def __init__(self, deepseek_client, model_name):
+        self.chat = MockChat(deepseek_client, model_name)
+
+class MockResponse:
+    def __init__(self, content, model):
+        self.id = "chatcmpl-mock-deepseek"
+        self.object = "chat.completion"
+        self.created = 1234567890
+        self.model = model
+        self.choices = [MockChoice(content)]
+
+class MockChoice:
+    def __init__(self, content):
+        self.index = 0
+        self.message = MockMessage(content)
+        self.finish_reason = "stop"
+
+class MockMessage:
+    def __init__(self, content):
+        self.role = "assistant"
+        self.content = content
+        self.function_call = None
+        self.tool_calls = None
+
+class DeepSeekLLM(ChatOpenAI):
+    """
+    Adapter 'Cavalo de Tróia' Supremo.
+    Herda de ChatOpenAI E substitui o client interno por um Mock.
+    """
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+    
+    # Cliente HTTP direto (escondido)
+    client_http: Any = Field(default=None, exclude=True)
+
+    def __init__(self, api_key: str, model_name: str, temperature: float = 0.7, **kwargs):
+        # Normalização
+        clean_model = model_name.split("/")[-1] if "/" in model_name else model_name
+        if clean_model not in ["deepseek-chat", "deepseek-reasoner"]:
+             clean_model = "deepseek-chat"
+        
+        # Inicializa ChatOpenAI
+        super().__init__(
+            model=clean_model,
+            api_key=api_key,
+            base_url="https://api.deepseek.com/v1",
+            temperature=temperature,
+            **kwargs
+        )
+        
+        print(f"[DeepSeekLLM] Trojan Horse Initialized: {id(self)} for {clean_model}")
+        
+        # Inicializa cliente real
+        self.client_http = SimpleDeepSeekClient(api_key, clean_model, temperature)
+        
+        # GOLPE FINAL: Substitui o client do OpenAI pelo nosso Mock
+        # Isso intercepta chamadas diretas tipo client.chat.completions.create()
+        self.client = MockClient(self.client_http, clean_model)
+        print(f"[DeepSeekLLM] 🕵️ OpenAI Client replaced with Mock for {clean_model}")
+
+    @property
+    def _llm_type(self) -> str:
+        return "deepseek-direct-trojan"
+
+    def bind_tools(self, tools: Sequence[Any], **kwargs: Any) -> BaseChatModel:
+        print(f"[DeepSeekLLM] bind_tools blocked ({len(tools)} tools). Keeping Trojan instance.")
+        return self
+
+    def _generate(
+        self,
+        messages: List[BaseMessage],
+        stop: List[str] | None = None,
+        run_manager: Any | None = None,
+        **kwargs: Any,
+    ) -> ChatResult:
+        """
+        Mantemos o override do _generate por segurança, 
+        caso o LangChain tente usar o caminho padrão.
+        """
+        # ... (código anterior de conversão)
+        formatted_messages = []
+        for msg in messages:
+            if isinstance(msg, HumanMessage):
+                formatted_messages.append({"role": "user", "content": msg.content})
+            elif isinstance(msg, AIMessage):
+                formatted_messages.append({"role": "assistant", "content": msg.content})
+            elif isinstance(msg, SystemMessage):
+                formatted_messages.append({"role": "system", "content": msg.content})
+            else:
+                formatted_messages.append({"role": "user", "content": str(msg.content)})
+
+        print(f"[DeepSeekLLM] Trojan _generate calls mock client explicitly")
+        
+        try:
+            # Chama nosso mock (que chama o http client)
+            mock_response = self.client.chat.completions.create(messages=formatted_messages)
+            content = mock_response.choices[0].message.content
+            
+            generation = ChatGeneration(message=AIMessage(content=content))
+            return ChatResult(generations=[generation])
+        except Exception as e:
+            print(f"[DeepSeekLLM] Generation Failed: {e}")
+            raise e
+
 # --- Pydantic Models ---
 class Strategy(BaseModel):
     title: str = Field(..., description="Nome da ação tática")
@@ -66,6 +346,13 @@ class CampaignOutput(BaseModel):
     strategies: List[Strategy] = Field(
         ..., 
         description="Lista de estratégias táticas específicas (quantidade definida pela persona)"
+    )
+
+class StrategiesList(BaseModel):
+    """Output otimizado: apenas a lista de estratégias"""
+    strategies: List[Strategy] = Field(
+        ..., 
+        description="Lista de estratégias táticas específicas"
     )
 
 
@@ -199,6 +486,33 @@ class GenesisCrew:
             model_name: Nome do modelo (ex: "gpt-4o-mini", "openrouter/x-ai/grok-beta")
             temperature: Nível de criatividade (0.0 a 1.0)
         """
+        if "deepseek" in model_name:
+            api_key = os.getenv("DEEPSEEK_API_KEY")
+            clean_model = model_name.replace("deepseek/", "") if "deepseek/" in model_name else model_name
+            
+            # AUDIT LOG (Secure)
+            key_preview = f"{api_key[:6]}... ({len(api_key)} chars)" if api_key else "NONE"
+            print(f"[AUDIT] Creating LLM: provider=deepseek_direct model={clean_model}")
+            print(f"[AUDIT] Key Check: {key_preview}")
+            
+            # Instancia o Adapter Manual (Bypass LangChain)
+            llm = DeepSeekLLM(
+                api_key=api_key,
+                model_name=clean_model,
+                temperature=temperature
+            )
+            
+            # Real Validation
+            try:
+                print(f"[System] 🩺 Verificando conexao DeepSeek ({clean_model}) via HTTP Direto...")
+                status = llm.invoke("Responda apenas 'OK'.")
+                content = status.content if hasattr(status, 'content') else str(status)
+                print(f"[System] ✅ DeepSeek Online. Resposta: {content[:20]}")
+                return llm
+            except Exception as e:
+                print(f"[System] ❌ Falha na validacao DeepSeek: {e}")
+                raise ValueError(f"DeepSeek Connection Failed: {e}")
+
         # Configura as chaves de API como variáveis de ambiente
         if model_name.startswith("openrouter/"):
             openrouter_key = os.getenv("OPENROUTER_API_KEY")
@@ -214,6 +528,7 @@ class GenesisCrew:
         
         # Cria um LLM básico do LangChain
         # O CrewAI vai detectar o prefixo e rotear via LiteLLM
+        print(f"[create_llm] Fallback to ChatOpenAI for {model_name}")
         return ChatOpenAI(
             model=model_name,  # Mantém o prefixo completo: "groq/llama3-70b-8192"
             temperature=temperature  # Usa a temperatura do config
@@ -334,8 +649,8 @@ class GenesisCrew:
             
             for agent_id, agent_config in agents_config.items():
                 # Determina se este agente precisa de ferramentas de pesquisa
-                needs_tools = agent_id in ["analyst", "researcher"]
-                tools = [campaign_vector_search, campaign_stats] if needs_tools else []
+                # needs_tools = agent_id in ["analyst", "researcher"]
+                tools = [] # [campaign_vector_search, campaign_stats] if needs_tools else []
                 
                 agent = Agent(
                     role=agent_config.get("role", f"Agente {agent_id}"),
@@ -343,11 +658,16 @@ class GenesisCrew:
                     backstory=agent_config.get("backstory", "Membro experiente da equipe."),
                     tools=tools,
                     llm=self.llm,
+                    function_calling_llm=self.llm, # Força uso do DeepSeek, evita fallback da CrewAI
                     verbose=True,
                     allow_delegation=False,
-                    max_iter=max_iter
+                    max_iter=max_iter,
+                    step_callback=None # Evita interferência de callbacks complexos
                 )
                 created_agents[agent_id] = agent
+                print(f"[DEBUG] Created agent {agent_id} with LLM type: {type(self.llm)}")
+                if hasattr(self.llm, 'model_name'):
+                    print(f"       Model: {self.llm.model_name}")
                 self.log(f"  ✓ {agent_config.get('role', agent_id)}", "System", "info")
         
         else:
@@ -360,19 +680,24 @@ class GenesisCrew:
                 backstory=self.personas.get("analyst", {}).get("backstory", "Especialista em dados."),
                 tools=[campaign_vector_search, campaign_stats],
                 llm=self.llm,
+                function_calling_llm=self.llm,
                 verbose=True,
                 allow_delegation=False,
-                max_iter=max_iter
+                max_iter=max_iter,
+                step_callback=None
             )
+            print(f"[DEBUG] Created analyst with LLM type: {type(self.llm)}")
             
             created_agents["strategist"] = Agent(
                 role=self.personas.get("strategist", {}).get("role", "Estrategista"),
                 goal=self.personas.get("strategist", {}).get("goal", "Definir estratégia"),
                 backstory=self.personas.get("strategist", {}).get("backstory", "Consultor experiente."),
                 llm=self.llm,
+                function_calling_llm=self.llm,
                 verbose=True,
                 allow_delegation=False,
-                max_iter=max_iter
+                max_iter=max_iter,
+                step_callback=None
             )
             
             created_agents["planner"] = Agent(
@@ -380,9 +705,11 @@ class GenesisCrew:
                 goal=self.personas.get("planner", {}).get("goal", "Criar planos táticos"),
                 backstory=self.personas.get("planner", {}).get("backstory", "Gerente de projeto."),
                 llm=self.llm,
+                function_calling_llm=self.llm,
                 verbose=True,
                 allow_delegation=False,
-                max_iter=max_iter
+                max_iter=max_iter,
+                step_callback=None
             )
         
         # Salva a lista de IDs de agentes para uso posterior
@@ -517,13 +844,13 @@ class GenesisCrew:
         # Task final que combina tudo
         task5 = Task(
             description=f"""
-            Você está no passo final de uma Genesis Crew política. Sua tarefa é gerar a saída final em JSON seguindo exatamente o formato abaixo.
+            Você está no passo final de uma Genesis Crew política. Sua tarefa é gerar a saída final em JSON contendo APENAS a lista de estratégias.
             
             VOCÊ PRECISA INCLUIR EXATAMENTE {self.task_count} ESTRATÉGIAS NO ARRAY 'strategies'.
             Conte cuidadosamente. Se houver {self.task_count} no texto acima, todas devem estar no JSON.
 
+            Format Output:
             {{
-              "strategic_plan": "string em formato Markdown com o plano estratégico completo",
               "strategies": [
                 {{
                   "title": "título da tática",
@@ -538,23 +865,22 @@ class GenesisCrew:
 
             Regras estritas:
             1. O campo `strategies` é uma lista de objetos JSON.
-            2. COPIE O TEXTO DA DESCRIÇÃO mas REMOVA as linhas que começam com "Ex:".
-            3. MOVA os textos dos "Ex:" para o array `examples`.
-            4. Garanta que o JSON seja válido (escape aspas duplas dentro de strings, etc).
-            5. Nunca omita a vírgula entre campos no JSON.
-            6. Nunca adicione comentários.
+            2. NÃO inclua o 'strategic_plan' (será adicionado via código).
+            3. COPIE O TEXTO DA DESCRIÇÃO mas REMOVA as linhas que começam com "Ex:".
+            4. MOVA os textos dos "Ex:" para o array `examples`.
+            5. Garanta que o JSON seja válido (escape aspas duplas dentro de strings, etc).
+            6. Nunca omita a vírgula entre campos no JSON.
             
             Verificação Final Obrigatória:
             - O array `strategies` tem {self.task_count} itens? Se não, corrija agora.
-            - A `description` está LIMPA (sem "Ex:")?
-            - O array `examples` está populado?
-
+            - O JSON contém APENAS a chave "strategies"?
+            
             Agora, gere o JSON.
             """,
             agent=planner,
-            expected_output=f"JSON válido com strategic_plan e array strategies contendo {self.task_count} itens com exemplos preservados",
+            expected_output=f"JSON válido contendo array 'strategies' com {self.task_count} itens",
             context=[task1, task2, task3, task4],
-            output_json=CampaignOutput
+            output_json=StrategiesList
         )
         
         # Monta a lista de tarefas base
@@ -693,71 +1019,103 @@ class GenesisCrew:
         # Se hierárquico, adiciona manager_llm (usa modelo configurado pelo admin)
         if self.process_type == "hierarchical":
             manager_llm = self._create_llm(self.manager_model, temperature=0.3)  # Baixa criatividade para manager
+            print(f"[DEBUG] Manager LLM type: {type(manager_llm)}")
             crew_params["manager_llm"] = manager_llm
             self.log(f"🎩 Modo Hierárquico: Manager usando {self.manager_model}", "System", "info")
         
         crew = Crew(**crew_params)
         
+        # AUDIT: Verifica o estado final dos Agentes antes de rodar
+        print("\n[AUDIT] === PRE-KICKOFF AGENT INSPECTION ===")
+        for ag in crew.agents:
+            print(f"[AUDIT] Agent: {ag.role}")
+            print(f"       LLM: {ag.llm} (type: {type(ag.llm)})")
+            if hasattr(ag.llm, "model_name"):
+                 print(f"       Model: {ag.llm.model_name}")
+            print(f"       FuncLLM: {ag.function_calling_llm} (type: {type(ag.function_calling_llm)})")
+        print("[AUDIT] ====================================\n")
+        
         self.log("Equipe iniciada! Agentes começando a trabalhar...", "Analista", "info")
         result = crew.kickoff()
         
-        # O resultado agora é um objeto CrewOutput
-        try:
-            # Verifica se é um objeto CrewOutput e tenta extrair o Pydantic model
-            if hasattr(result, 'pydantic') and result.pydantic:
-                if hasattr(result.pydantic, 'strategic_plan') and hasattr(result.pydantic, 'strategies'):
-                    return {
-                        'strategic_plan': result.pydantic.strategic_plan,
-                        'strategies': [s.model_dump() for s in result.pydantic.strategies]
-                    }
-                return result.pydantic.model_dump()
-            
-            # Tenta extrair do json_dict
-            if hasattr(result, 'json_dict') and result.json_dict:
-                if 'strategic_plan' in result.json_dict and 'strategies' in result.json_dict:
-                    return result.json_dict
-                # Fallback para formato antigo
-                if 'strategies' in result.json_dict:
-                    return {
-                        'strategic_plan': "# Plano Estratégico\n\nPlano não disponível nesta versão.",
-                        'strategies': result.json_dict['strategies']
-                    }
-                return result.json_dict
-                
-            # Tenta extrair do raw string
-            raw_output = ""
-            if hasattr(result, 'raw'):
-                raw_output = result.raw
-            elif isinstance(result, str):
-                raw_output = result
-                
-            if raw_output:
-                print(f"⚠️ Recebido raw output, tentando parsear: {raw_output[:100]}...")
-                result_clean = raw_output.strip()
-                if result_clean.startswith("```json"):
-                    result_clean = result_clean[7:]
-                if result_clean.startswith("```"):
-                    result_clean = result_clean[3:]
-                if result_clean.endswith("```"):
-                    result_clean = result_clean[:-3]
-                
-                data = json.loads(result_clean.strip())
-                if 'strategic_plan' in data and 'strategies' in data:
-                    return data
-                # Fallback para formato antigo
-                if 'strategies' in data:
-                    return {
-                        'strategic_plan': "# Plano Estratégico\n\nPlano não disponível nesta versão.",
-                        'strategies': data['strategies']
-                    }
-                return data
-            
-            raise ValueError(f"Não foi possível extrair dados do resultado: {type(result)}")
+        # --- AGGREGATION PATTERN (Optimization) ---
+        # Recupera o Plano Estratégico (Task 4) diretamente da memória da Task
+        # Isso evita que o LLM tenha que gerar tudo de novo no JSON (Task 5)
         
+        strategic_plan_text = ""
+        # Procura a task que gerou o plano
+        for task in tasks:
+            # Identifica a task pelo output esperado (mais seguro que index fixo)
+            if "Documento Markdown completo" in str(task.expected_output):
+                if hasattr(task, 'output') and hasattr(task.output, 'raw'):
+                    strategic_plan_text = task.output.raw
+                    print(f"[Guardrail] 📄 Plano Estratégico recuperado da Task: {len(strategic_plan_text)} chars")
+                    break
+        
+        # Se falhar em achar a task, tenta pegar do raw result se parecer markdown (fallback)
+        if not strategic_plan_text:
+             print("[Guardrail] ⚠️ Alerta: Não foi possivel recuperar o plano da Task 4. Usando fallback.")
+        
+        # --- JSON GUARDRAIL PARA ESTRATÉGIAS ---
+        final_strategies = []
+        
+        try:
+            # 1. Happy Path: Pydantic (StrategiesList)
+            if hasattr(result, 'pydantic') and result.pydantic:
+                # Verifica se é StrategiesList ou CampaignOutput (legado)
+                if hasattr(result.pydantic, 'strategies'):
+                     final_strategies = [s.model_dump() for s in result.pydantic.strategies]
+                     # Se for CampaignOutput legado vindo de cache, pode ter strategic_plan tambem
+                     if hasattr(result.pydantic, 'strategic_plan') and not strategic_plan_text:
+                         strategic_plan_text = result.pydantic.strategic_plan
+            
+            # 2. Path: JSON Dict
+            elif hasattr(result, 'json_dict') and result.json_dict:
+                if "strategies" in result.json_dict:
+                    final_strategies = result.json_dict["strategies"]
+                if "strategic_plan" in result.json_dict and not strategic_plan_text:
+                    strategic_plan_text = result.json_dict["strategic_plan"]
+
+            # 3. Path: Raw Text Parsing
+            else:
+                raw_output = ""
+                if hasattr(result, 'raw'):
+                    raw_output = result.raw
+                elif isinstance(result, str):
+                    raw_output = result
+                    
+                if raw_output:
+                    print(f"[Guardrail] ⚠️ Recebido raw strategies. Processando...")
+                    clean_text = clean_json_output(raw_output)
+                    try:
+                        data = json.loads(clean_text)
+                        if "strategies" in data:
+                            final_strategies = data["strategies"]
+                    except json.JSONDecodeError:
+                        print(f"[Guardrail] ❌ Falha no JSON das estratégias. Tentando Regex Recovery...")
+                        # Usa o recuperador apenas para estratégias
+                        recovered = recover_data_from_broken_json(raw_output)
+                        final_strategies = recovered["strategies"]
+
         except Exception as e:
-            print(f"❌ Erro ao processar resultado: {e}")
-            print(f"Resultado bruto: {result}")
-            raise ValueError(f"Erro no processamento do resultado: {e}")
+            print(f"[Guardrail] ☠️ Erro ao processar estratégias: {e}")
+            
+        # VALIDAÇÃO FINAL
+        if not strategic_plan_text:
+            strategic_plan_text = "# Erro na Geração do Plano\n\nNão foi possível recuperar o texto do plano estratégico."
+            
+        return {
+            "strategic_plan": strategic_plan_text,
+            "strategies": final_strategies
+        }
+
+
+    def _normalize_output(self, data: Dict) -> Dict:
+        """Normaliza dict de saída para o formato esperado"""
+        return {
+            'strategic_plan': data.get('strategic_plan', "# Plano Estratégico\n\nDados estruturados não encontrados."),
+            'strategies': data.get('strategies', []) if isinstance(data.get('strategies'), list) else []
+        }
     
     def save_to_database(self, result: dict):
         """

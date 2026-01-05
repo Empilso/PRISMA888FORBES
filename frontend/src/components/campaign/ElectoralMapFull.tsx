@@ -4,20 +4,21 @@ import { createClient } from "@/lib/supabase/client";
 import { useState, useEffect } from "react";
 import { useToast } from "@/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input"; // Added missing Input import
-import { Layers, Filter, MapIcon, Zap, Search, Loader2 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Layers, Filter, MapIcon, Zap, Search, Loader2, StickyNote, Plus, Trash2 } from "lucide-react";
 import dynamic from "next/dynamic";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet"; // Added Sheet imports
-import { MapNotesLayer } from "@/components/map/MapNotesLayer";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from "@/components/ui/sheet";
+import { MapNotesLayer, MapNote } from "@/components/map/MapNotesLayer";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 
-// Importação dinâmica do mapa (SSR false) - Moved Outside
+// Importação dinâmica do mapa (SSR false)
 const MapComponent = dynamic(() => import("@/components/dashboard/map-component"), {
     ssr: false,
     loading: () => <div className="h-full w-full flex items-center justify-center bg-muted">Carregando mapa...</div>
 });
 
-// Interfaces - Moved Outside
+// Interfaces
 interface Location {
     id: string;
     name: string;
@@ -26,8 +27,8 @@ interface Location {
     votes: number;
     meta: number;
     color: string;
-    my_votes: number;  // Votos específicos do candidato da campanha
-    my_share: number;  // Porcentagem de votos do candidato
+    my_votes: number;
+    my_share: number;
 }
 
 interface LocationResult {
@@ -55,16 +56,23 @@ export function ElectoralMapFull({ campaignId }: ElectoralMapFullProps) {
     const [searchQuery, setSearchQuery] = useState('');
     const [centerPosition, setCenterPosition] = useState<[number, number] | undefined>(undefined);
     const [showControls, setShowControls] = useState(false);
-    const [isAddingNote, setIsAddingNote] = useState(false);
+
+    // Notes State
+    const [isNoteMode, setIsNoteMode] = useState(false);
+    const [notes, setNotes] = useState<MapNote[]>([]);
+    const [selectedNote, setSelectedNote] = useState<MapNote | null>(null);
+    const [isNoteSheetOpen, setIsNoteSheetOpen] = useState(false);
+    const [noteForm, setNoteForm] = useState<Partial<MapNote>>({});
+    const [isSavingNote, setIsSavingNote] = useState(false);
 
     // Estado para resultados detalhados (Location Results)
     const [locationResults, setLocationResults] = useState<LocationResult[]>([]);
     const [loadingResults, setLoadingResults] = useState(false);
     const [campaignName, setCampaignName] = useState<string>("");
-    const [ballotName, setBallotName] = useState<string>(""); // Nome de urna para match
+    const [ballotName, setBallotName] = useState<string>("");
     const [isGeneratingAction, setIsGeneratingAction] = useState(false);
 
-    // 1. Fetch Campaign Info
+    // 1. Fetch Campaign Info & Notes
     useEffect(() => {
         const fetchCampaign = async () => {
             if (!campaignId) return;
@@ -75,7 +83,21 @@ export function ElectoralMapFull({ campaignId }: ElectoralMapFullProps) {
             }
         }
         fetchCampaign();
+        fetchNotes();
     }, [campaignId]);
+
+    const fetchNotes = async () => {
+        try {
+            const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+            const res = await fetch(`${apiUrl}/api/campaign/${campaignId}/map_notes`);
+            if (res.ok) {
+                const data = await res.json();
+                setNotes(data || []);
+            }
+        } catch (e) {
+            console.error("Failed to fetch map notes", e);
+        }
+    };
 
     // 2. Fetch Detailed Results for Selected Location
     useEffect(() => {
@@ -184,6 +206,7 @@ export function ElectoralMapFull({ campaignId }: ElectoralMapFullProps) {
 
     // Handlers
     const handleLocationClick = (location: any) => {
+        if (isNoteMode) return;
         setSelectedLocation(location);
         setIsSheetOpen(true);
     };
@@ -206,9 +229,8 @@ export function ElectoralMapFull({ campaignId }: ElectoralMapFullProps) {
         if (!selectedLocation) return;
         setIsGeneratingAction(true);
         try {
-            // Using consolidated service wrapper if available, or direct legacy endpoint
             const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-            const response = await fetch(`${apiUrl}/campaign/${campaignId}/location/${selectedLocation.id}/tactical_action`, {
+            const response = await fetch(`${apiUrl}/api/campaign/${campaignId}/location/${selectedLocation.id}/tactical_action`, {
                 method: 'POST'
             });
 
@@ -231,11 +253,79 @@ export function ElectoralMapFull({ campaignId }: ElectoralMapFullProps) {
         }
     };
 
-    // Render
+    // Note Handlers
+    const handleMapClick = (lat: number, lng: number) => {
+        if (!isNoteMode) return;
+        setNoteForm({ lat, lng, type: 'alerta', status: 'aberta', priority: 3, title: '', body: '' });
+        setSelectedNote(null);
+        setIsNoteSheetOpen(true);
+    };
+
+    const handleNoteClick = (note: MapNote) => {
+        setSelectedNote(note);
+        setNoteForm(note);
+        setIsNoteSheetOpen(true);
+    };
+
+    const saveNote = async () => {
+        if (!noteForm.title) {
+            toast({ title: "Erro", description: "Título é obrigatório", variant: "destructive" });
+            return;
+        }
+        setIsSavingNote(true);
+        try {
+            const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+            let res;
+            if (selectedNote) {
+                // Update
+                res = await fetch(`${apiUrl}/api/campaign/${campaignId}/map_notes/${selectedNote.id}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(noteForm)
+                });
+            } else {
+                // Create
+                res = await fetch(`${apiUrl}/api/campaign/${campaignId}/map_notes`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(noteForm)
+                });
+            }
+
+            if (!res.ok) throw new Error("Failed to save note");
+
+            toast({ title: "Sucesso", description: "Nota salva com sucesso." });
+            setIsNoteSheetOpen(false);
+            fetchNotes();
+        } catch (e) {
+            console.error(e);
+            toast({ title: "Erro", description: "Erro ao salvar nota.", variant: "destructive" });
+        } finally {
+            setIsSavingNote(false);
+        }
+    };
+
+    const deleteNote = async () => {
+        if (!selectedNote) return;
+        if (!confirm("Tem certeza que deseja excluir esta nota?")) return;
+
+        try {
+            const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+            await fetch(`${apiUrl}/api/campaign/${campaignId}/map_notes/${selectedNote.id}`, {
+                method: 'DELETE'
+            });
+            toast({ title: "Sucesso", description: "Nota excluída." });
+            setIsNoteSheetOpen(false);
+            fetchNotes();
+        } catch (e) {
+            toast({ title: "Erro", description: "Erro ao excluir nota.", variant: "destructive" });
+        }
+    };
+
     return (
         <div className="relative h-[calc(100vh-4rem)] w-full overflow-hidden flex flex-col bg-slate-50 border rounded-2xl shadow-sm">
 
-            {/* Toolbar Flutuante (Top Left) */}
+            {/* Toolbar e Top Left */}
             <div className="absolute top-4 left-4 z-[100] flex flex-col gap-2">
                 <div className="bg-white dark:bg-slate-950 p-1 rounded-md shadow-md border flex flex-col gap-1">
                     <Button
@@ -248,27 +338,25 @@ export function ElectoralMapFull({ campaignId }: ElectoralMapFullProps) {
                         <Layers className="h-4 w-4" />
                     </Button>
 
-                    {/* Botão Adicionar Nota */}
                     <Button
-                        variant={isAddingNote ? "default" : "ghost"}
+                        variant={isNoteMode ? "default" : "ghost"}
                         size="icon"
-                        className={`h-8 w-8 ${isAddingNote ? "bg-blue-600 text-white hover:bg-blue-700" : ""}`}
+                        className={`h-8 w-8 ${isNoteMode ? "bg-amber-500 text-white hover:bg-amber-600" : ""}`}
                         onClick={() => {
-                            setIsAddingNote(!isAddingNote);
-                            if (!isAddingNote) {
-                                toast({ title: "Modo de Criação", description: "Clique no mapa para adicionar uma nota." });
+                            setIsNoteMode(!isNoteMode);
+                            if (!isNoteMode) {
+                                toast({ title: "Modo Nota Ativo", description: "Clique no mapa para adicionar uma nota." });
                             }
                         }}
-                        title="Adicionar Nota Estratégica"
+                        title="Adicionar Nota / Alerta"
                     >
-                        <Zap className="h-4 w-4" />
+                        <StickyNote className="h-4 w-4" />
                     </Button>
 
                     <Button variant="ghost" size="icon" className="h-8 w-8"><Filter className="h-4 w-4" /></Button>
                     <Button variant="ghost" size="icon" className="h-8 w-8"><MapIcon className="h-4 w-4" /></Button>
                 </div>
 
-                {/* Painel de Controles Expandido */}
                 {showControls && (
                     <div className="bg-white dark:bg-slate-950 p-4 rounded-md shadow-lg border w-64 space-y-4 animate-in slide-in-from-left-2">
                         <div className="space-y-2">
@@ -289,7 +377,7 @@ export function ElectoralMapFull({ campaignId }: ElectoralMapFullProps) {
                 )}
             </div>
 
-            {/* Search Bar (Top Center/Right) */}
+            {/* Search Bar */}
             <div className="absolute top-4 right-4 z-[100] w-80 flex gap-2">
                 <div className="relative flex-1">
                     <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -304,27 +392,16 @@ export function ElectoralMapFull({ campaignId }: ElectoralMapFullProps) {
                 <Button onClick={handleSearch} className="shadow-md">Buscar</Button>
             </div>
 
-            {/* Legenda (Bottom Left) */}
-            <div className="absolute bottom-8 left-4 z-[100] bg-white dark:bg-slate-950 p-3 rounded-lg shadow-md border w-64">
-                <h4 className="text-xs font-bold uppercase text-muted-foreground mb-2">Sua Performance por Local</h4>
-                <div className="space-y-1.5">
-                    <div className="flex items-center gap-2 text-xs">
-                        <div className="w-3 h-3 rounded-full bg-emerald-500 border border-white shadow-sm" />
-                        <span>🟢 Dominante (&gt; 20% dos votos)</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-xs">
-                        <div className="w-3 h-3 rounded-full bg-amber-400 border border-white shadow-sm" />
-                        <span>🟡 Competitivo (5% - 20%)</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-xs">
-                        <div className="w-3 h-3 rounded-full bg-rose-500 border border-white shadow-sm" />
-                        <span>🔴 Fraco (&lt; 5% dos votos)</span>
-                    </div>
+            {/* Hint Mode */}
+            {isNoteMode && (
+                <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[100] bg-amber-500 text-white px-4 py-2 rounded-full shadow-lg text-sm font-bold animate-in fade-in flex items-center gap-2">
+                    <StickyNote className="h-4 w-4" />
+                    Modo Criação de Notas Ativo
                 </div>
-            </div>
+            )}
 
             {/* Mapa */}
-            <div className="flex-1 w-full h-full relative">
+            <div className={`flex-1 w-full h-full relative ${isNoteMode ? 'cursor-crosshair' : ''}`}>
                 {isLoading && (
                     <div className="absolute inset-0 z-50 flex items-center justify-center bg-white/80 backdrop-blur-sm">
                         <div className="flex flex-col items-center gap-2">
@@ -341,22 +418,19 @@ export function ElectoralMapFull({ campaignId }: ElectoralMapFullProps) {
                     centerPosition={centerPosition}
                 >
                     <MapNotesLayer
-                        campaignId={campaignId}
-                        isAddingNote={isAddingNote}
-                        onNoteAdded={() => setIsAddingNote(false)}
+                        notes={notes}
+                        isNoteMode={isNoteMode}
+                        onMapClick={handleMapClick}
+                        onNoteClick={handleNoteClick}
                     />
                 </MapComponent>
             </div>
 
-            {/* Sheet de Detalhes */}
+            {/* Sheet de Detalhes do Local */}
             <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
                 <SheetContent className="w-[400px] sm:w-[540px] overflow-y-auto p-0 gap-0 z-[99999]" side="right" style={{ zIndex: 99999 }}>
-                    {/* Fallback layout for sheet since I don't have the original Sheet content perfectly preserved.
-                       I will reconstruct a clean version based on typical Location Details UI.
-                    */}
                     {selectedLocation && (
                         <div className="flex flex-col h-full bg-slate-50">
-                            {/* Header */}
                             <div className="bg-white p-6 border-b sticky top-0 z-10">
                                 <SheetHeader>
                                     <div className="flex justify-between items-start">
@@ -389,7 +463,6 @@ export function ElectoralMapFull({ campaignId }: ElectoralMapFullProps) {
                                 </SheetHeader>
                             </div>
 
-                            {/* Body */}
                             <div className="p-6 space-y-6 flex-1">
                                 <div className="space-y-4">
                                     <div className="flex justify-between items-center">
@@ -422,7 +495,6 @@ export function ElectoralMapFull({ campaignId }: ElectoralMapFullProps) {
                                                                 <span className={`text-sm font-bold ${isMe ? 'text-blue-900' : 'text-slate-700'}`}>
                                                                     {res.candidate_name} {isMe && '(Você)'}
                                                                 </span>
-                                                                {/* Progress Removed */}
                                                                 <div className="h-1.5 w-24 mt-1 bg-slate-100 rounded-full overflow-hidden">
                                                                     <div className={`h-full ${isMe ? 'bg-blue-600' : 'bg-slate-400'}`} style={{ width: `${share}%` }} />
                                                                 </div>
@@ -442,6 +514,127 @@ export function ElectoralMapFull({ campaignId }: ElectoralMapFullProps) {
                             </div>
                         </div>
                     )}
+                </SheetContent>
+            </Sheet>
+
+            {/* Note Editor Sheet */}
+            <Sheet open={isNoteSheetOpen} onOpenChange={setIsNoteSheetOpen}>
+                <SheetContent className="w-[400px] sm:w-[540px] p-6 z-[99999]" side="right" style={{ zIndex: 99999 }}>
+                    <SheetHeader>
+                        <SheetTitle>{selectedNote ? 'Editar Nota' : 'Nova Nota'}</SheetTitle>
+                        <SheetDescription>
+                            Adicione informações táticas sobre este ponto do mapa.
+                        </SheetDescription>
+                    </SheetHeader>
+                    <div className="space-y-4 py-4">
+                        <div className="space-y-2">
+                            <Label>Título</Label>
+                            <Input
+                                value={noteForm.title || ''}
+                                onChange={e => setNoteForm(prev => ({ ...prev, title: e.target.value }))}
+                                placeholder="Ex: Buraco na rua, Oportunidade de comício..."
+                            />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label>Tipo</Label>
+                                <select
+                                    className="w-full p-2 border rounded-md text-sm bg-background"
+                                    value={noteForm.type || 'alerta'}
+                                    onChange={e => setNoteForm(prev => ({ ...prev, type: e.target.value as any }))}
+                                >
+                                    <option value="alerta">Alerta</option>
+                                    <option value="oportunidade">Oportunidade</option>
+                                    <option value="risco">Risco</option>
+                                    <option value="logistica">Logística</option>
+                                    <option value="campo">Campo</option>
+                                </select>
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Prioridade (1-5)</Label>
+                                <select
+                                    className="w-full p-2 border rounded-md text-sm bg-background"
+                                    value={noteForm.priority || 3}
+                                    onChange={e => setNoteForm(prev => ({ ...prev, priority: parseInt(e.target.value) }))}
+                                >
+                                    <option value={1}>1 - Baixa</option>
+                                    <option value={2}>2 - Normal</option>
+                                    <option value={3}>3 - Média</option>
+                                    <option value={4}>4 - Alta</option>
+                                    <option value={5}>5 - Crítica</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        {/* Style Selection */}
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label>Cor do Pin</Label>
+                                <div className="flex flex-wrap gap-2">
+                                    {[
+                                        { fill: '#EF4444', label: 'Vermelho' }, // Red
+                                        { fill: '#F59E0B', label: 'Laranja' }, // Amber
+                                        { fill: '#10B981', label: 'Verde' },   // Emerald
+                                        { fill: '#3B82F6', label: 'Azul' },    // Blue
+                                        { fill: '#8B5CF6', label: 'Roxo' },    // Violet
+                                        { fill: '#EC4899', label: 'Rosa' },    // Pink
+                                        { fill: '#64748B', label: 'Cinza' },   // Slate
+                                    ].map((c) => (
+                                        <button
+                                            key={c.fill}
+                                            className={`w-6 h-6 rounded-full border-2 transition-all ${noteForm.color === c.fill ? 'border-black scale-110 ring-2 ring-offset-1 ring-slate-400' : 'border-transparent hover:scale-105'}`}
+                                            style={{ backgroundColor: c.fill }}
+                                            onClick={() => setNoteForm(prev => ({ ...prev, color: c.fill }))}
+                                            title={c.label}
+                                        />
+                                    ))}
+                                </div>
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Formato</Label>
+                                <div className="flex gap-2">
+                                    {[
+                                        { id: 'circle', icon: <div className="w-4 h-4 rounded-full bg-slate-400" /> },
+                                        { id: 'triangle', icon: <div className="w-0 h-0 border-l-[8px] border-l-transparent border-b-[14px] border-r-[8px] border-r-transparent border-b-slate-400" /> },
+                                        { id: 'flag', icon: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-slate-400"><path fillRule="evenodd" d="M3 2.25a.75.75 0 01.75.75v.54l1.838-.46a9.75 9.75 0 016.725.738l.108.054a8.25 8.25 0 005.58.652l3.109-.732a.75.75 0 01.917.81 47.784 47.784 0 00.005 10.337.75.75 0 01-.574.812l-3.114.733a9.75 9.75 0 01-6.594-.158l-.106-.053a8.25 8.25 0 00-5.69-.717l-2.137.535v9.141a.75.75 0 01-1.5 0v-10.9V3a.75.75 0 01.75-.75z" clipRule="evenodd" /></svg> },
+                                    ].map((s) => (
+                                        <button
+                                            key={s.id}
+                                            className={`w-10 h-10 flex items-center justify-center border rounded-md transition-all ${noteForm.shape === s.id ? 'bg-slate-100 border-slate-500 ring-1 ring-slate-500' : 'bg-white hover:bg-slate-50 border-slate-200'}`}
+                                            onClick={() => setNoteForm(prev => ({ ...prev, shape: s.id as any }))}
+                                            title={s.id}
+                                        >
+                                            {s.icon}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Descrição</Label>
+                            <Textarea
+                                value={noteForm.body || ''}
+                                onChange={e => setNoteForm(prev => ({ ...prev, body: e.target.value }))}
+                                rows={5}
+                                placeholder="Detalhes sobre a situação..."
+                            />
+                        </div>
+                    </div>
+                    <SheetFooter className="flex justify-between sm:justify-between items-center w-full">
+                        {selectedNote ? (
+                            <Button variant="destructive" size="icon" onClick={deleteNote} title="Excluir Nota">
+                                <Trash2 className="h-4 w-4" />
+                            </Button>
+                        ) : <div />}
+
+                        <div className="flex gap-2">
+                            <Button variant="outline" onClick={() => setIsNoteSheetOpen(false)}>Cancelar</Button>
+                            <Button onClick={saveNote} disabled={isSavingNote}>
+                                {isSavingNote && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                Salvar
+                            </Button>
+                        </div>
+                    </SheetFooter>
                 </SheetContent>
             </Sheet>
         </div>

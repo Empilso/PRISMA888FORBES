@@ -13,7 +13,21 @@ def get_supabase_client():
 
 class TacticalAIService:
     def __init__(self):
-        self.llm = ChatOpenAI(model="gpt-4o", temperature=0.7)
+        # GLOBAL DEEPSEEK ALIGNMENT
+        deepseek_key = os.getenv("DEEPSEEK_API_KEY")
+        base_url = "https://api.deepseek.com/v1"
+        model_name = "deepseek/deepseek-chat"
+        
+        # Audit Log
+        print(f"[System] Inicializando LLM Tático: {model_name}")
+        print(f"[System] LLM_AUDIT create provider=deepseek base_url={base_url} model={model_name} source=tactical_ai.py")
+        
+        self.llm = ChatOpenAI(
+            model=model_name,
+            api_key=deepseek_key,
+            base_url=base_url,
+            temperature=0.7
+        )
         self.supabase = get_supabase_client()
 
     def generate_suggestion(self, campaign_id: str, location_id: int = None, note_content: str = None, lat: float = None, lng: float = None):
