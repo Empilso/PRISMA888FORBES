@@ -301,28 +301,39 @@ async def refresh_radar(campaign_id: UUID, politico_id: str):
     """
     Trigger a radar refresh for the specified politician.
     
-    NOTE: This is a stub. In the future, this will:
-    - Enqueue workers to scrape Portal da Transparência
-    - Fetch YouTube videos
-    - Scrape Instagram posts
-    - Run AI agents to verify promises
-    
-    For now, it just returns a scheduled status.
+    This endpoint runs the Matcher Engine which:
+    1. Fetches all promises for the politician
+    2. Searches municipal_expenses for matching evidence
+    3. Updates promise_verifications with status and evidence
     """
-    # TODO: Implement worker dispatch logic
-    # - Send message to task queue (e.g., Celery, RQ, or Kestra flow)
-    # - Workers will:
-    #   1. Fetch emendas from Portal da Transparência API
-    #   2. Search YouTube for relevant videos
-    #   3. Scrape Instagram for related posts
-    #   4. Use LLM to analyze and score each promise
-    #   5. Insert/update promise_verifications records
-
-    return {
-        "status": "scheduled",
-        "message": f"Radar refresh scheduled for politico_id={politico_id} in campaign={campaign_id}",
-        "estimated_time_seconds": 120  # Placeholder
-    }
+    from src.services.radar_matcher import RadarMatcher
+    
+    supabase = get_supabase_client()
+    
+    # Get municipio_slug from politician's city
+    pol = supabase.table("politicians").select("city_id").eq("id", politico_id).limit(1).execute()
+    
+    municipio_slug = "votorantim"  # Default
+    if pol.data and pol.data[0].get("city_id"):
+        city = supabase.table("cities").select("slug").eq("id", pol.data[0]["city_id"]).limit(1).execute()
+        if city.data:
+            municipio_slug = city.data[0].get("slug", "votorantim")
+    
+    try:
+        matcher = RadarMatcher()
+        result = matcher.run_matching(
+            politico_id=politico_id,
+            municipio_slug=municipio_slug,
+            campaign_id=str(campaign_id)
+        )
+        
+        return {
+            "status": "completed",
+            "message": f"Matching concluído: {result.get('matches_found', 0)}/{result.get('total_promises', 0)} promessas com evidências",
+            "data": result
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro no matching: {str(e)}")
 
 
 @router.post("/{campaign_id}/radar/{politico_id}/refresh-phase1")

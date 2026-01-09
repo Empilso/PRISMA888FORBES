@@ -271,3 +271,155 @@ class RadarCrew:
         except json.JSONDecodeError:
             self.log("Erro ao parsear JSON da IA (Fiscal)", "System", "error")
             return {"raw_output": raw, "error": "json_parse_error"}
+
+    def run_google_scan(self, politician_name: str, city_name: str, agent_name: str = "radar-google-scanner", target_sites: List[str] = [], search_mode: str = "hybrid", max_results: int = 10) -> Dict:
+        """
+        Fase 3: Executa o agente 'Radar - Investigador Google' (identificado por agent_name)
+        """
+        # agent_name passed as argument
+        agent_data = self._get_agent_config(agent_name)
+        
+        # Setup Agent
+        agent = Agent(
+            role=agent_data.get("role", "Investigador"),
+            goal=agent_data.get("goal", "Identificar promessas em fontes abertas"),
+            backstory=agent_data.get("description", "Especialista em fact-checking."),
+            llm=self._create_llm(agent_data.get("llm_model"), 0.4), # Slightly higher temp for creativity/search
+            max_iter=10,
+            verbose=True,
+            allow_delegation=False
+        )
+
+        sys_msg = agent_data.get("system_prompt", "")
+        
+        # Build Search Directives (Hybrid Search Logic)
+        search_directives = "1. Simule uma busca detalhada em jornais locais e sites de notícias."
+        
+        if target_sites:
+             sites_str = ", ".join(target_sites)
+             
+             if search_mode == "focused":
+                 search_directives = f"""
+                ⚠️ MODO FOCADO ATIVO ({len(target_sites)} sites): {sites_str}
+                
+                ESTRATÉGIA DE BUSCA FOCADA (OBRIGATÓRIO):
+                1. RESTRIÇÃO TOTAL: Você DEVE buscar APENAS nos domínios listados acima.
+                2. Use o operador 'site:' para cada domínio (ex: 'site:{target_sites[0]} "{politician_name}" promessa').
+                3. NÃO realize buscas abertas fora dessa lista.
+                """
+             elif search_mode == "open":
+                 search_directives = f"""
+                ⚠️ MODO ABERTO (IGNORANDO WHITELIST)
+                
+                ESTRATÉGIA DE BUSCA AMPLA:
+                1. Realize buscas abertas em todo a web por notícias e promessas.
+                2. Ignore a lista de sites preferenciais e busque diversidade.
+                """
+             else: # Hybrid (Default)
+                 search_directives = f"""
+                ⚠️ MODO HÍBRIDO ({len(target_sites)} sites): {sites_str}
+                
+                ESTRATÉGIA DE BUSCA HÍBRIDA (OBRIGATÓRIO):
+                1. BUSCA FOCADA: Para CADA site da lista acima, simule queries específicas usando o operador 'site:' (ex: 'site:{target_sites[0]} "{politician_name}" promessa').
+                2. BUSCA ABERTA: Em seguida, realize a busca ampla para capturar outras fontes não listadas.
+                3. CONSOLIDAÇÃO: Junte os resultados, removendo duplicatas, mas DÊ PRIORIDADE TOTAL aos itens encontrados nos sites alvo.
+                """
+        elif search_mode == "focused":
+            # Focused but no sites provided? Fallback to hybrid/open with warning
+            search_directives = "⚠️ AVISO: Modo Focado selecionado mas nenhum site fornecido. Revertendo para busca aberta."
+        
+        # Add Max Results constraint
+        search_directives += f"\n            4. LIMITE DE RESULTADOS: Tente encontrar até {max_results} itens relevantes (mas priorize qualidade)."
+        
+        # Setup Task
+        task = Task(
+            description=f"""
+            {sys_msg}
+            
+            ALVO DA INVESTIGAÇÃO:
+            Político: {politician_name}
+            Cidade: {city_name}
+            
+            DIRETRIZES DE EXECUÇÃO:
+            {search_directives}
+            2. Identifique pelo menos 3 a 5 promessas ou declarações relevantes.
+            3. Priorize promessas recentes (últimos 2 anos).
+            
+            IMPORTANT: Return ONLY a valid JSON ARRAY. Do not use markdown code blocks like ```json.
+            
+            OUTPUT ESPERADO (JSON Array):
+            [
+                {{
+                    "date": "YYYY-MM-DD",
+                    "source": "Nome do Jornal/Site",
+                    "title": "Título da Notícia",
+                    "sentiment": "positive|neutral|negative",
+                    "url": "https://...",
+                    "summary": "Resumo da promessa identificada ou menção relevante"
+                }}
+            ]
+            """,
+            agent=agent,
+            expected_output="JSON Array with media analysis results"
+        )
+
+        crew = Crew(
+            agents=[agent],
+            tasks=[task],
+            verbose=True,
+            step_callback=self._log_step
+        )
+        
+        self.log(f"Iniciando Varredura Google com {agent_name} para {politician_name}", "System")
+        result = crew.kickoff()
+        
+        # Resilient Parser (Regex + Cleanup)
+        raw = str(result)
+        
+        # 1. Regex Extraction (Find first '[' and last ']')
+        # This handles cases where LLM wraps in text or markdown
+        try:
+            match = re.search(r'\[.*\]', raw, re.DOTALL)
+            if match:
+                clean_json_str = match.group(0)
+            else:
+                # Fallback: try to clean markdown manually
+                clean_json_str = raw.replace("```json", "").replace("```", "").strip()
+            
+            parsed_data = json.loads(clean_json_str)
+            
+            # Ensure it is a list
+            if isinstance(parsed_data, dict) and "details" in parsed_data:
+                parsed_data = parsed_data["details"]
+            elif isinstance(parsed_data, dict):
+                 parsed_data = [parsed_data] # Wrap single object
+            elif not isinstance(parsed_data, list):
+                 parsed_data = []
+
+            return {
+                "status": "ok",
+                "message": "Varredura concluída",
+                "media_sources": list(set([item.get("source", "Unknown") for item in parsed_data])),
+                "items_found": len(parsed_data),
+                "details": parsed_data
+            }
+
+        except Exception as e:
+            self.log(f"Erro ao parsear JSON da IA (Google Scan): {e}", "System", "error")
+            # Fallback: Return raw text as a single item so user sees something
+            fallback_item = {
+                "date": "Hoje",
+                "source": "Erro de Leitura",
+                "title": "Resultado não estruturado (Clique para ver logs)",
+                "sentiment": "neutral",
+                "url": "#",
+                "summary": f"O agente retornou dados mas não foi possível formatar automaticamente. Texto bruto: {raw[:200]}..."
+            }
+            return {
+                "status": "warning",
+                "message": "Erro de formatação",
+                "media_sources": [],
+                "items_found": 1,
+                "details": [fallback_item],
+                "raw_output": raw
+            }

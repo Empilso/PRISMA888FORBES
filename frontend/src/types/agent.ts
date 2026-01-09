@@ -4,7 +4,7 @@ export interface Agent {
     name: string; // Slug
     display_name: string;
     role: string;
-    type: 'evidence' | 'policy' | 'demographics' | 'validator' | 'compliance' | 'auditor' | 'simulator' | 'radar' | 'generic';
+    type: 'evidence' | 'policy' | 'demographics' | 'validator' | 'compliance' | 'auditor' | 'simulator' | 'radar' | 'scanning' | 'generic';
     description?: string;
     system_prompt: string;
     tools: string[]; // Array of tool identifiers
@@ -27,6 +27,7 @@ export const AGENT_TYPES = [
     { value: 'compliance', label: 'Auditor de Compliance', icon: 'ShieldCheck' },
     { value: 'auditor', label: 'Auditor Geral', icon: 'ClipboardText' },
     { value: 'simulator', label: 'Simulador de Cenários', icon: 'GameController' },
+    { value: 'scanning', label: 'Agente de Varredura (Scanning)', icon: 'Radar' },
     { value: 'radar', label: 'Radar Premium (Python)', icon: 'Terminal' },
     { value: 'generic', label: 'Genérico', icon: 'Robot' },
 ];

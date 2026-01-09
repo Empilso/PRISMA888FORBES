@@ -34,7 +34,8 @@ import {
     Sword,
     ArrowRight,
     CalendarBlank,
-    IdentificationBadge
+    IdentificationBadge,
+    UsersThree
 } from "@phosphor-icons/react";
 
 // ============ TYPES ============
@@ -44,6 +45,15 @@ interface Politician {
     slug: string;
     partido: string | null;
     tipo: string;
+    city_id?: string;
+    city_name?: string;
+}
+
+interface Councilor {
+    id: string;
+    name: string;
+    partido: string | null;
+    slug: string;
 }
 
 // ============ MOCK DATA ============
@@ -206,7 +216,9 @@ export function PromisesRadar({ campaignId, initialPoliticoId }: { campaignId: s
                             name: `${p.name}${p.partido ? ` (${p.partido})` : ""}`,
                             slug: p.slug,
                             partido: p.partido,
-                            tipo: p.tipo
+                            tipo: p.tipo,
+                            city_id: p.city_id,
+                            city_name: p.city_name
                         }));
                         setPoliticians(mapped);
                         // If no selection yet, verify if initialPoliticoId matches one, else default to first
@@ -383,9 +395,56 @@ export function PromisesRadar({ campaignId, initialPoliticoId }: { campaignId: s
         setIsModalOpen(true);
     };
 
+    const [chamber, setChamber] = useState<Councilor[]>([]);
+    const [isLoadingChamber, setIsLoadingChamber] = useState(false);
+
+    // Fetch Chamber with Status from Campaign context
+    useEffect(() => {
+        const fetchChamber = async () => {
+            setIsLoadingChamber(true);
+            try {
+                // New Endpoint that returns enrichment
+                const res = await fetch(`${API_URL}/api/campaigns/${campaignId}/chamber`);
+                if (res.ok) {
+                    const data = await res.json();
+                    setChamber(data);
+                }
+            } catch (error) {
+                console.error("Failed to fetch chamber:", error);
+            } finally {
+                setIsLoadingChamber(false);
+            }
+        };
+        fetchChamber();
+    }, [campaignId]); // Now context is campaign-wide, simpler.
+
+    const updateCouncilorStatus = async (politicianId: string, newStatus: string) => {
+        // Optimistic UI Update
+        setChamber(prev => prev.map(c => c.id === politicianId ? { ...c, status: newStatus } : c));
+
+        try {
+            await fetch(`${API_URL}/api/campaigns/${campaignId}/chamber/${politicianId}/status`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ status: newStatus })
+            });
+        } catch (e) {
+            console.error("Failed to update status", e);
+            // Revert? For now, silent fail is better than janky revert unless critical.
+        }
+    };
+
+    const getStatusBadge = (status?: string) => {
+        switch (status) {
+            case "base": return { color: "bg-emerald-100 text-emerald-700 border-emerald-200", label: "Base" };
+            case "oposicao": return { color: "bg-red-100 text-red-700 border-red-200", label: "Oposição" };
+            default: return { color: "bg-slate-100 text-slate-600 border-slate-200", label: "Neutro" };
+        }
+    };
+
     return (
         <div className="space-y-6">
-            {/* Header */}
+            {/* ... Header ... */}
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                 <div className="flex items-center gap-3">
                     <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shadow-lg shadow-violet-200">
@@ -482,6 +541,65 @@ export function PromisesRadar({ campaignId, initialPoliticoId }: { campaignId: s
                     </CardContent>
                 </Card>
             </div>
+
+            {/* City Chamber Section (Gestão de Apoio) */}
+            {chamber.length > 0 && (
+                <Card className="border-slate-200 shadow-sm bg-slate-50/50">
+                    <CardHeader className="pb-3 border-b border-slate-200/50 mb-3">
+                        <div className="flex items-center justify-between">
+                            <CardTitle className="text-base font-bold text-slate-700 flex items-center gap-2">
+                                <UsersThree className="h-5 w-5 text-violet-600" weight="duotone" />
+                                Composição da Câmara Municipal
+                                <span className="text-xs font-normal text-slate-500 ml-2 bg-white px-2 py-0.5 rounded border border-slate-200">
+                                    {chamber.length} vereadores
+                                </span>
+                            </CardTitle>
+                            <div className="flex gap-2 text-xs font-medium text-slate-500">
+                                <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-emerald-500"></div>Base</span>
+                                <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-red-500"></div>Oposição</span>
+                            </div>
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                            {chamber.map((ver: any) => {
+                                const badge = getStatusBadge(ver.status);
+                                return (
+                                    <div key={ver.id} className="relative group bg-white p-3 rounded-lg border border-slate-200 flex flex-col gap-2 shadow-sm hover:shadow-md transition-all">
+                                        <div className="flex items-center gap-3">
+                                            <div className="h-10 w-10 rounded-full bg-slate-100 overflow-hidden flex items-center justify-center flex-shrink-0 border border-slate-100">
+                                                {ver.photograph ? (
+                                                    <img src={ver.photograph} alt={ver.name} className="h-full w-full object-cover" />
+                                                ) : (
+                                                    <span className="text-slate-400 font-bold text-xs">{ver.partido || "IND"}</span>
+                                                )}
+                                            </div>
+                                            <div className="overflow-hidden flex-1">
+                                                <p className="text-sm font-bold text-slate-800 truncate" title={ver.name}>{ver.name}</p>
+                                                <p className="text-xs text-slate-500">{ver.partido} • Vereador</p>
+                                            </div>
+                                        </div>
+
+                                        {/* Status Control */}
+                                        <div className="flex justify-between items-center mt-1">
+                                            <Select value={ver.status || "neutro"} onValueChange={(val) => updateCouncilorStatus(ver.id, val)}>
+                                                <SelectTrigger className={`h-7 px-2 text-xs font-bold border-0 ${badge.color}`}>
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="base" className="text-xs font-bold text-emerald-700">🟢 Base</SelectItem>
+                                                    <SelectItem value="oposicao" className="text-xs font-bold text-red-700">🔴 Oposição</SelectItem>
+                                                    <SelectItem value="neutro" className="text-xs font-bold text-slate-600">⚪ Neutro</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
 
             {/* Promises Table */}
             <Card>

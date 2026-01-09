@@ -1056,18 +1056,27 @@ class GenesisCrew:
         if not strategic_plan_text:
              print("[Guardrail] ⚠️ Alerta: Não foi possivel recuperar o plano da Task 4. Usando fallback.")
         
-        # --- JSON GUARDRAIL PARA ESTRATÉGIAS ---
+        # --- JSON GUARDRAIL PARA ESTRATÉGIAS (Enterprise Enhanced) ---
         final_strategies = []
+        raw_output_text = ""
+        parsing_error = None
+        
+        # CAPTURE RAW OUTPUT FIRST (Always save regardless of parsing success)
+        if hasattr(result, 'raw'):
+            raw_output_text = result.raw
+        elif isinstance(result, str):
+            raw_output_text = result
+        
+        print(f"[Guardrail] 📦 Raw output captured: {len(raw_output_text)} chars")
         
         try:
             # 1. Happy Path: Pydantic (StrategiesList)
             if hasattr(result, 'pydantic') and result.pydantic:
-                # Verifica se é StrategiesList ou CampaignOutput (legado)
                 if hasattr(result.pydantic, 'strategies'):
                      final_strategies = [s.model_dump() for s in result.pydantic.strategies]
-                     # Se for CampaignOutput legado vindo de cache, pode ter strategic_plan tambem
                      if hasattr(result.pydantic, 'strategic_plan') and not strategic_plan_text:
                          strategic_plan_text = result.pydantic.strategic_plan
+                print(f"[Guardrail] ✅ Pydantic path: {len(final_strategies)} strategies")
             
             # 2. Path: JSON Dict
             elif hasattr(result, 'json_dict') and result.json_dict:
@@ -1075,38 +1084,55 @@ class GenesisCrew:
                     final_strategies = result.json_dict["strategies"]
                 if "strategic_plan" in result.json_dict and not strategic_plan_text:
                     strategic_plan_text = result.json_dict["strategic_plan"]
+                print(f"[Guardrail] ✅ JSON dict path: {len(final_strategies)} strategies")
 
-            # 3. Path: Raw Text Parsing
-            else:
-                raw_output = ""
-                if hasattr(result, 'raw'):
-                    raw_output = result.raw
-                elif isinstance(result, str):
-                    raw_output = result
+            # 3. Path: Raw Text Parsing with NEW json_cleaner
+            elif raw_output_text:
+                print(f"[Guardrail] ⚠️ Using json_cleaner for raw text...")
+                
+                from src.utils.json_cleaner import extract_json_from_text, clean_for_display
+                
+                parsed, cleaned, error = extract_json_from_text(raw_output_text)
+                
+                if parsed is not None:
+                    if isinstance(parsed, dict) and "strategies" in parsed:
+                        final_strategies = parsed["strategies"]
+                        if "strategic_plan" in parsed and not strategic_plan_text:
+                            strategic_plan_text = parsed["strategic_plan"]
+                    elif isinstance(parsed, list):
+                        final_strategies = parsed
+                    print(f"[Guardrail] ✅ json_cleaner recovered: {len(final_strategies)} strategies")
+                else:
+                    parsing_error = error
+                    print(f"[Guardrail] ❌ json_cleaner failed: {error}")
                     
-                if raw_output:
-                    print(f"[Guardrail] ⚠️ Recebido raw strategies. Processando...")
-                    clean_text = clean_json_output(raw_output)
-                    try:
-                        data = json.loads(clean_text)
-                        if "strategies" in data:
-                            final_strategies = data["strategies"]
-                    except json.JSONDecodeError:
-                        print(f"[Guardrail] ❌ Falha no JSON das estratégias. Tentando Regex Recovery...")
-                        # Usa o recuperador apenas para estratégias
-                        recovered = recover_data_from_broken_json(raw_output)
-                        final_strategies = recovered["strategies"]
+                    # Last resort: legacy regex recovery
+                    recovered = recover_data_from_broken_json(raw_output_text)
+                    final_strategies = recovered.get("strategies", [])
+                    if recovered.get("strategic_plan") and not strategic_plan_text:
+                        strategic_plan_text = recovered["strategic_plan"]
+                    print(f"[Guardrail] 🔧 Regex recovery: {len(final_strategies)} strategies")
 
         except Exception as e:
+            parsing_error = str(e)
             print(f"[Guardrail] ☠️ Erro ao processar estratégias: {e}")
             
-        # VALIDAÇÃO FINAL
+        # VALIDAÇÃO FINAL + RAW OUTPUT SAVING
         if not strategic_plan_text:
-            strategic_plan_text = "# Erro na Geração do Plano\n\nNão foi possível recuperar o texto do plano estratégico."
-            
+            if raw_output_text:
+                # Use raw output as fallback plan
+                from src.utils.json_cleaner import clean_for_display
+                strategic_plan_text = f"# Análise Gerada (Formato Raw)\n\n{clean_for_display(raw_output_text, 5000)}"
+            else:
+                strategic_plan_text = "# Erro na Geração do Plano\n\nNão foi possível recuperar o texto do plano estratégico."
+        
+        # Return with partial success info
         return {
             "strategic_plan": strategic_plan_text,
-            "strategies": final_strategies
+            "strategies": final_strategies,
+            "raw_output": raw_output_text,
+            "parsing_error": parsing_error,
+            "partial_success": bool(parsing_error and (strategic_plan_text or final_strategies))
         }
 
 
@@ -1133,9 +1159,14 @@ class GenesisCrew:
         
         strategic_plan = result.get('strategic_plan', '')
         strategies = result.get('strategies', [])
+        raw_output = result.get('raw_output', '')
+        parsing_error = result.get('parsing_error', None)
+        partial_success = result.get('partial_success', False)
         
         # Log dos dados recebidos para debug
-        self.log(f"📊 Dados recebidos: plano={len(strategic_plan)} chars, estratégias={len(strategies)}", "System", "info")
+        self.log(f"📊 Dados: plano={len(strategic_plan)} chars, estratégias={len(strategies)}, raw={len(raw_output)} chars", "System", "info")
+        if partial_success:
+            self.log(f"⚠️ Sucesso parcial: {parsing_error}", "System", "warning")
         
         # Validar dados antes de salvar
         if not strategic_plan:

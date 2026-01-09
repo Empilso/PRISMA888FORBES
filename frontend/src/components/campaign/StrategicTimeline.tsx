@@ -19,7 +19,7 @@ interface Strategy {
     description: string;
     pillar: string;
     phase: string;
-    status: "suggested" | "approved";
+    status: "suggested" | "approved" | "published" | "executed";
     start_date?: string | null;
     end_date?: string | null;
     campaign_id: string;

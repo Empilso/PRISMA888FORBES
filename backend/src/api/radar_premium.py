@@ -2,15 +2,20 @@
 Radar Premium API - Offices & Mandates + Phase Execution
 """
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, UploadFile, File, BackgroundTasks, Body
 from typing import List, Optional
 from uuid import UUID
 from datetime import datetime, date
 from pydantic import BaseModel, Field
 import os
 import json
+import logging
 from supabase import create_client
 from openai import OpenAI
+
+# Setup logging
+logger = logging.getLogger("radar_premium")
+logger.setLevel(logging.INFO)
 
 # Primary router for API resources
 router = APIRouter(tags=["radar-premium"])
@@ -78,6 +83,7 @@ class RadarExecutionRead(BaseModel):
     finished_at: Optional[datetime]
     summary: Optional[dict]
     error_message: Optional[str]
+    logs: Optional[List[dict]] = None
 
     class Config:
         from_attributes = True
@@ -88,6 +94,11 @@ class PhaseStatusRead(BaseModel):
     phase2: Optional[RadarExecutionRead] = None
     phase3: Optional[RadarExecutionRead] = None
     verify: Optional[RadarExecutionRead] = None
+
+class Phase3Request(BaseModel):
+    target_sites: List[str] = []
+    search_mode: str = Field("hybrid", description="Mode: open, focused, hybrid")
+    max_results: int = Field(10, ge=5, le=50)
 
 
 # ============ API RESOURCES (Prefix: /api) ============
@@ -174,6 +185,53 @@ async def list_mandates(
     
     result = query.order("created_at", desc=True).limit(limit).execute()
     
+    if not result.data and campaign_id:
+        # AUTO-INITIALIZATION FOR NEW CAMPAIGNS (Dashboard Fix)
+        # If accessing via campaign but no mandate exists, create a default one.
+        try:
+            print(f"[Mandate Auto-Init] No mandate found for campaign {campaign_id}. Attempting initialization...")
+            
+            # 1. Get Campaign Context
+            camp_res = supabase.table("campaigns").select("politician_id, city_id").eq("id", str(campaign_id)).single().execute()
+            if camp_res.data:
+                pol_id = camp_res.data["politician_id"]
+                city_id = camp_res.data.get("city_id")
+
+                # If missing city in campaign, try politician
+                if not city_id:
+                    pol_res = supabase.table("politicians").select("city_id").eq("id", pol_id).single().execute()
+                    if pol_res.data:
+                        city_id = pol_res.data.get("city_id")
+
+                if city_id and pol_id:
+                    # 2. Get/Find "Prefeito" Office (Default)
+                    office_res = supabase.table("offices").select("id").ilike("name", "Prefeito%").limit(1).execute()
+                    if office_res.data:
+                        office_id = office_res.data[0]["id"]
+                        
+                        # 3. Create Default Mandate
+                        new_mandate = {
+                            "politician_id": pol_id,
+                            "city_id": city_id,
+                            "office_id": office_id,
+                            "campaign_id": str(campaign_id),
+                            "is_active": True,
+                            "start_date": "2025-01-01",
+                            "end_date": "2028-12-31"
+                        }
+                        
+                        insert_res = supabase.table("mandates").insert(new_mandate).execute()
+                        if insert_res.data:
+                             print(f"[Mandate Auto-Init] Created default mandate: {insert_res.data[0]['id']}")
+                             # Update result to include the new mandate
+                             # We need to re-query to match the expected structure if possible, or just append
+                             # Re-executing main query to include joins:
+                             result = query.order("created_at", desc=True).limit(limit).execute()
+                             
+        except Exception as e:
+            print(f"[Mandate Auto-Init] Failed: {e}")
+            # Continue to return empty if failed
+
     if not result.data:
         return []
     
@@ -284,6 +342,21 @@ async def get_mandate_phase_status(mandate_id: UUID):
                     summary=execution_row.get("summary"),
                     error_message=execution_row.get("error_message")
                 )
+                
+                # Fetch logs if accessible (focused on running or recently finished)
+                # To capture real-time progress for the UI console
+                if execution_row["status"] in ["running", "ok", "error"]:
+                     logs_res = supabase.table("agent_logs") \
+                        .select("created_at, message, agent_name, status") \
+                        .eq("run_id", execution_row["id"]) \
+                        .order("created_at", desc=False) \
+                        .limit(100) \
+                        .execute()
+                     if logs_res.data:
+                         exec_read.logs = logs_res.data
+
+
+
                 if phase == "phase1":
                     status.phase1 = exec_read
                 elif phase == "phase2":
@@ -296,22 +369,185 @@ async def get_mandate_phase_status(mandate_id: UUID):
     return status
 
 
-# ============ CAMPAIGN EXECUTION ENDPOINTS (Prefix: /campaigns) ============
+# ============ BACKGROUND TASK HELPER ============
+
+def _extract_promises_background(
+    campaign_id: str,
+    mandate_id: str,
+    politician_id: str,
+    exec_id: str
+):
+    """
+    Background task for heavy PDF processing.
+    This runs asynchronously after the HTTP response is sent.
+    """
+    logger.info(f"🚀 INICIANDO EXTRAÇÃO BACKGROUND para campanha {campaign_id[:8]}, mandate {mandate_id[:8]}")
+    
+    supabase = get_supabase_client()
+    
+    try:
+        # 1. Find the document
+        docs_res = supabase.table("documents") \
+            .select("id, filename, file_url, content_text") \
+            .eq("person_id", politician_id) \
+            .eq("doc_type", "government_plan") \
+            .limit(1) \
+            .execute()
+        
+        if not docs_res.data:
+            logger.error(f"❌ Documento não encontrado para politician_id {politician_id[:8]}")
+            supabase.table("radar_executions").update({
+                "status": "error",
+                "finished_at": datetime.now().isoformat(),
+                "error_message": "Documento não encontrado"
+            }).eq("id", exec_id).execute()
+            return
+        
+        doc = docs_res.data[0]
+        full_text = doc.get("content_text", "")
+        
+        # 2. Extract text if not cached
+        if not full_text or len(full_text) < 100:
+            logger.info(f"📄 Extraindo texto do PDF {doc.get('filename')}...")
+            
+            from src.services.pdf_service import PDFExtractionService
+            service = PDFExtractionService()
+            result = service.extract_text(doc.get("file_url", ""))
+            
+            if result.success:
+                full_text = result.text
+                # Cache it
+                supabase.table("documents").update({"content_text": full_text}).eq("id", doc["id"]).execute()
+                logger.info(f"✅ Texto extraído e cacheado: {len(full_text)} chars")
+            else:
+                logger.error(f"❌ Falha na extração PDF: {result.error}")
+                supabase.table("radar_executions").update({
+                    "status": "error",
+                    "finished_at": datetime.now().isoformat(),
+                    "error_message": f"Falha na extração: {result.error}"
+                }).eq("id", exec_id).execute()
+                return
+        
+        # 3. Extract promises using AI
+        logger.info(f"🤖 Extraindo promessas com DeepSeek ({len(full_text)} chars)...")
+        
+        from src.services.ai_service import AIService
+        ai = AIService()
+        promessas_raw = ai.extract_promises_from_text(full_text)
+        
+        logger.info(f"📋 DeepSeek retornou {len(promessas_raw)} promessas")
+        
+        # 4. Save promises (delete existing first - idempotent)
+        supabase.table("promises") \
+            .delete() \
+            .eq("campaign_id", campaign_id) \
+            .eq("politico_id", politician_id) \
+            .eq("mandate_id", mandate_id) \
+            .eq("origem", "Plano de Governo") \
+            .execute()
+        
+        inserted_count = 0
+        for p in promessas_raw:
+            promise_data = {
+                "campaign_id": campaign_id,
+                "politico_id": politician_id,
+                "mandate_id": mandate_id,
+                "resumo_promessa": (p.get("titulo", "") + " - " + p.get("descricao", ""))[:500],
+                "categoria": p.get("area", "Outro"),
+                "origem": "Plano de Governo",
+                "source_type": "PLANO_GOVERNO",
+                "data_promessa": datetime.now().date().isoformat()
+            }
+            if promise_data["resumo_promessa"]:
+                supabase.table("promises").insert(promise_data).execute()
+                inserted_count += 1
+        
+        # 5. Update execution log with success
+        summary = {
+            "status": "ok",
+            "promises_count": inserted_count,
+            "document": doc.get("filename"),
+            "extracted_at": datetime.now().isoformat()
+        }
+        
+        supabase.table("radar_executions").update({
+            "status": "ok",
+            "finished_at": datetime.now().isoformat(),
+            "summary": summary
+        }).eq("id", exec_id).execute()
+        
+        logger.info(f"✅ EXTRAÇÃO CONCLUÍDA. Promessas salvas: {inserted_count}")
+        
+    except Exception as e:
+        logger.error(f"❌ ERRO NA EXTRAÇÃO BACKGROUND: {e}")
+        supabase.table("radar_executions").update({
+            "status": "error",
+            "finished_at": datetime.now().isoformat(),
+            "error_message": str(e)
+        }).eq("id", exec_id).execute()
 
 
 # ============ CAMPAIGN EXECUTION ENDPOINTS (Prefix: /campaigns) ============
 
-@router.post("/campaigns/{campaign_id}/radar/{mandate_id}/phase1")
-async def execute_phase1(campaign_id: UUID, mandate_id: str):
+@router.post("/api/campaigns/{campaign_id}/radar/{mandate_id}/phase1")
+async def execute_phase1(
+    campaign_id: UUID, 
+    mandate_id: str,
+    background_tasks: BackgroundTasks,
+    force: bool = Query(False, description="Force re-extraction even if promises exist")
+):
     """
     Phase 1: Extract promises from government plan PDF.
     
-    Supports shared documents (by person_id) and legacy campaign documents.
+    Uses fire-and-forget pattern with BackgroundTasks.
+    Returns immediately with status "processing".
+    
+    Args:
+        force: If True, re-extracts even if promises already exist
     """
     supabase = get_supabase_client()
-    from src.crew.radar_crew import RadarCrew
     
-    # Create execution log
+    # 1. Get mandate details
+    mandate_res = supabase.table("mandates").select("politician_id").eq("id", mandate_id).single().execute()
+    if not mandate_res.data:
+        raise HTTPException(status_code=404, detail="Mandate not found")
+    
+    politician_id = mandate_res.data["politician_id"]
+    
+    # 2. IDEMPOTENCY CHECK: Skip if promises already exist
+    if not force:
+        existing = supabase.table("promises") \
+            .select("count", count="exact") \
+            .eq("politico_id", politician_id) \
+            .eq("mandate_id", mandate_id) \
+            .eq("origem", "Plano de Governo") \
+            .execute()
+        
+        if existing.count and existing.count > 0:
+            return {
+                "status": "exists",
+                "message": f"Já existem {existing.count} promessas extraídas. Use 'Atualizar Radar' para cruzar com despesas, ou passe force=true para re-extrair.",
+                "promises_count": existing.count,
+                "action": "Use o botão 'Atualizar Radar' para correlacionar com despesas municipais."
+            }
+    
+    # 3. Check if document exists
+    docs_res = supabase.table("documents") \
+        .select("id, filename") \
+        .eq("person_id", politician_id) \
+        .eq("doc_type", "government_plan") \
+        .limit(1) \
+        .execute()
+    
+    if not docs_res.data:
+        raise HTTPException(
+            status_code=404, 
+            detail="Nenhum Plano de Governo encontrado. Faça upload do PDF primeiro."
+        )
+    
+    doc = docs_res.data[0]
+    
+    # 4. Create execution log (status: "processing")
     exec_log = supabase.table("radar_executions").insert({
         "campaign_id": str(campaign_id),
         "mandate_id": mandate_id,
@@ -321,187 +557,162 @@ async def execute_phase1(campaign_id: UUID, mandate_id: str):
     
     exec_id = exec_log.data[0]["id"] if exec_log.data else None
     
+    # 5. Dispatch background task
+    logger.info(f"📤 Despachando extração em background para {doc.get('filename')}")
+    
+    background_tasks.add_task(
+        _extract_promises_background,
+        campaign_id=str(campaign_id),
+        mandate_id=mandate_id,
+        politician_id=politician_id,
+        exec_id=exec_id
+    )
+    
+    # 6. Return immediately
+    return {
+        "status": "running",
+        "message": f"Extração iniciada em segundo plano para '{doc.get('filename')}'. Isso pode levar alguns minutos.",
+        "execution_id": exec_id,
+        "document": doc.get("filename"),
+        "hint": "Atualize a página em 2-3 minutos para ver os resultados."
+    }
+
+
+# ============ PHASE 2 BACKGROUND TASK ============
+
+def _process_phase2_background(
+    campaign_id: str,
+    mandate_id: str,
+    politician_id: str,
+    municipio_slug: str,
+    exec_id: str
+):
+    """
+    Background task for Phase 2 data matching.
+    Uses RadarMatcher for SQL-based matching (fast, no LLM).
+    """
+    logger.info(f"🚀 INICIANDO MATCHING FASE 2 BACKGROUND para mandate {mandate_id[:8]}...")
+    
+    supabase = get_supabase_client()
+    
     try:
-        # 1. Get mandate details to find politician_id
-        mandate_res = supabase.table("mandates").select("politician_id").eq("id", mandate_id).single().execute()
-        if not mandate_res.data:
-            raise HTTPException(status_code=404, detail="Mandate not found")
-            
-        politician_id = mandate_res.data["politician_id"]
+        from src.services.radar_matcher import RadarMatcher
         
-        # 2. Find government plan PDF
-        # Priority 1: Document linked to person_id (Shared Layer)
-        docs_res = supabase.table("documents") \
-            .select("id, filename, file_url, content_text") \
-            .eq("person_id", politician_id) \
-            .eq("doc_type", "government_plan") \
-            .limit(1) \
-            .execute()
-            
-        full_text = ""
-        doc_source = ""
+        matcher = RadarMatcher()
+        result = matcher.run_matching(
+            politico_id=politician_id,
+            municipio_slug=municipio_slug,
+            campaign_id=campaign_id
+        )
         
-        if docs_res.data:
-            doc = docs_res.data[0]
-            doc_source = f"Documento: {doc['filename']}"
-            full_text = doc.get("content_text", "")
-            
-            # If no content_text, use Robust Reuse Logic
-            if not full_text or len(full_text) < 100:
-                print(f"⚠️ Texto vazio no banco. Invocando ingestão robusta para {doc.get('file_url')}")
-                
-                # Validation: If URL is missing, we can't do anything.
-                # Auto-heal: Delete this broken record so user can upload again.
-                if not doc.get("file_url"):
-                    print("❌ URL do arquivo inválida/nula. Removendo registro corrompido.")
-                    supabase.table("documents").delete().eq("id", doc["id"]).execute()
-                    raise HTTPException(
-                        status_code=400, 
-                        detail="O documento do Plano de Governo parece estar corrompido (sem URL). O registro foi limpo. Por favor, faça o upload do PDF novamente."
-                    )
-
-                from src.services.pdf_ingestion import extract_text_from_pdf
-                
-                try:
-                    full_text = extract_text_from_pdf(doc["file_url"])
-                    
-                    # Update cache in documents table to avoid re-downloading next time
-                    if full_text and len(full_text) > 100:
-                         supabase.table("documents").update({"content_text": full_text}).eq("id", doc["id"]).execute()
-                         print("✅ Texto extraído e salvo em documents.content_text")
-                         
-                except Exception as ingest_error:
-                    print(f"❌ Falha na ingestão robusta: {ingest_error}")
-                    # Fallback to chunks if ingestion fails (legacy)
-                    chunks_res = supabase.table("document_chunks") \
-                        .select("content") \
-                        .eq("document_id", doc["id"]) \
-                        .limit(50) \
-                        .execute()
-                    if chunks_res.data:
-                        full_text = "\n\n".join([c["content"] for c in chunks_res.data if c.get("content")])
+        logger.info(f"📊 Matching concluído: {result.get('matches_found', 0)} matches")
         
-        if not full_text or len(full_text) < 100:
-            # If we reached here, both text cache and robust ingestion failed.
-            # Check if we should delete the doc to force re-upload
-            if not doc.get("content_text"):
-                 supabase.table("documents").delete().eq("id", doc["id"]).execute()
-                 
-            raise HTTPException(
-                status_code=404, 
-                detail="Nenhum texto pôde ser extraído do PDF. O arquivo pode estar vazio ou ser uma imagem. Tente fazer upload de um PDF pesquisável."
-            )
-
-        # 3. Extract promises using RadarCrew Agent (Radar – Extrator de Promessas)
-        crew = RadarCrew(campaign_id=str(campaign_id), run_id=exec_id)
-        extracted = crew.run_extraction(full_text)
-        
-        # The result accepts different JSON structures, usually a list or object with list
-        if isinstance(extracted, list):
-            promessas = extracted
-        elif isinstance(extracted, dict) and "promessas" in extracted:
-            promessas = extracted["promessas"]
-        else:
-            promessas = []
-        
-        # 4. Save promises
-        # Delete existing promises for this mandate/origin (idempotent)
-        supabase.table("promises") \
-            .delete() \
-            .eq("campaign_id", str(campaign_id)) \
-            .eq("politico_id", politician_id) \
-            .eq("mandate_id", mandate_id) \
-            .eq("origem", "Plano de Governo") \
-            .execute()
-            
-        inserted_count = 0
-        for p in promessas:
-            # Preserve rich context in available columns
-            local_info = f"[Local: {p.get('local')}] " if p.get("local") else ""
-            verbos_info = f"[Verbos: {', '.join(p.get('verbos_chave', []))}] " if p.get("verbos_chave") else ""
-            
-            trecho = p.get("trecho_original", "")
-            if len(trecho) > 10:
-                final_trecho = f"{local_info}{trecho}"[:500]
-            else:
-                final_trecho = f"{local_info}{verbos_info[:50]}..."
-                
-            promise_data = {
-                "campaign_id": str(campaign_id),
-                "politico_id": politician_id,
-                "mandate_id": mandate_id,
-                "resumo_promessa": p.get("resumo_promessa", "")[:500] if p.get("resumo_promessa") else "Sem resumo",
-                "categoria": p.get("categoria", "Outro"),
-                "origem": "Plano de Governo", 
-                "source_type": "PLANO_GOVERNO",
-                "trecho_original": final_trecho,
-                "data_promessa": datetime.now().date().isoformat()
-            }
-            # Only insert if it has some content
-            if promise_data["resumo_promessa"]:
-                res = supabase.table("promises").insert(promise_data).execute()
-                if res.data:
-                    inserted_count += 1
-        
-        # 5. Enrich Response (Stats & Categories)
-        by_category = {}
-        for p in promessas:
-            cat = p.get("categoria", "Outro")
-            by_category[cat] = by_category.get(cat, 0) + 1
-            
-        sorted_cats = [{"categoria": k, "qtd": v} for k, v in by_category.items()]
-        sorted_cats.sort(key=lambda x: x["qtd"], reverse=True)
-        
-        # Sample promises (top 3)
-        sample = [{"resumo": p.get("resumo_promessa", "")[:100], "categoria": p.get("categoria", "Outro")} for p in promessas[:5]]
-
-        result = {
-            "status": "ok",
-            "message": f"Extraídas {inserted_count} promessas de {doc_source}",
-            "promises_count": inserted_count,
-            "source": doc_source,
-            "success": True, # Premium flag
-            "total_promises": inserted_count,
-            "by_category": sorted_cats,
-            "sample_promises": sample,
-            "document_info": {
-                "filename": doc.get("filename", "Plano de Governo"),
-                "last_extraction_at": datetime.now().isoformat()
-            }
+        # Save summary to promise_budget_summaries
+        summary_payload = {
+            "matching_result": result,
+            "data_sources": ["municipal_expenses"],
+            "matcher_version": "v1.0"
         }
         
-        # Update execution log
-        if exec_id:
-            supabase.table("radar_executions").update({
-                "status": "ok",
-                "finished_at": datetime.now().isoformat(),
-                "summary": result
-            }).eq("id", exec_id).execute()
+        try:
+            supabase.table("promise_budget_summaries").insert({
+                "campaign_id": campaign_id,
+                "mandate_id": mandate_id,
+                "payload_json": summary_payload
+            }).execute()
+        except Exception as e:
+            logger.warning(f"⚠️ Erro ao salvar summary (não-crítico): {e}")
         
-        return result
-
+        # Update execution log
+        supabase.table("radar_executions").update({
+            "status": "ok",
+            "finished_at": datetime.now().isoformat(),
+            "summary": result
+        }).eq("id", exec_id).execute()
+        
+        logger.info(f"✅ FASE 2 CONCLUÍDA. {result.get('matches_found', 0)} promessas correlacionadas.")
+        
     except Exception as e:
-        if exec_id:
-            supabase.table("radar_executions").update({
-                "status": "error",
-                "finished_at": datetime.now().isoformat(),
-                "error_message": str(e)
-            }).eq("id", exec_id).execute()
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"❌ ERRO NA FASE 2 BACKGROUND: {e}")
+        supabase.table("radar_executions").update({
+            "status": "error",
+            "finished_at": datetime.now().isoformat(),
+            "error_message": str(e)
+        }).eq("id", exec_id).execute()
 
 
 # ============ PHASE 2 - DADOS OFICIAIS ============
 
-@router.post("/campaigns/{campaign_id}/radar/{mandate_id}/phase2")
-async def execute_phase2(campaign_id: UUID, mandate_id: str):
+@router.post("/api/campaigns/{campaign_id}/radar/{mandate_id}/phase2")
+async def execute_phase2(
+    campaign_id: UUID, 
+    mandate_id: str,
+    background_tasks: BackgroundTasks,
+    force: bool = Query(False, description="Force re-matching even if verifications exist")
+):
     """
     Phase 2: Data Sources (Official Data).
-    Uses 'Radar – Fiscal de Verbas' agent to cross-reference promises with municipal expenses.
+    
+    Uses RadarMatcher to cross-reference promises with municipal expenses.
+    Returns immediately and processes in background.
     """
     supabase = get_supabase_client()
-    from src.crew.radar_crew import RadarCrew
     
-    # Create execution log
+    # 1. Get mandate details
+    mandate = supabase.table("mandates").select("city_id, politician_id").eq("id", mandate_id).single().execute()
+    if not mandate.data:
+        raise HTTPException(status_code=404, detail="Mandate not found")
+    
+    politician_id = mandate.data["politician_id"]
+    city_id = mandate.data.get("city_id")
+    
+    # 2. Get municipio_slug from city
+    municipio_slug = "votorantim"  # Default
+    if city_id:
+        city = supabase.table("cities").select("slug").eq("id", city_id).limit(1).execute()
+        if city.data:
+            slug = city.data[0].get("slug", "votorantim")
+            # Normalize: expenses use 'votorantim', city uses 'votorantim-sp'
+            municipio_slug = slug.split('-')[0] if '-' in slug else slug
+    
+    # 3. IDEMPOTENCY CHECK: Skip if recent successful execution exists
+    if not force:
+        # Check if any recent phase2 execution exists with status=ok
+        recent_exec = supabase.table("radar_executions") \
+            .select("id, finished_at, summary") \
+            .eq("mandate_id", mandate_id) \
+            .eq("phase", "phase2") \
+            .eq("status", "ok") \
+            .order("finished_at", desc=True) \
+            .limit(1) \
+            .execute()
+        
+        if recent_exec.data:
+            last_run = recent_exec.data[0]
+            summary = last_run.get("summary") or {}
+            matches = summary.get("matches_found", 0) if isinstance(summary, dict) else 0
+            return {
+                "status": "exists",
+                "message": f"Cruzamento já realizado. {matches} promessas com evidências encontradas.",
+                "last_run": last_run.get("finished_at"),
+                "matches_found": matches,
+                "action": "Use force=true para re-processar ou veja os resultados abaixo."
+            }
+    
+    # 4. Check if promises exist
+    promises_check = supabase.table("promises") \
+        .select("count", count="exact") \
+        .eq("politico_id", politician_id) \
+        .eq("mandate_id", mandate_id) \
+        .execute()
+    
+    if not promises_check.count or promises_check.count == 0:
+        raise HTTPException(
+            status_code=400, 
+            detail="Nenhuma promessa encontrada. Execute a Fase 1 (Extrair Promessas) primeiro."
+        )
+    
+    # 5. Create execution log
     exec_log = supabase.table("radar_executions").insert({
         "campaign_id": str(campaign_id),
         "mandate_id": mandate_id,
@@ -511,157 +722,420 @@ async def execute_phase2(campaign_id: UUID, mandate_id: str):
     
     exec_id = exec_log.data[0]["id"] if exec_log.data else None
     
+    # 6. Dispatch background task
+    logger.info(f"📤 Despachando matching Fase 2 em background para {promises_check.count} promessas")
+    
+    background_tasks.add_task(
+        _process_phase2_background,
+        campaign_id=str(campaign_id),
+        mandate_id=mandate_id,
+        politician_id=politician_id,
+        municipio_slug=municipio_slug,
+        exec_id=exec_id
+    )
+    
+    # 7. Return immediately
+    return {
+        "status": "running",
+        "message": f"Cruzamento de dados iniciado para {promises_check.count} promessas. Isso pode levar alguns minutos.",
+        "execution_id": exec_id,
+        "promises_count": promises_check.count,
+        "hint": "Atualize a página em 1-2 minutos para ver os resultados."
+    }
+
+
+# ============ PHASE 3 - MÍDIA/GOOGLE (BACKGROUND) ============
+
+def _run_phase3_background(
+    campaign_id: str,
+    mandate_id: str,
+    politician_name: str,
+    city_name: str,
+    agent_slug: str,
+    exec_id: str,
+    target_sites: List[str] = [],
+    search_mode: str = "hybrid",
+    max_results: int = 10
+):
+    """
+    Background task for Phase 3 Media Scan.
+    Executes the CrewAI agent and updates the execution status.
+    """
+    logger.info(f"🚀 INICIANDO VARREDURA PHASE 3 BACKGROUND com {agent_slug}...")
+    supabase = get_supabase_client()
+    
     try:
-        # 1. Get mandate details to find city
-        mandate = supabase.table("mandates").select("city_id, politician_id").eq("id", mandate_id).single().execute()
-        if not mandate.data:
-            raise HTTPException(status_code=404, detail="Mandate not found")
+        from src.crew.radar_crew import RadarCrew
         
-        city_id = mandate.data["city_id"]
-        
-        # 2. Fetch Promises for this Mandate
-        promises_res = supabase.table("promises") \
-            .select("resumo_promessa, categoria") \
-            .eq("mandate_id", mandate_id) \
-            .execute()
-        
-        if not promises_res.data:
-            raise HTTPException(status_code=400, detail="Nenhuma promessa encontrada na Fase 1. Execute a extração primeiro.")
-            
-        promises_list = [{"resumo": p["resumo_promessa"], "categoria": p["categoria"]} for p in promises_res.data]
-        
-        # 3. Fetch Official Expenses (Simplified aggregation)
-        # Try to match city or use Votorantim as default/fallback if no match found (assuming single tenant for now)
-        # In a real scenario, filter by city_id logic would be stricter.
-        expenses_res = supabase.table("municipal_expenses") \
-            .select("category, value_paid, description") \
-            .limit(1000) \
-            .execute()
-            
-        # Group expenses by category (Python aggregation)
-        grouped_expenses = {}
-        for exp in expenses_res.data:
-            cat = exp.get("category") or "Outros"
-            val = float(exp.get("value_paid") or 0)
-            if cat not in grouped_expenses:
-                grouped_expenses[cat] = 0.0
-            grouped_expenses[cat] += val
-            
-        # 4. Run Fiscal Agent
+        # Initialize Crew with run_id for logging
         crew = RadarCrew(campaign_id=str(campaign_id), run_id=exec_id)
-        fiscal_analysis = crew.run_fiscal_analysis(promises_list, grouped_expenses)
         
-        # 5. Persist Analysis
-        summary_payload = {
-            "analysis": fiscal_analysis,
-            "data_sources": ["Portal da Transparência", "Câmara Municipal"],
-            "expenses_count": len(expenses_res.data),
-            "promises_count": len(promises_list)
-        }
+        # Execute the Agent
+        # logs are automatically saved to agent_logs by the crew logger
+        result = crew.run_google_scan(
+            politician_name=politician_name,
+            city_name=city_name,
+            agent_name=agent_slug,
+            target_sites=target_sites,
+            search_mode=search_mode,
+            max_results=max_results
+        )
         
-        # Save to promise_budget_summaries table
-        supabase.table("promise_budget_summaries").insert({
-            "campaign_id": str(campaign_id),
-            "mandate_id": mandate_id,
-            "payload_json": fiscal_analysis
-        }).execute()
-        
-        # Result for frontend
-        result = {
+        # Update Execution with Success
+        supabase.table("radar_executions").update({
             "status": "ok",
-            "message": "Cruzamento realizado com sucesso pelo Agente Fiscal.",
-            "data": fiscal_analysis
-        }
+            "finished_at": datetime.now().isoformat(),
+            "summary": result
+        }).eq("id", exec_id).execute()
         
-        # Update execution log
-        if exec_id:
-            supabase.table("radar_executions").update({
-                "status": "ok",
-                "finished_at": datetime.now().isoformat(),
-                "summary": result
-            }).eq("id", exec_id).execute()
-        
-        return result
+        logger.info(f"✅ VARREDURA CONCLUÍDA.")
         
     except Exception as e:
-        if exec_id:
-            supabase.table("radar_executions").update({
-                "status": "error",
-                "finished_at": datetime.now().isoformat(),
-                "error_message": str(e)
-            }).eq("id", exec_id).execute()
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"❌ ERRO NA VARREDURA BACKGROUND: {e}")
+        supabase.table("radar_executions").update({
+            "status": "error",
+            "finished_at": datetime.now().isoformat(),
+            "error_message": str(e)
+        }).eq("id", exec_id).execute()
 
 
-# ============ PHASE 3 - MÍDIA/GOOGLE (SIMULATION) ============
-
-@router.post("/campaigns/{campaign_id}/radar/{mandate_id}/phase3")
-async def execute_phase3(campaign_id: UUID, mandate_id: str):
+@router.post("/api/campaigns/{campaign_id}/radar/{mandate_id}/phase3")
+async def execute_phase3(
+    campaign_id: UUID, 
+    mandate_id: str,
+    background_tasks: BackgroundTasks,
+    force: bool = Query(False),
+    agent_slug: str = Query("radar-google-scanner", description="Slug name of the agent to use"),
+    request_body: Phase3Request = Body(default=Phase3Request())
+):
     """
     Phase 3: Media Scan (Google/Social).
-    SIMULATION: Returns realistic mock data to demonstrate functionality.
+    Executes via RadarCrew using the selected agent in background.
     """
     supabase = get_supabase_client()
-    import random
     
-    # Create execution log
+    # Check existing execution
+    if not force:
+        existing = supabase.table("radar_executions") \
+            .select("*") \
+            .eq("mandate_id", mandate_id) \
+            .eq("phase", "phase3") \
+            .eq("status", "ok") \
+            .execute()
+            
+        if existing.data:
+            return existing.data[0]
+            
+    # Get Mandate Context
+    mandate = supabase.table("mandates").select("*, politicians(name), cities(name)").eq("id", mandate_id).single().execute()
+    if not mandate.data:
+        raise HTTPException(status_code=404, detail="Mandate not found")
+        
+    politician_name = mandate.data["politicians"]["name"]
+    city_name = mandate.data["cities"]["name"]
+
+    # Create Execution Record (Running)
     exec_log = supabase.table("radar_executions").insert({
         "campaign_id": str(campaign_id),
         "mandate_id": mandate_id,
         "phase": "phase3",
-        "status": "running"
+        "status": "running",
+        "started_at": datetime.now().isoformat()
     }).execute()
     
-    exec_id = exec_log.data[0]["id"] if exec_log.data else None
+    if not exec_log.data:
+        raise HTTPException(status_code=500, detail="Failed to initialize execution log")
+        
+    exec_id = exec_log.data[0]["id"]
     
+    # Dispatch Background Task
+    background_tasks.add_task(
+        _run_phase3_background,
+        campaign_id=str(campaign_id),
+        mandate_id=mandate_id,
+        politician_name=politician_name,
+        city_name=city_name,
+        agent_slug=agent_slug,
+        exec_id=exec_id,
+        target_sites=request_body.target_sites,
+        search_mode=request_body.search_mode,
+        max_results=request_body.max_results
+    )
+    
+    return {
+        "status": "running",
+        "message": "Agente de Varredura iniciado. Acompanhe os logs no console.",
+        "execution_id": exec_id,
+        "agent": agent_slug
+    }
+
+
+# ============ LEGISLATIVE SUPPORT (Gestão Câmara) ============
+
+class ChamberSupportUpdate(BaseModel):
+    status: str = Field(..., pattern="^(base|oposicao|neutro)$")
+    notes: Optional[str] = None
+
+@router.get("/api/campaigns/{campaign_id}/chamber")
+async def list_chamber_support(campaign_id: UUID):
+    """
+    List councilors (Vereadores) for the campaign's city,
+    enriched with their support status (base/oposicao/neutro).
+    """
+    supabase = get_supabase_client()
+    
+    # 1. Get Campaign City
+    # Note: Column is named 'city' (which stores the Name string), not 'city_id'
+    camp = supabase.table("campaigns").select("city").eq("id", str(campaign_id)).single().execute()
+    if not camp.data or not camp.data.get("city"):
+         return []
+    
+    city_name = camp.data["city"]
+    
+    # Resolve City ID from Name
+    city_res = supabase.table("cities").select("id").ilike("name", city_name).limit(1).execute()
+    if not city_res.data:
+        return []
+        
+    city_id = city_res.data[0]["id"]
+
+    # 2. Get Councilors (Vereadores) for this city
+    councilors_res = supabase.table("politicians") \
+        .select("id, name, partido, slug, foto_url") \
+        .eq("city_id", city_id) \
+        .ilike("tipo", "%vereador%") \
+        .order("name") \
+        .execute()
+        
+    if not councilors_res.data:
+        return []
+
+    councilors = councilors_res.data
+    councilor_ids = [c["id"] for c in councilors]
+
+    # 3. Get Support Status
+    support_map = {}
     try:
-        # Get mandate details
-        mandate = supabase.table("mandates").select("politician_id").eq("id", mandate_id).execute()
-        m = mandate.data[0]
-        person = supabase.table("politicians").select("name").eq("id", m["politician_id"]).execute()
-        p_name = person.data[0]["name"] if person.data else "Político"
+        support_res = supabase.table("legislative_support") \
+            .select("politician_id, status, notes") \
+            .eq("campaign_id", str(campaign_id)) \
+            .in_("politician_id", councilor_ids) \
+            .execute()
+            
+        support_map = {s["politician_id"]: s for s in support_res.data} if support_res.data else {}
+    except Exception as e:
+        print(f"⚠️ Legislative Support Fetch Failed: {e}")
+        # Continue without support data (defaults to neutro)
+
+    # 4. Merge
+    result = []
+    for c in councilors:
+        sup = support_map.get(c["id"], {})
+        result.append({
+            "id": c["id"],
+            "name": c["name"],
+            "partido": c["partido"],
+            "slug": c["slug"],
+            "photograph": c.get("foto_url"),
+            "status": sup.get("status", "neutro"), 
+            "notes": sup.get("notes")
+        })
         
-        # MOCK DATA GENERATION
-        items_found = random.randint(4, 9)
+    return result
+
+
+@router.post("/api/campaigns/{campaign_id}/chamber/{politician_id}/status")
+async def update_chamber_support(campaign_id: UUID, politician_id: str, payload: ChamberSupportUpdate):
+    """
+    Update support status for a councilor.
+    """
+    supabase = get_supabase_client()
+    
+    data = {
+        "campaign_id": str(campaign_id),
+        "politician_id": politician_id,
+        "status": payload.status,
+        "notes": payload.notes,
+        "updated_at": datetime.now().isoformat()
+    }
+    
+    # Upsert logic
+    res = supabase.table("legislative_support").upsert(data, on_conflict="campaign_id, politician_id").execute()
+    
+    if not res.data:
+        raise HTTPException(status_code=500, detail="Failed to update status")
         
-        mock_media = [
-            {"date": "2025-10-10", "source": "G1 Sorocaba", "title": f"Prefeitura anuncia novas obras em parceria com {p_name}", "sentiment": "positive", "url": "https://g1.globo.com/sp/sorocaba/noticia"},
-            {"date": "2025-09-15", "source": "Jornal Cruzeiro do Sul", "title": "Câmara aprova orçamento para 2026 com emendas", "sentiment": "neutral", "url": "https://jornalcruzeiro.com.br"},
-            {"date": "2025-08-20", "source": "Instagram", "title": "@cidadaovotorantim: Cadê a reforma prometida da praça?", "sentiment": "negative", "url": "https://instagram.com/p/xyz"},
-            {"date": "2025-11-01", "source": "YouTube", "title": f"Entrevista exclusiva com {p_name} sobre saúde", "sentiment": "positive", "url": "https://youtube.com/watch?v=123"},
-            {"date": "2025-07-30", "source": "Blog do Zé", "title": "Moradores reclamam de buracos na Av. 31 de Março", "sentiment": "negative", "url": "https://blogdoze.com.br"}
-        ]
-        
-        selected_media = random.sample(mock_media, min(len(mock_media), items_found))
-        
-        result = {
-            "status": "ok",
-            "message": f"Varredura de mídia concluída para {p_name}.",
-            "media_sources": [
-                "Google News",
-                "YouTube",
-                "Instagram",
-                "Twitter/X"
-            ],
-            "items_found": items_found,
-            "details": selected_media
+    return {"success": True, "data": res.data[0]}
+
+
+@router.get("/api/mandates/{mandate_id}/document")
+async def get_mandate_document(mandate_id: str):
+    """
+    Get the government plan document for a mandate.
+    Returns document info if exists, null otherwise.
+    """
+    supabase = get_supabase_client()
+    
+    # Get politician_id from mandate
+    mandate = supabase.table("mandates").select("politician_id").eq("id", mandate_id).single().execute()
+    if not mandate.data:
+        raise HTTPException(status_code=404, detail="Mandate not found")
+    
+    politician_id = mandate.data["politician_id"]
+    
+    # Get document
+    doc = supabase.table("documents") \
+        .select("id, filename, file_url, created_at, content_text") \
+        .eq("person_id", politician_id) \
+        .eq("doc_type", "government_plan") \
+        .order("created_at", desc=True) \
+        .limit(1) \
+        .execute()
+    
+    if not doc.data:
+        return {"document": None}
+    
+    d = doc.data[0]
+    has_text = bool(d.get("content_text") and len(d.get("content_text", "")) > 100)
+    
+    return {
+        "document": {
+            "id": d["id"],
+            "filename": d["filename"],
+            "file_url": d["file_url"],
+            "created_at": d["created_at"],
+            "has_text": has_text
         }
+    }
+
+
+@router.delete("/api/mandates/{mandate_id}/document/{doc_id}")
+async def delete_mandate_document(mandate_id: str, doc_id: str):
+    """
+    Delete a government plan document.
+    """
+    supabase = get_supabase_client()
+    
+    # Verify ownership
+    mandate = supabase.table("mandates").select("politician_id").eq("id", mandate_id).single().execute()
+    if not mandate.data:
+        raise HTTPException(status_code=404, detail="Mandate not found")
+    
+    politician_id = mandate.data["politician_id"]
+    
+    # Get document to verify ownership
+    doc = supabase.table("documents") \
+        .select("id, file_url") \
+        .eq("id", doc_id) \
+        .eq("person_id", politician_id) \
+        .single() \
+        .execute()
+    
+    if not doc.data:
+        raise HTTPException(status_code=404, detail="Document not found or not owned by this politician")
+    
+    # Delete from storage (extract path from URL)
+    try:
+        file_url = doc.data["file_url"]
+        # URL format: .../government-plans/politician_id/filename
+        if "government-plans" in file_url:
+            path_part = file_url.split("government-plans/")[1].split("?")[0]
+            supabase.storage.from_("government-plans").remove([path_part])
+    except Exception as e:
+        print(f"⚠️ Storage delete warning: {e}")
+    
+    # Delete from database
+    supabase.table("documents").delete().eq("id", doc_id).execute()
+    
+    return {"success": True, "message": "Documento excluído com sucesso"}
+
+
+@router.post("/campaigns/{campaign_id}/radar/{mandate_id}/upload-plan")
+async def upload_government_plan(
+    campaign_id: UUID, 
+    mandate_id: str,
+    file: UploadFile = File(...)
+):
+    """
+    Uploads a Government Plan PDF manually.
+    - Saves to Supabase Storage (bucket: government-plans)
+    - Creates/Updates 'documents' record
+    - Triggers immediate text extraction
+    """
+    supabase = get_supabase_client()
+    
+    # 1. Get Politician ID
+    mandate = supabase.table("mandates").select("politician_id, politician:politicians(name)").eq("id", mandate_id).single().execute()
+    if not mandate.data:
+        raise HTTPException(status_code=404, detail="Mandate not found")
+    
+    politician_id = mandate.data["politician_id"]
+    
+    # 2. Upload to Storage
+    try:
+        file_content = await file.read()
+        storage_path = f"{politician_id}/{file.filename}"
         
-        # Update execution log
-        if exec_id:
-            supabase.table("radar_executions").update({
-                "status": "ok",
-                "finished_at": datetime.now().isoformat(),
-                "summary": result
-            }).eq("id", exec_id).execute()
+        # Check if exists (overwrite)
+        list_res = supabase.storage.from_("government-plans").list(politician_id)
+        exists = any(f["name"] == file.filename for f in list_res)
         
-        return result
+        if exists:
+             supabase.storage.from_("government-plans").update(
+                path=storage_path,
+                file=file_content,
+                file_options={"content-type": "application/pdf"}
+            )
+        else:
+            supabase.storage.from_("government-plans").upload(
+                path=storage_path,
+                file=file_content,
+                file_options={"content-type": "application/pdf"}
+            )
+            
+        # Get Public URL
+        public_url = supabase.storage.from_("government-plans").get_public_url(storage_path)
         
     except Exception as e:
-        if exec_id:
-            supabase.table("radar_executions").update({
-                "status": "error",
-                "finished_at": datetime.now().isoformat(),
-                "error_message": str(e)
-            }).eq("id", exec_id).execute()
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"❌ Storage Upload Failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to upload file to storage: {str(e)}")
+        
+    # 3. Upsert Document Record
+    try:
+        # Check if doc exists
+        existing_doc = supabase.table("documents") \
+            .select("id") \
+            .eq("person_id", politician_id) \
+            .eq("doc_type", "government_plan") \
+            .execute()
+            
+        doc_data = {
+            "person_id": politician_id,
+            "campaign_id": str(campaign_id),
+            "doc_type": "government_plan",
+            "filename": file.filename,
+            "file_url": public_url
+        }
+        
+        doc_id = None
+        if existing_doc.data:
+            doc_id = existing_doc.data[0]["id"]
+            supabase.table("documents").update(doc_data).eq("id", doc_id).execute()
+        else:
+            res = supabase.table("documents").insert(doc_data).execute()
+            doc_id = res.data[0]["id"]
+            
+        # 4. Immediate Extraction
+        from src.services.pdf_service import PDFExtractionService
+        service = PDFExtractionService()
+        result = service.extract_text(public_url)
+        
+        if result.success and len(result.text) > 100:
+             supabase.table("documents").update({"content_text": result.text}).eq("id", doc_id).execute()
+             return {"message": "Upload e extração realizados com sucesso!", "text_preview": result.text[:100]}
+        else:
+             return {"message": "Upload realizado, mas extração falhou (PDF Imagem?)", "warning": result.error}
+             
+    except Exception as e:
+        print(f"❌ Database/Extraction Failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Upload saved but registration failed: {str(e)}")

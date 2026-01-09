@@ -9,7 +9,7 @@ import {
     ChevronLeft, ChevronRight, LayoutGrid,
     FileInput, FileText, Database, Activity,
     Users, MessageSquare, Cpu, CheckCircle2,
-    ShieldAlert, FileCheck, Network, Layers, Target, Terminal
+    ShieldAlert, FileCheck, Network, Layers, Target, Terminal, Radar
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
@@ -47,6 +47,7 @@ const CATEGORY_CONFIG: Record<string, { label: string; icon: React.ElementType }
     compliance: { label: "Compliance", icon: ShieldAlert },
     auditor: { label: "Auditor", icon: FileCheck },
     orchestrator: { label: "Orquestrador", icon: Network },
+    scanning: { label: "Varredura", icon: Radar },
     radar: { label: "Python", icon: Terminal },
     generic: { label: "Geral", icon: Bot },
 };
@@ -69,7 +70,10 @@ const createAgent = async (data: AgentCreate): Promise<Agent> => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
     });
-    if (!res.ok) throw new Error("Falha ao criar agente");
+    if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.detail || "Falha ao criar agente");
+    }
     return res.json();
 };
 
@@ -79,7 +83,10 @@ const updateAgent = async ({ id, data }: { id: string; data: AgentCreate }): Pro
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
     });
-    if (!res.ok) throw new Error("Falha ao atualizar agente");
+    if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.detail || "Falha ao atualizar agente");
+    }
     return res.json();
 };
 
@@ -87,7 +94,10 @@ const deleteAgent = async (id: string): Promise<void> => {
     const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/agents/${id}`, {
         method: "DELETE",
     });
-    if (!res.ok) throw new Error("Falha ao excluir agente");
+    if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.detail || "Falha ao excluir agente");
+    }
 };
 
 export default function AgentLibraryPage() {

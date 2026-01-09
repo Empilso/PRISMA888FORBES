@@ -21,7 +21,7 @@ interface Strategy {
     description: string;
     pillar: string;
     phase: string;
-    status: string;
+    status: "suggested" | "approved" | "published" | "executed";
 }
 
 interface StrategyDetailModalProps {

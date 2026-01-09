@@ -33,7 +33,7 @@ interface Strategy {
     description: string;
     pillar: string;
     phase: string;
-    status: "suggested" | "approved";
+    status: "suggested" | "approved" | "published" | "executed";
     campaign_id: string;
     run_id?: string;
     examples?: string[];

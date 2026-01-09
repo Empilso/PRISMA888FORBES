@@ -44,6 +44,16 @@ export default function AdminLayout({
                     name: "Lista de Candidatos",
                     href: "/admin/candidatos",
                     icon: ListDashes
+                },
+                {
+                    name: "Políticos (Base)",
+                    href: "/admin/politicos",
+                    icon: User
+                },
+                {
+                    name: "Cidades",
+                    href: "/admin/cidades",
+                    icon: Buildings
                 }
             ]
         },
@@ -51,14 +61,9 @@ export default function AdminLayout({
             title: "Radar de Promessas",
             items: [
                 {
-                    name: "Cidades",
-                    href: "/admin/cidades",
-                    icon: Buildings
-                },
-                {
-                    name: "Políticos",
-                    href: "/admin/politicos",
-                    icon: User
+                    name: "Painel de Monitoramento",
+                    href: "/admin/radar",
+                    icon: Crosshair
                 }
             ]
         },

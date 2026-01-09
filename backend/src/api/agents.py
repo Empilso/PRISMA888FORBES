@@ -1,7 +1,7 @@
 
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
-from typing import List, Optional, Any, Dict
+from typing import List, Optional, Any, Dict, Union
 import os
 from supabase import create_client, Client
 
@@ -25,7 +25,7 @@ class AgentBase(BaseModel):
     system_prompt: str
     tools: List[str] = []
     knowledge_base: List[Dict[str, Any]] = []
-    compliance_rules: Dict[str, Any] = {}
+    compliance_rules: Union[List[str], Dict[str, Any]] = {}
     is_active: bool = True
 
 class AgentCreate(AgentBase):
@@ -39,7 +39,7 @@ class AgentUpdate(BaseModel):
     system_prompt: Optional[str] = None
     tools: Optional[List[str]] = None
     knowledge_base: Optional[List[Dict[str, Any]]] = None
-    compliance_rules: Optional[Dict[str, Any]] = None
+    compliance_rules: Optional[Union[List[str], Dict[str, Any]]] = None
     is_active: Optional[bool] = None
 
 class Agent(AgentBase):
@@ -51,8 +51,11 @@ class Agent(AgentBase):
 def normalize_agent_data(agent_data: Dict[str, Any]) -> Dict[str, Any]:
     """Ensure compliance_rules is a dict, handling legacy list/null data."""
     cr = agent_data.get("compliance_rules")
-    if not isinstance(cr, dict):
-        # If it's a list (legacy) or None, enforce empty dict
+    if isinstance(cr, list):
+        # Legacy/Frontend format: keep as is
+        pass
+    elif not isinstance(cr, dict):
+        # If None or other type, enforce empty dict
         agent_data["compliance_rules"] = {}
     
     # Also ensure tools is a list
@@ -68,7 +71,7 @@ def normalize_agent_data(agent_data: Dict[str, Any]) -> Dict[str, Any]:
 # --- Endpoints ---
 
 @router.get("", response_model=List[Agent])
-def list_agents(active_only: bool = True):
+def list_agents(active_only: bool = True, type: Optional[str] = None):
     """List all agents."""
     try:
         supabase = get_supabase_client()
@@ -76,6 +79,9 @@ def list_agents(active_only: bool = True):
         
         if active_only:
             query = query.eq("is_active", True)
+            
+        if type:
+            query = query.eq("type", type)
             
         response = query.order("name").execute()
         

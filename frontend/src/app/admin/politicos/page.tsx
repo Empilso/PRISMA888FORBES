@@ -1,10 +1,12 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Spinner } from "@phosphor-icons/react";
 import {
     Dialog,
     DialogContent,
@@ -34,7 +36,10 @@ import {
     UsersThree,
     MapPin,
     Trash,
+    Download,
+    Crosshair
 } from "@phosphor-icons/react";
+import { TSEImportModal } from "@/components/admin/politicos/TSEImportModal";
 
 interface City {
     id: string;
@@ -86,13 +91,62 @@ export default function PoliticiansPage() {
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");
     const [cityFilter, setCityFilter] = useState("");
+
     const [campaignFilter, setCampaignFilter] = useState("");
+    const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
     // Form state
     const [formName, setFormName] = useState("");
     const [formCityId, setFormCityId] = useState("");
     const [formCampaignId, setFormCampaignId] = useState("");
     const [formTipo, setFormTipo] = useState("prefeito");
+
+    const [accessingRadar, setAccessingRadar] = useState<string | null>(null);
+    const router = useRouter();
+
+    const handleAccessRadar = async (politician: Politician) => {
+        setAccessingRadar(politician.id);
+        try {
+            const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+            if (politician.campaign_id) {
+                router.push(`/campaign/${politician.campaign_id}/promises`);
+                return;
+            }
+
+            const res = await fetch(`${API_URL}/api/politicians/${politician.id}`);
+            if (res.ok) {
+                const updatedPol = await res.json();
+                if (updatedPol.campaign_id) {
+                    router.push(`/campaign/${updatedPol.campaign_id}/promises`);
+                    return;
+                }
+            }
+
+            const createRes = await fetch(`${API_URL}/api/campaigns`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    name: `Campanha ${politician.name}`,
+                    politician_id: politician.id,
+                    is_active: true
+                })
+            });
+
+            if (createRes.ok) {
+                const newCampaign = await createRes.json();
+                router.push(`/campaign/${newCampaign.id}/promises`);
+            } else {
+                alert("Erro ao criar campanha para acessar Radar.");
+                setAccessingRadar(null);
+            }
+
+        } catch (error) {
+            console.error("Error accessing radar:", error);
+            alert("Erro de conexão.");
+            setAccessingRadar(null);
+        }
+    };
     const [formPartido, setFormPartido] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -237,90 +291,101 @@ export default function PoliticiansPage() {
                     </div>
                 </div>
 
-                <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                    <DialogTrigger asChild>
-                        <Button className="bg-violet-600 hover:bg-violet-700">
-                            <Plus className="h-4 w-4 mr-2" weight="bold" />
-                            Novo Político
-                        </Button>
-                    </DialogTrigger>
-                    <DialogContent className="max-w-lg">
-                        <DialogHeader>
-                            <DialogTitle>Cadastrar Novo Político</DialogTitle>
-                        </DialogHeader>
-                        <form onSubmit={handleSubmit} className="space-y-4 mt-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="name">Nome Completo</Label>
-                                <Input
-                                    id="name"
-                                    value={formName}
-                                    onChange={(e) => setFormName(e.target.value)}
-                                    placeholder="Ex: Carlos Augusto Pivetta"
-                                    required
-                                />
-                            </div>
+                <div className="flex gap-2">
+                    <Button
+                        variant="outline"
+                        onClick={() => setIsImportModalOpen(true)}
+                        className="border-blue-200 text-blue-700 hover:bg-blue-50"
+                    >
+                        <Download className="h-4 w-4 mr-2" />
+                        Importar do TSE
+                    </Button>
 
-                            <div className="grid grid-cols-2 gap-4">
+                    <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                        <DialogTrigger asChild>
+                            <Button className="bg-violet-600 hover:bg-violet-700">
+                                <Plus className="h-4 w-4 mr-2" weight="bold" />
+                                Novo Político
+                            </Button>
+                        </DialogTrigger>
+                        <DialogContent className="max-w-lg">
+                            <DialogHeader>
+                                <DialogTitle>Cadastrar Novo Político</DialogTitle>
+                            </DialogHeader>
+                            <form onSubmit={handleSubmit} className="space-y-4 mt-4">
                                 <div className="space-y-2">
-                                    <Label htmlFor="tipo">Cargo</Label>
-                                    <Select value={formTipo} onValueChange={setFormTipo}>
+                                    <Label htmlFor="name">Nome Completo</Label>
+                                    <Input
+                                        id="name"
+                                        value={formName}
+                                        onChange={(e) => setFormName(e.target.value)}
+                                        placeholder="Ex: Carlos Augusto Pivetta"
+                                        required
+                                    />
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="tipo">Cargo</Label>
+                                        <Select value={formTipo} onValueChange={setFormTipo}>
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Selecione..." />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {POLITICIAN_TYPES.map((t) => (
+                                                    <SelectItem key={t.value} value={t.value}>
+                                                        {t.label}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label htmlFor="partido">Partido</Label>
+                                        <Select value={formPartido} onValueChange={setFormPartido}>
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Selecione..." />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {PARTIES.map((p) => (
+                                                    <SelectItem key={p} value={p}>
+                                                        {p}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label htmlFor="city">Cidade</Label>
+                                    <Select value={formCityId} onValueChange={setFormCityId}>
                                         <SelectTrigger>
-                                            <SelectValue placeholder="Selecione..." />
+                                            <SelectValue placeholder="Selecione a cidade..." />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            {POLITICIAN_TYPES.map((t) => (
-                                                <SelectItem key={t.value} value={t.value}>
-                                                    {t.label}
+                                            {cities.map((c) => (
+                                                <SelectItem key={c.id} value={c.id}>
+                                                    {c.name} - {c.state}
                                                 </SelectItem>
                                             ))}
                                         </SelectContent>
                                     </Select>
                                 </div>
 
-                                <div className="space-y-2">
-                                    <Label htmlFor="partido">Partido</Label>
-                                    <Select value={formPartido} onValueChange={setFormPartido}>
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Selecione..." />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {PARTIES.map((p) => (
-                                                <SelectItem key={p} value={p}>
-                                                    {p}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
+                                <div className="flex justify-end gap-2 pt-4">
+                                    <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
+                                        Cancelar
+                                    </Button>
+                                    <Button type="submit" disabled={isSubmitting} className="bg-violet-600 hover:bg-violet-700">
+                                        {isSubmitting ? "Salvando..." : "Salvar"}
+                                    </Button>
                                 </div>
-                            </div>
-
-                            <div className="space-y-2">
-                                <Label htmlFor="city">Cidade</Label>
-                                <Select value={formCityId} onValueChange={setFormCityId}>
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Selecione a cidade..." />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {cities.map((c) => (
-                                            <SelectItem key={c.id} value={c.id}>
-                                                {c.name} - {c.state}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-
-                            <div className="flex justify-end gap-2 pt-4">
-                                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
-                                    Cancelar
-                                </Button>
-                                <Button type="submit" disabled={isSubmitting} className="bg-violet-600 hover:bg-violet-700">
-                                    {isSubmitting ? "Salvando..." : "Salvar"}
-                                </Button>
-                            </div>
-                        </form>
-                    </DialogContent>
-                </Dialog>
+                            </form>
+                        </DialogContent>
+                    </Dialog>
+                </div>
             </div>
 
             {/* Filters */}
@@ -420,6 +485,16 @@ export default function PoliticiansPage() {
                                             <Button
                                                 variant="ghost"
                                                 size="sm"
+                                                className="text-violet-600 hover:text-violet-800 hover:bg-violet-50 mr-1"
+                                                onClick={() => handleAccessRadar(p)}
+                                                title="Acessar Radar"
+                                                disabled={accessingRadar === p.id}
+                                            >
+                                                {accessingRadar === p.id ? <Spinner className="h-4 w-4 animate-spin" /> : <Crosshair className="h-4 w-4" weight="bold" />}
+                                            </Button>
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
                                                 className="text-red-500 hover:text-red-700 hover:bg-red-50"
                                                 onClick={() => handleDelete(p.id, p.name)}
                                             >
@@ -433,6 +508,16 @@ export default function PoliticiansPage() {
                     )}
                 </CardContent>
             </Card>
+
+            <TSEImportModal
+                isOpen={isImportModalOpen}
+                onClose={() => setIsImportModalOpen(false)}
+                onSuccess={() => {
+                    fetchPoliticians(); // Refresh list after import
+                    setIsImportModalOpen(false);
+                }}
+                cities={cities}
+            />
         </div>
     );
 }
