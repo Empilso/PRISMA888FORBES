@@ -109,6 +109,9 @@ export function StrategyDetailModal({ strategy, isOpen, onClose, onActivate, onR
                         <DialogTitle className="text-2xl font-bold leading-tight text-slate-900 mb-6">
                             {strategy.title}
                         </DialogTitle>
+                        <DialogDescription className="hidden">
+                            Detalhes da estratégia selecionada
+                        </DialogDescription>
 
                         <Tabs defaultValue="details" className="w-full">
                             <TabsList className="mb-4 bg-slate-100/50">

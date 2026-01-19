@@ -102,8 +102,10 @@ export function AIStrategiesList({ campaignId, onTaskCreated, activePhase = "all
                     });
                 }
             } else {
-                const { data } = await response.json();
-                setStrategies(data || []);
+                const result = await response.json();
+                // Handle both array response (new API) and wrapped response (legacy/fallback)
+                const strategiesData = Array.isArray(result) ? result : result.data;
+                setStrategies(strategiesData || []);
             }
         } catch (err) {
             console.error("Erro inesperado:", err);

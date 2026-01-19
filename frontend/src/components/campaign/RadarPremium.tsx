@@ -33,7 +33,8 @@ import {
     UsersThree,
     UploadSimple,
     WarningCircle,
-    MagnifyingGlass
+    MagnifyingGlass,
+    CalendarBlank
 } from "@phosphor-icons/react";
 import { PromisesRadar } from "./PromisesRadar";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -74,6 +75,7 @@ interface PhaseExecution {
     finished_at: string | null;
     summary: any;
     error_message: string | null;
+    logs?: string[];
 }
 
 interface PhaseStatus {
@@ -132,6 +134,31 @@ export function RadarPremium({ campaignId, initialPoliticianId }: RadarPremiumPr
     const [maxResults, setMaxResults] = useState<number>(10);
     const [phase3Results, setPhase3Results] = useState<any>(null); // Results container // Whitelisting input
     const [showLogs, setShowLogs] = useState(false);
+
+    // Preview Data State (Phase 2 Expenses)
+    const [previewData, setPreviewData] = useState<any>(null);
+    const [isPreviewing, setIsPreviewing] = useState(false);
+
+    // Fetch Preview
+    const fetchExpensesPreview = async () => {
+        setIsPreviewing(true);
+        setStatusMessage("⏳ Buscando dados em tempo real no TCESP...");
+        try {
+            const res = await fetch(`${API_URL}/api/campaigns/${campaignId}/radar/${selectedMandate}/preview-expenses?year=${targetYear}`);
+            if (res.ok) {
+                const data = await res.json();
+                setPreviewData(data.data);
+                setStatusMessage("✅ Dados do Portal carregados para conferência.");
+            } else {
+                setStatusMessage("❌ Erro ao buscar dados do portal.");
+            }
+        } catch (e) {
+            console.error(e);
+            setStatusMessage("❌ Erro de conexão com backend.");
+        } finally {
+            setIsPreviewing(false);
+        }
+    };
 
     // Fetch Scanning Agents on Mount
     useEffect(() => {
@@ -438,13 +465,22 @@ export function RadarPremium({ campaignId, initialPoliticianId }: RadarPremiumPr
         setStatusMessage(`🚀 Iniciando ${phase === "phase1" ? "extração" : phase === "phase2" ? "análise" : "varredura"}...`);
 
         try {
-            let url = `${API_URL}/api/campaigns/${campaignId}/radar/${selectedMandate}/${phase}`;
-            if (force) url += "?force=true";
+            const urlObj = new URL(`${API_URL}/api/campaigns/${campaignId}/radar/${selectedMandate}/${phase}`);
+
+            // Add params
+            if (force) urlObj.searchParams.append("force", "true");
+
+            // Add target_year if phase 2
+            if (phase === "phase2") {
+                urlObj.searchParams.append("target_year", targetYear.toString());
+            }
 
             // Append Agent Slug for Phase 3
             if (phase === "phase3" && selectedScanningAgent) {
-                url += `${force ? '&' : '?'}agent_slug=${selectedScanningAgent}`;
+                urlObj.searchParams.append("agent_slug", selectedScanningAgent);
             }
+
+            const url = urlObj.toString();
 
             const options: RequestInit = { method: "POST" };
 
@@ -476,19 +512,37 @@ export function RadarPremium({ campaignId, initialPoliticianId }: RadarPremiumPr
                     // Start polling for completion
                     let elapsedTime = 0;
                     const pollInterval = setInterval(async () => {
-                        elapsedTime += 5;
-                        setStatusMessage(`⏳ ${data.message || "Processando em segundo plano..."} (${elapsedTime}s)`);
+                        elapsedTime += 2; // Poll every 2s
+                        setStatusMessage(`⏳ ${data.message || "Processando..."} (${elapsedTime}s)`);
 
                         try {
                             const statusData = await refreshData();
                             const phaseData = statusData?.[phase];
 
-                            if (phaseData?.status === "ok") {
+                            // Check both status and if data exists
+                            if (phaseData?.status === "ok" || phaseData?.status === "exists") {
                                 clearInterval(pollInterval);
                                 setBackgroundProcessing(prev => ({ ...prev, [phase]: false }));
+
                                 const finalMatches = phaseData.summary?.matches_found ?? 0;
+
+                                // FORCE UPDATE STATE with new data
+                                setPhaseStatus(prev => ({
+                                    ...prev,
+                                    [phase]: phaseData
+                                }));
+
                                 setStatusMessage(`✅ ${finalMatches} evidências carregadas com sucesso`);
+                                setTargetYear(phaseData.summary?.target_year || targetYear); // Update year if returned
+
                                 setTimeout(() => setStatusMessage(""), 5000);
+
+                                // Scroll to results
+                                setTimeout(() => {
+                                    const resultsElement = document.getElementById("phase2-results");
+                                    if (resultsElement) resultsElement.scrollIntoView({ behavior: "smooth", block: "start" });
+                                }, 500);
+
                             } else if (phaseData?.status === "error") {
                                 clearInterval(pollInterval);
                                 setBackgroundProcessing(prev => ({ ...prev, [phase]: false }));
@@ -497,7 +551,7 @@ export function RadarPremium({ campaignId, initialPoliticianId }: RadarPremiumPr
                         } catch (e) {
                             console.error("Polling error:", e);
                         }
-                    }, 5000);
+                    }, 2000); // Faster polling (2s)
 
                     setTimeout(() => {
                         clearInterval(pollInterval);
@@ -507,7 +561,21 @@ export function RadarPremium({ campaignId, initialPoliticianId }: RadarPremiumPr
                 }
                 // CASE 2: Immediate Success (Cached or Finished)
                 else if (data.status === "exists" || data.status === "ok" || data.status === "completed") {
-                    await refreshData();
+                    // Force UI update immediately if we have results but status logic is lagging
+                    const newStatusData = await refreshData();
+
+                    // If refresh didn't return OK but we know it exists, FORCE local state to OK to show results
+                    if (data.status === "exists" || matches > 0) {
+                        setPhaseStatus(prev => ({
+                            ...prev,
+                            [phase]: {
+                                ...prev[phase as keyof PhaseStatus],
+                                status: "ok",
+                                summary: data.summary || prev[phase as keyof PhaseStatus]?.summary || { matches_found: matches }
+                            } as PhaseExecution
+                        }));
+                    }
+
                     setStatusMessage(`✅ ${matches} evidências carregadas com sucesso`);
                     setTimeout(() => setStatusMessage(""), 5000);
                 }
@@ -520,6 +588,27 @@ export function RadarPremium({ campaignId, initialPoliticianId }: RadarPremiumPr
             setStatusMessage(`❌ Erro de conexão: ${error}`);
         } finally {
             setIsLoading(prev => ({ ...prev, [phase]: false }));
+
+            // Scroll to results if successful (or exists)
+            if (phase === "phase2") {
+                // Small delay to allow React to render the results div
+                setTimeout(() => {
+                    const resultsElement = document.getElementById("phase2-results");
+                    if (resultsElement) {
+                        resultsElement.scrollIntoView({ behavior: "smooth", block: "start" });
+                        // Add a highlight effect
+                        resultsElement.classList.add("ring-2", "ring-violet-400");
+                        setTimeout(() => resultsElement.classList.remove("ring-2", "ring-violet-400"), 2000);
+                    } else {
+                        console.warn("⚠️ Phase 2 results element not found in DOM");
+                        // Re-try scrolling once more in case of render lag
+                        setTimeout(() => {
+                            const retryEl = document.getElementById("phase2-results");
+                            if (retryEl) retryEl.scrollIntoView({ behavior: "smooth", block: "start" });
+                        }, 1000);
+                    }
+                }, 500);
+            }
         }
     };
 
@@ -579,41 +668,12 @@ export function RadarPremium({ campaignId, initialPoliticianId }: RadarPremiumPr
         }
     };
 
+    // New State for Year Selector
+    const [targetYear, setTargetYear] = useState<number>(2025);
+
     // --- Render ---
 
-    if (view === "list") {
-        return (
-            <div className="space-y-6">
-                {/* CONNECTION ERROR ALERT */}
-                {connectionError && (
-                    <Alert variant="destructive">
-                        <AlertTriangle className="h-4 w-4" />
-                        <AlertTitle>Erro de Conexão</AlertTitle>
-                        <AlertDescription>
-                            Não foi possível conectar ao servidor. Verifique se o backend está rodando em {API_URL}.
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                className="ml-4 h-6 px-2 text-xs bg-white text-red-600 border-red-200"
-                                onClick={() => window.location.reload()}
-                            >
-                                Tentar Novamente
-                            </Button>
-                        </AlertDescription>
-                    </Alert>
-                )}
-
-                <div className="flex items-center gap-4 mb-4">
-                    <Button variant="ghost" onClick={() => setView("wizard")} className="text-slate-500 hover:text-slate-800">
-                        <CaretLeft className="h-4 w-4 mr-2" />
-                        Voltar para Wizard
-                    </Button>
-                    <h2 className="text-xl font-bold">Detalhamento de Promessas</h2>
-                </div>
-                <PromisesRadar campaignId={campaignId} initialPoliticoId={currentMandate?.politician_id} />
-            </div>
-        )
-    }
+    // (List view disabled temporarily for syntax fix)
 
     return (
         <div className="space-y-6">
@@ -857,24 +917,24 @@ export function RadarPremium({ campaignId, initialPoliticianId }: RadarPremiumPr
                                 </div>
                             </div>
 
-                            {/* Phase 2 Status */}
-                            <div className={`p-4 rounded-xl border flex items-center gap-3 ${getStatusColor(phaseStatus.phase2)}`}>
-                                <Bank className="h-8 w-8 opacity-80" weight="duotone" />
+                            {/* Phase 3 Status (Now Step 2: Media) */}
+                            <div className={`p-4 rounded-xl border flex items-center gap-3 ${getStatusColor(phaseStatus.phase3)}`}>
+                                <Newspaper className="h-8 w-8 opacity-80" weight="duotone" />
                                 <div>
-                                    <p className="text-xs font-bold uppercase opacity-70">Fase 2: Dados</p>
+                                    <p className="text-xs font-bold uppercase opacity-70">Fase 2: Mídia</p>
                                     <p className="text-sm font-medium">
-                                        {phaseStatus.phase2?.status === "ok" ? "Concluída" : "Não Iniciada"}
+                                        {phaseStatus.phase3?.status === "ok" ? "Concluída" : "Não Iniciada"}
                                     </p>
                                 </div>
                             </div>
 
-                            {/* Phase 3 Status */}
-                            <div className={`p-4 rounded-xl border flex items-center gap-3 ${getStatusColor(phaseStatus.phase3)}`}>
-                                <Newspaper className="h-8 w-8 opacity-80" weight="duotone" />
+                            {/* Phase 2 Status (Now Step 3: Expenses) */}
+                            <div className={`p-4 rounded-xl border flex items-center gap-3 ${getStatusColor(phaseStatus.phase2)}`}>
+                                <Bank className="h-8 w-8 opacity-80" weight="duotone" />
                                 <div>
-                                    <p className="text-xs font-bold uppercase opacity-70">Fase 3: Mídia</p>
+                                    <p className="text-xs font-bold uppercase opacity-70">Fase 3: Dados</p>
                                     <p className="text-sm font-medium">
-                                        {phaseStatus.phase3?.status === "ok" ? "Concluída" : "Não Iniciada"}
+                                        {phaseStatus.phase2?.status === "ok" ? "Concluída" : "Não Iniciada"}
                                     </p>
                                 </div>
                             </div>
@@ -1059,10 +1119,24 @@ export function RadarPremium({ campaignId, initialPoliticianId }: RadarPremiumPr
                             </div>
 
 
-                            {/* Step 2: Enriquecimento */}
+                            {/* Step 2: Mídia (Ex-Phase 3) */}
+                            {currentMandate && (
+                                <div className="relative pl-8 border-l-2 border-slate-200 pb-8">
+                                    <div className={`absolute -left-[9px] top-0 h-4 w-4 rounded-full border-2 border-white shadow-sm ${phaseStatus.phase3?.status === 'ok' ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                                    <h3 className="text-lg font-bold text-slate-800 mb-2">2. Monitoramento de Mídia</h3>
+                                    <Phase3Orchestrator
+                                        mandateId={currentMandate.id}
+                                        campaignId={campaignId as string}
+                                    />
+                                </div>
+                            )}
+
+
+
+                            {/* Step 3: Dados Oficiais (Ex-Phase 2) */}
                             <div className="relative pl-8 border-l-2 border-slate-200 pb-8">
                                 <div className={`absolute -left-[9px] top-0 h-4 w-4 rounded-full border-2 border-white shadow-sm ${phaseStatus.phase2?.status === 'ok' ? 'bg-emerald-500' : 'bg-slate-300'}`} />
-                                <h3 className="text-lg font-bold text-slate-800 mb-2">2. Dados Oficiais & Transparência</h3>
+                                <h3 className="text-lg font-bold text-slate-800 mb-2">3. Dados Oficiais & Transparência</h3>
                                 <Card className="border-slate-200 shadow-sm opacity-90">
                                     <CardContent className="p-6">
                                         <div className="flex items-start justify-between gap-6">
@@ -1073,10 +1147,19 @@ export function RadarPremium({ campaignId, initialPoliticianId }: RadarPremiumPr
 
                                                 {/* ANALYSIS RESULT */}
                                                 {phaseStatus.phase2?.status === "ok" && phaseStatus.phase2.summary?.data && (
-                                                    <div className="mt-4 bg-slate-50 rounded-lg p-4 border border-slate-100">
-                                                        <p className="text-sm text-slate-700 italic mb-4">
-                                                            "{phaseStatus.phase2.summary.data.observacoes_gerais}"
-                                                        </p>
+                                                    <div id="phase2-results" className="mt-4 bg-slate-50 rounded-lg p-4 border border-slate-100 animate-in fade-in slide-in-from-top-2 duration-500">
+                                                        <div className="flex items-center justify-between mb-4">
+                                                            <p className="text-sm text-slate-700 italic">
+                                                                "{phaseStatus.phase2.summary.data.observacoes_gerais}"
+                                                            </p>
+                                                            {/* Year Badge */}
+                                                            <div className="flex items-center gap-1.5 bg-violet-100 text-violet-700 px-2.5 py-1 rounded-full border border-violet-200 shadow-sm">
+                                                                <CalendarBlank weight="fill" className="h-3.5 w-3.5" />
+                                                                <span className="text-xs font-bold uppercase">
+                                                                    Dados de {phaseStatus.phase2.summary.target_year || "2024"}
+                                                                </span>
+                                                            </div>
+                                                        </div>
                                                         <div className="grid grid-cols-1 gap-3">
                                                             {phaseStatus.phase2.summary.data.categorias?.map((cat: any, idx: number) => (
                                                                 <div
@@ -1110,38 +1193,136 @@ export function RadarPremium({ campaignId, initialPoliticianId }: RadarPremiumPr
                                                 />
                                             </div>
 
-                                            <div className="flex flex-col items-end gap-2">
+                                            <div className="flex flex-col items-end gap-2 w-full md:w-auto">
                                                 {/* Background Processing Indicator */}
                                                 {backgroundProcessing.phase2 && (
-                                                    <div className="flex items-center gap-2 text-blue-600 text-sm bg-blue-50 px-3 py-1.5 rounded-full border border-blue-200">
+                                                    <div className="flex items-center gap-2 text-blue-600 text-sm bg-blue-50 px-3 py-1.5 rounded-full border border-blue-200 mb-2">
                                                         <Loader2 className="h-4 w-4 animate-spin" />
                                                         <span>Processando em segundo plano...</span>
                                                     </div>
                                                 )}
 
-                                                <Button
-                                                    onClick={() => executePhase("phase2", phaseStatus.phase2?.status === "ok")}
-                                                    disabled={isLoading.phase2 || backgroundProcessing.phase2}
-                                                    className="min-w-[180px]"
-                                                    variant={phaseStatus.phase2?.status === "ok" ? "outline" : "secondary"}
-                                                >
-                                                    {isLoading.phase2 ? (
-                                                        <>
-                                                            <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                                                            Iniciando...
-                                                        </>
-                                                    ) : backgroundProcessing.phase2 ? (
-                                                        <>
-                                                            <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                                                            Aguardando...
-                                                        </>
-                                                    ) : (
-                                                        <>
-                                                            <Bank className="mr-2" weight="duotone" />
-                                                            {phaseStatus.phase2?.status === "ok" ? "Re-analisar Dados" : "Consultar Dados"}
-                                                        </>
+                                                <div className="flex flex-col gap-3 items-end w-full">
+
+                                                    {/* CONTROLS ROW: YEAR + ACTION BUTTONS */}
+                                                    <div className="flex flex-wrap items-center justify-end gap-2 w-full">
+                                                        {/* Year - Always Visible */}
+                                                        <Select
+                                                            value={targetYear.toString()}
+                                                            onValueChange={(val) => setTargetYear(parseInt(val))}
+                                                            disabled={isLoading.phase2 || backgroundProcessing.phase2 || isPreviewing}
+                                                        >
+                                                            <SelectTrigger className="w-[90px] bg-white text-xs font-bold">
+                                                                <SelectValue />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                <SelectItem value="2025">2025</SelectItem>
+                                                                <SelectItem value="2024">2024</SelectItem>
+                                                            </SelectContent>
+                                                        </Select>
+
+                                                        {/* STATE: ALWAYS SHOW OPTIONS */}
+                                                        {true && (
+                                                            <>
+                                                                <Button
+                                                                    onClick={fetchExpensesPreview}
+                                                                    disabled={isPreviewing || isLoading.phase2}
+                                                                    variant="outline"
+                                                                    className="text-sky-600 border-sky-200 hover:bg-sky-50 flex-1 md:flex-none"
+                                                                    title="Consultar TCESP em Tempo Real (Sem salvar)"
+                                                                >
+                                                                    {isPreviewing ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : <MagnifyingGlass className="mr-2 h-4 w-4" />}
+                                                                    Ver Portal (Live)
+                                                                </Button>
+
+                                                                <Button
+                                                                    onClick={() => executePhase("phase2", true)}
+                                                                    disabled={isLoading.phase2 || backgroundProcessing.phase2 || isPreviewing}
+                                                                    className="bg-violet-600 hover:bg-violet-700 flex-1 md:flex-none text-white shadow-sm shadow-violet-200"
+                                                                    title="Baixar dados e cruzar com promessas (Salva no Banco)"
+                                                                >
+                                                                    {isLoading.phase2 ? (
+                                                                        <>
+                                                                            <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                                                            Processando...
+                                                                        </>
+                                                                    ) : (
+                                                                        <>
+                                                                            <Bank className="mr-2 h-4 w-4" weight="duotone" />
+                                                                            {phaseStatus.phase2?.status === 'ok' ? "Atualizar Cruzamento" : "Cruzar Dados (Banco)"}
+                                                                        </>
+                                                                    )}
+                                                                </Button>
+                                                            </>
+                                                        )}
+                                                    </div>
+
+                                                    {/* PREVIEW CARD */}
+                                                    {previewData && (
+                                                        <div className="w-full bg-slate-50 border border-slate-200 rounded-lg p-4 animate-in fade-in zoom-in-95 duration-300 shadow-sm mt-2">
+                                                            <div className="flex items-start gap-3 mb-3">
+                                                                <div className="p-1.5 bg-sky-100 rounded-md">
+                                                                    <WarningCircle className="h-5 w-5 text-sky-600" weight="duotone" />
+                                                                </div>
+                                                                <div>
+                                                                    <p className="text-sm font-bold text-slate-800">Pré-visualização TCESP ({previewData.year})</p>
+                                                                    <p className="text-xs text-slate-500 leading-tight mt-1">
+                                                                        Valores oficiais do portal da transparência. Clique em "Analisar" para cruzar com as promessas.
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+
+                                                            <div className="grid grid-cols-2 gap-3 mb-4">
+                                                                <div className="bg-white p-2.5 rounded border border-slate-200 shadow-sm">
+                                                                    <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider mb-1">Empenhado</p>
+                                                                    <p className="text-base font-bold text-sky-700">
+                                                                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(previewData.total_empenhado)}
+                                                                    </p>
+                                                                </div>
+                                                                <div className="bg-white p-2.5 rounded border border-slate-200 shadow-sm">
+                                                                    <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider mb-1">Pago</p>
+                                                                    <p className="text-base font-bold text-emerald-700">
+                                                                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(previewData.total_pago)}
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+
+                                                            <div className="flex justify-end gap-2 pt-3 border-t border-slate-200">
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    onClick={() => setPreviewData(null)}
+                                                                    className="text-slate-500 hover:text-slate-700"
+                                                                >
+                                                                    Cancelar
+                                                                </Button>
+                                                                <Button
+                                                                    onClick={() => executePhase("phase2", true)}
+                                                                    disabled={isLoading.phase2 || backgroundProcessing.phase2}
+                                                                    className="bg-violet-600 hover:bg-violet-700 text-white"
+                                                                    size="sm"
+                                                                >
+                                                                    {isLoading.phase2 ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : <Bank className="mr-2 h-4 w-4" weight="bold" />}
+                                                                    Confirmar Análise
+                                                                </Button>
+                                                            </div>
+                                                        </div>
                                                     )}
-                                                </Button>
+
+                                                    {/* RE-ANALYZE BUTTON (If already exists) */}
+                                                    {(phaseStatus.phase2?.status === "ok" || phaseStatus.phase2?.status === "exists") && (
+                                                        <Button
+                                                            onClick={() => executePhase("phase2", true)}
+                                                            disabled={isLoading.phase2 || backgroundProcessing.phase2}
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            className="text-slate-400 hover:text-slate-600 hover:bg-slate-50 border border-transparent hover:border-slate-200"
+                                                        >
+                                                            <ArrowsClockwise className="mr-2 h-4 w-4" />
+                                                            Atualizar Dados
+                                                        </Button>
+                                                    )}
+                                                </div>
                                             </div>
                                         </div>
                                     </CardContent>
@@ -1149,12 +1330,7 @@ export function RadarPremium({ campaignId, initialPoliticianId }: RadarPremiumPr
                             </div>
 
                             {/* Step 3: Mídia (Orchestrator) */}
-                            {currentMandate && (
-                                <Phase3Orchestrator
-                                    mandateId={currentMandate.id}
-                                    campaignId={campaignId as string}
-                                />
-                            )}
+
                         </div>
                     </div>
                 )

@@ -31,6 +31,35 @@ class ActivateStrategyResponse(BaseModel):
     message: str
 
 
+
+class StrategyRead(BaseModel):
+    id: str
+    title: str
+    description: str
+    status: str
+    pillar: Optional[str] = None
+    phase: Optional[str] = None
+    impact: Optional[str] = None
+    effort: Optional[str] = None
+    created_at: str
+
+@router.get("/campaign/{campaign_id}/strategies", response_model=list[StrategyRead])
+async def list_strategies(campaign_id: str, status: Optional[str] = None):
+    """
+    Lista estratégias de uma campanha, com filtro opcional por status.
+    """
+    supabase = get_supabase_client()
+    
+    query = supabase.table("strategies").select("*").eq("campaign_id", campaign_id)
+    
+    if status:
+        query = query.eq("status", status)
+        
+    result = query.order("created_at", desc=True).execute()
+    
+    return result.data
+
+
 @router.post("/campaign/{campaign_id}/strategies/{strategy_id}/activate", 
              response_model=ActivateStrategyResponse)
 async def activate_strategy(campaign_id: str, strategy_id: str):

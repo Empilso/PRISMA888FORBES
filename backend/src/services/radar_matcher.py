@@ -55,20 +55,25 @@ class RadarMatcher:
         self, 
         politico_id: str, 
         municipio_slug: str = "votorantim",
-        campaign_id: str = None
+        campaign_id: str = None,
+        target_year: int = None
     ) -> Dict:
         """
         Main entry point: Match all promises for a politician against municipal expenses.
         
         Args:
-            politico_id: UUID of the politician (Weber Manga)
+            politico_id: UUID of the politician
             municipio_slug: Slug for filtering expenses
             campaign_id: Optional campaign_id filter
+            target_year: Year to filter expenses (defaults to current year)
             
         Returns:
             Summary with match counts and details
         """
-        print(f"🔄 Starting Matcher for politico_id={politico_id[:8]}...")
+        if target_year is None:
+            target_year = datetime.now().year
+
+        print(f"🔄 Starting Matcher for politico_id={politico_id[:8]} (Year: {target_year})...")
         
         # 1. Fetch all promises for this politician
         promises = self._fetch_promises(politico_id, campaign_id)
@@ -80,18 +85,25 @@ class RadarMatcher:
         # 2. Process each promise
         results = []
         matches_found = 0
-        total_evidence_value = 0.0
+        
+        # Track unique expenses to avoid double counting in global total
+        unique_expenses_map = {}  # id -> value
         
         for promise in promises:
-            match_result = self._match_promise(promise, municipio_slug)
+            match_result = self._match_promise(promise, municipio_slug, target_year)
             results.append(match_result)
             
             if match_result.matched_expenses:
                 matches_found += 1
-                total_evidence_value += match_result.total_value
+                # Add found expenses to unique map
+                for exp in match_result.matched_expenses:
+                    unique_expenses_map[exp['id']] = exp.get('vl_despesa', 0)
             
             # Save verification to DB
             self._save_verification(promise, match_result)
+        
+        # Calculate TRUE deduplicated total
+        total_evidence_value = sum(unique_expenses_map.values())
         
         # 3. Summary
         # Group by category for frontend display
@@ -103,11 +115,12 @@ class RadarMatcher:
             "matches_found": matches_found,
             "match_rate": f"{(matches_found / len(promises) * 100):.1f}%",
             "total_evidence_value": total_evidence_value,
+            "target_year": target_year,
             "status_breakdown": self._count_statuses(results),
             "sample_matches": [r.__dict__ for r in results if r.matched_expenses][:5],
             # Add data structure expected by Frontend
             "data": {
-                "observacoes_gerais": f"Análise concluída com {matches_found} evidências encontradas, totalizando R$ {total_evidence_value:,.2f} em investimentos correlacionados.",
+                "observacoes_gerais": f"Análise do ano {target_year} concluída com {matches_found} evidências encontradas, totalizando R$ {total_evidence_value:,.2f} em investimentos (valor auditado e deduplicado).",
                 "categorias": by_category
             }
         }
@@ -127,7 +140,7 @@ class RadarMatcher:
         result = query.execute()
         return result.data or []
     
-    def _match_promise(self, promise: Dict, municipio_slug: str) -> MatchResult:
+    def _match_promise(self, promise: Dict, municipio_slug: str, target_year: int) -> MatchResult:
         """
         Match a single promise against municipal expenses.
         Uses category keywords + promise text for ILIKE matching.
@@ -159,7 +172,7 @@ class RadarMatcher:
         seen_ids = set()
         
         for keyword in all_keywords[:5]:  # Limit to 5 keywords for performance
-            expenses = self._search_expenses(keyword, municipio_slug)
+            expenses = self._search_expenses(keyword, municipio_slug, target_year)
             for exp in expenses:
                 if exp["id"] not in seen_ids:
                     seen_ids.add(exp["id"])
@@ -186,14 +199,16 @@ class RadarMatcher:
             status=status
         )
     
-    def _search_expenses(self, keyword: str, municipio_slug: str) -> List[Dict]:
+    def _search_expenses(self, keyword: str, municipio_slug: str, target_year: int) -> List[Dict]:
         """Search expenses by keyword in various fields."""
         # Search in nm_fornecedor and orgao
         result = self.supabase.table("municipal_expenses") \
             .select("id, nm_fornecedor, orgao, vl_despesa, dt_emissao_despesa, ano, nr_empenho") \
             .eq("municipio_slug", municipio_slug) \
+            .eq("ano", target_year) \
             .or_(f"nm_fornecedor.ilike.%{keyword}%,orgao.ilike.%{keyword}%") \
-            .limit(20) \
+            .order("vl_despesa", desc=True) \
+            .limit(100) \
             .execute()
         
         return result.data or []

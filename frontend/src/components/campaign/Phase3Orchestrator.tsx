@@ -171,15 +171,15 @@ export function Phase3Orchestrator({ mandateId, campaignId, onComplete }: Phase3
                     if (Array.isArray(rawData)) {
                         resultsArray = rawData;
                     }
-                    // CASO 2: O Backend devolveu encapsulado (ex: { results: [...], status: 'ok' }) Variações: result.details ou result.results
-                    else if (rawData && (Array.isArray(rawData.results) || Array.isArray(rawData.details))) {
-                        resultsArray = rawData.results || rawData.details;
+                    // CASO 2: O Backend devolveu encapsulado (ex: { results: [...], status: 'ok' }) Variações: result.details, result.results ou result.items
+                    else if (rawData && (Array.isArray(rawData.results) || Array.isArray(rawData.details) || Array.isArray(rawData.items))) {
+                        resultsArray = rawData.results || rawData.details || rawData.items;
                     }
                     // CASO 3: O Backend devolveu string (JSON escapado)
                     else if (typeof rawData === 'string') {
                         try {
                             const parsed = JSON.parse(rawData);
-                            resultsArray = Array.isArray(parsed) ? parsed : (parsed.results || parsed.details || []);
+                            resultsArray = Array.isArray(parsed) ? parsed : (parsed.results || parsed.details || parsed.items || []);
                         } catch (e) {
                             console.error('Erro ao fazer parse manual:', e);
                         }

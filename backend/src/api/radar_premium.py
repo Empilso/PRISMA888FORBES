@@ -585,24 +585,26 @@ def _process_phase2_background(
     mandate_id: str,
     politician_id: str,
     municipio_slug: str,
-    exec_id: str
+    exec_id: str,
+    target_year: int = None
 ):
     """
-    Background task for Phase 2 data matching.
-    Uses RadarMatcher for SQL-based matching (fast, no LLM).
+    Background worker for Phase 2.
     """
-    logger.info(f"🚀 INICIANDO MATCHING FASE 2 BACKGROUND para mandate {mandate_id[:8]}...")
-    
+    logger.info(f"🏗️ EXECUTANDO PHASE 2 BACKGROUND (ID: {exec_id}) para {municipio_slug}...")
     supabase = get_supabase_client()
     
     try:
         from src.services.radar_matcher import RadarMatcher
         
         matcher = RadarMatcher()
+        
+        # Determine year: if target_year provided, use it. Else default to now().year inside matcher.
         result = matcher.run_matching(
             politico_id=politician_id,
-            municipio_slug=municipio_slug,
-            campaign_id=campaign_id
+            municipio_slug=municipio_slug, 
+            campaign_id=str(campaign_id),
+            target_year=target_year
         )
         
         logger.info(f"📊 Matching concluído: {result.get('matches_found', 0)} matches")
@@ -641,6 +643,34 @@ def _process_phase2_background(
         }).eq("id", exec_id).execute()
 
 
+# ============ PREVIEW ENDPOINT (LIVE DATA) ============
+
+@router.get("/api/campaigns/{campaign_id}/radar/{mandate_id}/preview-expenses")
+async def preview_expenses(
+    campaign_id: UUID,
+    mandate_id: str,
+    year: int = 2025
+):
+    """
+    Returns LIVE totals from TCESP API without saving to DB.
+    Used for user validation before ingestion.
+    """
+    try:
+        from src.services.tcesp_live import fetch_live_totals
+        
+        # We assume Votorantim for now, but could fetch city slug from mandate
+        data = fetch_live_totals(year, "votorantim")
+        
+        return {
+            "status": "success",
+            "data": data,
+            "message": "Dados obtidos diretamente do Portal TCESP (Tempo Real)."
+        }
+    except Exception as e:
+        logger.error(f"Error in preview: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ============ PHASE 2 - DADOS OFICIAIS ============
 
 @router.post("/api/campaigns/{campaign_id}/radar/{mandate_id}/phase2")
@@ -648,7 +678,8 @@ async def execute_phase2(
     campaign_id: UUID, 
     mandate_id: str,
     background_tasks: BackgroundTasks,
-    force: bool = Query(False, description="Force re-matching even if verifications exist")
+    force: bool = Query(False, description="Force re-matching even if verifications exist"),
+    target_year: int = Query(None, description="Year to analyze (default: current year)")
 ):
     """
     Phase 2: Data Sources (Official Data).
@@ -696,6 +727,7 @@ async def execute_phase2(
                 "message": f"Cruzamento já realizado. {matches} promessas com evidências encontradas.",
                 "last_run": last_run.get("finished_at"),
                 "matches_found": matches,
+                "summary": summary,
                 "action": "Use force=true para re-processar ou veja os resultados abaixo."
             }
     
@@ -731,7 +763,8 @@ async def execute_phase2(
         mandate_id=mandate_id,
         politician_id=politician_id,
         municipio_slug=municipio_slug,
-        exec_id=exec_id
+        exec_id=exec_id,
+        target_year=target_year
     )
     
     # 7. Return immediately

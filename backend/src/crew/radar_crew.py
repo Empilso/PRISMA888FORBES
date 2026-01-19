@@ -5,6 +5,9 @@ from crewai import Agent, Task, Crew, Process
 from langchain_openai import ChatOpenAI
 from supabase import create_client
 from dotenv import load_dotenv
+from pydantic import BaseModel, Field
+from tavily import TavilyClient
+from crewai.tools import BaseTool
 
 load_dotenv()
 
@@ -12,8 +15,33 @@ def get_supabase_client():
     url = os.getenv("SUPABASE_URL")
     key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
     if not url or not key:
-        raise ValueError("Supabase credentials not found")
+        raise ValueError("Supabase credentials not found in environment")
     return create_client(url, key)
+
+# --- PYDANTIC MODELS FOR STRUCTURED OUTPUT ---
+class MediaItem(BaseModel):
+    date: str = Field(description="Date of the news/article in YYYY-MM-DD format (or 'Recent' if unknown)")
+    source: str = Field(description="Name of the news source, newspaper, or website")
+    title: str = Field(description="Headline or title of the article")
+    sentiment: str = Field(description="Sentiment analysis of the content: 'positive', 'neutral', or 'negative'")
+    url: str = Field(description="Direct URL to the source article")
+    summary: str = Field(description="Brief summary of the content and how it relates to campaign promises")
+
+class MediaScanResult(BaseModel):
+    items: List[MediaItem] = Field(description="List of media items found during the scan")
+    overview: str = Field(description="General overview or conclusion of the media landscape")
+
+# --- CUSTOM TAVILY TOOL (CLASSIC APPROACH) ---
+class TavilySearchTool(BaseTool):
+    name: str = "Busca na Web (Tavily)"
+    description: str = "Realiza buscas na internet para encontrar notícias e promessas políticas recentes."
+    api_key: str = Field(..., description="API Key do Tavily")
+
+    def _run(self, query: str) -> str:
+        from tavily import TavilyClient
+        client = TavilyClient(api_key=self.api_key)
+        results = client.search(query, search_depth="advanced", max_results=5)
+        return str(results)
 
 class RadarCrew:
     """
@@ -27,7 +55,7 @@ class RadarCrew:
         self.supabase = get_supabase_client()
         self.llm = self._create_llm("deepseek/deepseek-chat") # Default, can be overridden by persona config
     
-        # GLOBAL DEEPSEEK ALIGNMENT (Alignment with GenesisCrew)
+        # GLOBAL DEEPSEEK ALIGNMENT
         self.log(f"Inicializando RadarCrew LLM: {self.llm.model_name}", "System")
 
     def _create_llm(self, model_name: str, temperature: float = 0.3):
@@ -47,9 +75,9 @@ class RadarCrew:
         if "deepseek" in model_name:
             api_key = os.getenv("DEEPSEEK_API_KEY")
             base_url = "https://api.deepseek.com/v1"
-            if not model_name.startswith("deepseek/"): # Fix prefix if needed
+            if not model_name.startswith("deepseek/"):
                  model_name = f"deepseek/{model_name}" if "/" not in model_name else model_name
-            # clean for ChatOpenAI param
+            
             clean_model = model_name.replace("deepseek/", "")
             
             # Audit
@@ -73,12 +101,16 @@ class RadarCrew:
     def _log_step(self, step_output: Any):
         """Callback para logar pensamentos dos agentes"""
         try:
+            val = ""
             if hasattr(step_output, 'thought') and step_output.thought:
-                self.log(f"💭 {step_output.thought[:300]}...", "AI Brain", "info")
+                val = f"💭 {step_output.thought[:300]}..."
+                self.log(val, "AI Brain", "info")
             if hasattr(step_output, 'tool') and step_output.tool:
-                 self.log(f"🛠️ Tool: {step_output.tool}", "Tool", "warning")
+                val = f"🛠️ Tool: {step_output.tool}"
+                self.log(val, "Tool", "warning")
             if hasattr(step_output, 'result') and step_output.result:
-                 self.log(f"✅ Result: {str(step_output.result)[:200]}...", "Tool", "success")
+                val = f"✅ Result: {str(step_output.result)[:200]}..."
+                self.log(val, "Tool", "success")
         except Exception as e:
             print(f"Log error: {e}")
 
@@ -102,16 +134,13 @@ class RadarCrew:
         """Busca configuração do agente na tabela 'agents'"""
         resp = self.supabase.table("agents").select("*").eq("name", agent_name).single().execute()
         if not resp.data:
-            # Fallback to personas if not found (legacy support)
             return self._get_persona_config_legacy(agent_name)
         return resp.data
 
     def _get_persona_config_legacy(self, persona_name: str):
-        """Fallback: Busca na tabela 'personas'"""
         try:
             resp = self.supabase.table("personas").select("*").eq("name", persona_name).single().execute()
             if resp.data:
-                # Normalize to look like agent data
                 p = resp.data
                 config = p.get("config", {})
                 return {
@@ -123,15 +152,11 @@ class RadarCrew:
             pass
         raise ValueError(f"Agente '{persona_name}' não encontrado.")
 
+    # --- FASE 1: EXTRAÇÃO ---
     def run_extraction(self, document_text: str) -> Dict:
-        """
-        Fase 1: Executa o agente 'Radar – Extrator de Promessas'
-        """
         agent_name = "radar-extrator-promessas"
         agent_data = self._get_agent_config(agent_name)
         
-        # Setup Agent
-        # Uses default temperature 0.3 if not specified
         agent = Agent(
             role=agent_data.get("role", "Extractor"),
             goal="Extrair promessas de documentos",
@@ -144,42 +169,15 @@ class RadarCrew:
 
         sys_msg = agent_data.get("system_prompt", "")
         
-        # Setup Task
         task = Task(
             description=f"""
             {sys_msg}
-            
             ANALYZE THE FOLLOWING TEXT AND EXTRACT PROMISES FROM THE GOVERNMENT PLAN.
+            IF THE TEXT IS EMPTY, RETURN [].
+            OUTPUT FORMAT MUST BE A VALID JSON ARRAY.
             
-            IF THE TEXT IS EMPTY, TOO SHORT, OR DOES NOT CONTAIN A GOVERNMENT PLAN, RETURN AN EMPTY ARRAY [].
-
-            OUTPUT FORMAT MUST BE A VALID JSON ARRAY OF OBJECTS.
-            EACH OBJECT MUST HAVE EXACTLY THESE KEYS:
-            - "resumo_promessa": A clear, concise summary of the promise (in Portuguese).
-            - "categoria": One of [Saúde, Educação, Segurança, Infraestrutura, Meio Ambiente, Economia, Transporte, Social, Cultura, Esporte, Habitação].
-            - "verbos_chave": List of key action verbs (e.g., ["construir", "criar"]).
-            - "entidades_citadas": List of entities mentioned (e.g., ["SUS", "Prefeitura"]).
-            - "local": The specific location/neighborhood mentioned, or null if none.
-            - "origem": Must be "PLANO_GOVERNO".
-            - "trecho_original": The exact text snippet from the document where this promise appears.
-
-            Example:
-            [
-              {{
-                "resumo_promessa": "Construir uma nova UPA na Zona Norte",
-                "categoria": "Saúde",
-                "verbos_chave": ["construir"],
-                "entidades_citadas": ["UPA"],
-                "local": "Zona Norte",
-                "origem": "PLANO_GOVERNO",
-                "trecho_original": "...vamos construir uma nova UPA para atender a Zona Norte..."
-              }}
-            ]
-
             DOCUMENT TEXT:
             {document_text[:50000]} 
-            
-            (Text truncated to fit context if necessary)
             """,
             agent=agent,
             expected_output="JSON array with extracted promises keys: resumo_promessa, categoria, verbos_chave, entidades_citadas, local, origem, trecho_original"
@@ -195,13 +193,10 @@ class RadarCrew:
         self.log(f"Iniciando extração com {agent_name}", "System")
         result = crew.kickoff()
         
-        # Parse output
+        # Simple manual parse for Phase 1 (staying robust but simple)
         raw = str(result)
-        # Cleanup markdown code blocks if present
-        if "```json" in raw:
-            raw = raw.split("```json")[1].split("```")[0]
-        elif "```" in raw:
-             raw = raw.split("```")[1].split("```")[0]
+        if "```json" in raw: raw = raw.split("```json")[1].split("```")[0]
+        elif "```" in raw: raw = raw.split("```")[1].split("```")[0]
              
         try:
             return json.loads(raw.strip())
@@ -209,14 +204,11 @@ class RadarCrew:
             self.log("Erro ao parsear JSON da IA", "System", "error")
             return {"raw_output": raw, "error": "json_parse_error"}
 
+    # --- FASE 2: ANÁLISE FISCAL ---
     def run_fiscal_analysis(self, promises_summary: List[Dict], expenses_summary: Dict) -> Dict:
-        """
-        Fase 2: Executa o agente 'Radar – Fiscal de Verbas'
-        """
         agent_name = "radar-fiscal-verbas"
         agent_data = self._get_agent_config(agent_name)
         
-        # Setup Agent
         agent = Agent(
             role=agent_data.get("role", "Auditor"),
             goal="Cruzar promessas com execução orçamentária",
@@ -228,23 +220,11 @@ class RadarCrew:
         )
 
         sys_msg = agent_data.get("system_prompt", "")
-        
-        # Prepare Input Data
-        input_data = {
-            "promessas": promises_summary,
-            "despesas_agrupadas": expenses_summary
-        }
+        input_data = {"promessas": promises_summary, "despesas_agrupadas": expenses_summary}
         input_json = json.dumps(input_data, ensure_ascii=False, indent=2)
 
-        # Setup Task
         task = Task(
-            description=f"""
-            {sys_msg}
-            
-            INPUT DATA (JSON):
-            
-            {input_json}
-            """,
+            description=f"{sys_msg}\nINPUT DATA (JSON):\n{input_json}",
             agent=agent,
             expected_output="JSON with fiscal analysis and semaphore evaluation"
         )
@@ -259,12 +239,9 @@ class RadarCrew:
         self.log(f"Iniciando análise fiscal com {agent_name}", "System")
         result = crew.kickoff()
         
-        # Parse output
         raw = str(result)
-        if "```json" in raw:
-            raw = raw.split("```json")[1].split("```")[0]
-        elif "```" in raw:
-             raw = raw.split("```")[1].split("```")[0]
+        if "```json" in raw: raw = raw.split("```json")[1].split("```")[0]
+        elif "```" in raw: raw = raw.split("```")[1].split("```")[0]
              
         try:
             return json.loads(raw.strip())
@@ -272,95 +249,62 @@ class RadarCrew:
             self.log("Erro ao parsear JSON da IA (Fiscal)", "System", "error")
             return {"raw_output": raw, "error": "json_parse_error"}
 
+    # --- FASE 3: VARREDURA (REFATURADA COM TAVILY E PYDANTIC) ---
     def run_google_scan(self, politician_name: str, city_name: str, agent_name: str = "radar-google-scanner", target_sites: List[str] = [], search_mode: str = "hybrid", max_results: int = 10) -> Dict:
         """
-        Fase 3: Executa o agente 'Radar - Investigador Google' (identificado por agent_name)
+        Fase 3: Executa o agente 'Radar - Investigador Google' usando Tavily Search Tool.
         """
-        # agent_name passed as argument
         agent_data = self._get_agent_config(agent_name)
         
-        # Setup Agent
+        # 1. Instantiate Custom Tool (Class Based)
+        tavily_tool = TavilySearchTool(api_key=os.getenv("TAVILY_API_KEY"))
+        
+        # 2. Setup Agent
         agent = Agent(
             role=agent_data.get("role", "Investigador"),
-            goal=agent_data.get("goal", "Identificar promessas em fontes abertas"),
-            backstory=agent_data.get("description", "Especialista em fact-checking."),
-            llm=self._create_llm(agent_data.get("llm_model"), 0.4), # Slightly higher temp for creativity/search
-            max_iter=10,
+            goal=agent_data.get("goal", "Identificar promessas e notícias em tempo real"),
+            backstory=agent_data.get("description", "Especialista em OSINT e checagem de fatos."),
+            llm=self._create_llm(agent_data.get("llm_model"), 0.5), # Higher temp for search synthesis
+            tools=[tavily_tool],
+            max_iter=15, # Allow more steps for search
             verbose=True,
             allow_delegation=False
         )
 
         sys_msg = agent_data.get("system_prompt", "")
         
-        # Build Search Directives (Hybrid Search Logic)
-        search_directives = "1. Simule uma busca detalhada em jornais locais e sites de notícias."
-        
+        # 3. Build Directives
+        search_context = f"Alvo: {politician_name} ({city_name})"
         if target_sites:
-             sites_str = ", ".join(target_sites)
-             
-             if search_mode == "focused":
-                 search_directives = f"""
-                ⚠️ MODO FOCADO ATIVO ({len(target_sites)} sites): {sites_str}
-                
-                ESTRATÉGIA DE BUSCA FOCADA (OBRIGATÓRIO):
-                1. RESTRIÇÃO TOTAL: Você DEVE buscar APENAS nos domínios listados acima.
-                2. Use o operador 'site:' para cada domínio (ex: 'site:{target_sites[0]} "{politician_name}" promessa').
-                3. NÃO realize buscas abertas fora dessa lista.
-                """
-             elif search_mode == "open":
-                 search_directives = f"""
-                ⚠️ MODO ABERTO (IGNORANDO WHITELIST)
-                
-                ESTRATÉGIA DE BUSCA AMPLA:
-                1. Realize buscas abertas em todo a web por notícias e promessas.
-                2. Ignore a lista de sites preferenciais e busque diversidade.
-                """
-             else: # Hybrid (Default)
-                 search_directives = f"""
-                ⚠️ MODO HÍBRIDO ({len(target_sites)} sites): {sites_str}
-                
-                ESTRATÉGIA DE BUSCA HÍBRIDA (OBRIGATÓRIO):
-                1. BUSCA FOCADA: Para CADA site da lista acima, simule queries específicas usando o operador 'site:' (ex: 'site:{target_sites[0]} "{politician_name}" promessa').
-                2. BUSCA ABERTA: Em seguida, realize a busca ampla para capturar outras fontes não listadas.
-                3. CONSOLIDAÇÃO: Junte os resultados, removendo duplicatas, mas DÊ PRIORIDADE TOTAL aos itens encontrados nos sites alvo.
-                """
-        elif search_mode == "focused":
-            # Focused but no sites provided? Fallback to hybrid/open with warning
-            search_directives = "⚠️ AVISO: Modo Focado selecionado mas nenhum site fornecido. Revertendo para busca aberta."
-        
-        # Add Max Results constraint
-        search_directives += f"\n            4. LIMITE DE RESULTADOS: Tente encontrar até {max_results} itens relevantes (mas priorize qualidade)."
-        
-        # Setup Task
+            sites_str = ", ".join(target_sites)
+            if search_mode == "focused":
+                search_context += f"\nMODO: FOCADO. Busque APENAS em: {sites_str}"
+            else:
+                search_context += f"\nMODO: HÍBRIDO. Priorize: {sites_str}, mas busque outras fontes relevantes."
+        else:
+             search_context += f"\nMODO: ABERTO. Busque em toda a internet."
+
+        # 4. Setup Task with OUTPUT PYDANTIC
         task = Task(
             description=f"""
             {sys_msg}
             
-            ALVO DA INVESTIGAÇÃO:
-            Político: {politician_name}
-            Cidade: {city_name}
+            CONTEXTO DA INVESTIGAÇÃO:
+            {search_context}
             
-            DIRETRIZES DE EXECUÇÃO:
-            {search_directives}
-            2. Identifique pelo menos 3 a 5 promessas ou declarações relevantes.
-            3. Priorize promessas recentes (últimos 2 anos).
+            SEUS OBJETIVOS:
+            1. Use a tool 'Internet Search' para encontrar notícias e planos de governo recentes sobre {politician_name}.
+            2. Procure por promessas de campanha, projetos de lei ou polêmicas recentes.
+            3. Analise o sentimento de cada notícia encontrada.
+            4. Compile os {max_results} resultados mais relevantes.
             
-            IMPORTANT: Return ONLY a valid JSON ARRAY. Do not use markdown code blocks like ```json.
-            
-            OUTPUT ESPERADO (JSON Array):
-            [
-                {{
-                    "date": "YYYY-MM-DD",
-                    "source": "Nome do Jornal/Site",
-                    "title": "Título da Notícia",
-                    "sentiment": "positive|neutral|negative",
-                    "url": "https://...",
-                    "summary": "Resumo da promessa identificada ou menção relevante"
-                }}
-            ]
+            IMPORTANTE:
+            - Garanta que as URLs sejam válidas.
+            - Resuma o conteúdo focado em PROPOSTAS ou AÇÕES POLÍTICAS.
             """,
             agent=agent,
-            expected_output="JSON Array with media analysis results"
+            output_pydantic=MediaScanResult, # FORCE STRUCTURED OUTPUT
+            expected_output="A structured list of media items found during the scan."
         )
 
         crew = Crew(
@@ -370,56 +314,42 @@ class RadarCrew:
             step_callback=self._log_step
         )
         
-        self.log(f"Iniciando Varredura Google com {agent_name} para {politician_name}", "System")
-        result = crew.kickoff()
+        self.log(f"Iniciando Varredura Real (Tavily) com Pydantic para {politician_name}", "System")
         
-        # Resilient Parser (Regex + Cleanup)
-        raw = str(result)
-        
-        # 1. Regex Extraction (Find first '[' and last ']')
-        # This handles cases where LLM wraps in text or markdown
         try:
-            match = re.search(r'\[.*\]', raw, re.DOTALL)
-            if match:
-                clean_json_str = match.group(0)
-            else:
-                # Fallback: try to clean markdown manually
-                clean_json_str = raw.replace("```json", "").replace("```", "").strip()
+            result = crew.kickoff() # This returns a MediaScanResult object directly
             
-            parsed_data = json.loads(clean_json_str)
+            # Access pydantic fields directly from result if it's the object, 
+            # Or accessing the pydantic attribute depending on CrewAI version output.
+            # In recent CrewAI, result.pydantic or direct access if casted.
             
-            # Ensure it is a list
-            if isinstance(parsed_data, dict) and "details" in parsed_data:
-                parsed_data = parsed_data["details"]
-            elif isinstance(parsed_data, dict):
-                 parsed_data = [parsed_data] # Wrap single object
-            elif not isinstance(parsed_data, list):
-                 parsed_data = []
+            # Safe access logic handling potential wrapper types
+            items = []
+            if hasattr(result, 'items'):
+                items = result.items
+            elif hasattr(result, 'pydantic') and result.pydantic:
+                items = result.pydantic.items
+            elif isinstance(result, dict) and 'items' in result:
+                items = result['items']
+            # Fallback if result is just correct structure
+            elif hasattr(result, 'dict'):
+                 items = result.dict().get('items', [])
+            
+            # Convert to dict list for JSON serialization
+            serialized_items = [item.dict() if hasattr(item, 'dict') else item for item in items]
 
             return {
                 "status": "ok",
-                "message": "Varredura concluída",
-                "media_sources": list(set([item.get("source", "Unknown") for item in parsed_data])),
-                "items_found": len(parsed_data),
-                "details": parsed_data
+                "message": "Varredura Tavily concluída",
+                "media_sources": list(set([item.get('source', 'Unknown') for item in serialized_items])),
+                "items_found": len(serialized_items),
+                "details": serialized_items
             }
 
         except Exception as e:
-            self.log(f"Erro ao parsear JSON da IA (Google Scan): {e}", "System", "error")
-            # Fallback: Return raw text as a single item so user sees something
-            fallback_item = {
-                "date": "Hoje",
-                "source": "Erro de Leitura",
-                "title": "Resultado não estruturado (Clique para ver logs)",
-                "sentiment": "neutral",
-                "url": "#",
-                "summary": f"O agente retornou dados mas não foi possível formatar automaticamente. Texto bruto: {raw[:200]}..."
-            }
+            self.log(f"Erro crítico na execução do Crew (Tavily/Pydantic): {e}", "System", "error")
             return {
-                "status": "warning",
-                "message": "Erro de formatação",
-                "media_sources": [],
-                "items_found": 1,
-                "details": [fallback_item],
-                "raw_output": raw
+                "status": "error",
+                "message": f"Falha na varredura: {str(e)}",
+                "details": []
             }

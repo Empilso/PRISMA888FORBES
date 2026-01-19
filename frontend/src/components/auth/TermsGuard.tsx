@@ -31,7 +31,10 @@ export function TermsGuard({ children }: { children: React.ReactNode }) {
     // Loading state
     if (checking) {
         return (
-            <div className="flex h-screen items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100">
+            <div
+                className="flex h-screen items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100"
+                suppressHydrationWarning
+            >
                 <div className="flex flex-col items-center gap-3">
                     <Loader2 className="h-8 w-8 animate-spin text-primary" />
                     <p className="text-sm text-muted-foreground">Verificando acesso...</p>
