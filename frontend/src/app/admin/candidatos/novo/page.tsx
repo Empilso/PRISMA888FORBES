@@ -304,12 +304,15 @@ function CandidateForm() {
                                 />
                             </div>
                             <div className="space-y-1.5">
-                                <Label className="text-xs text-gray-600">Nome da Urna *</Label>
+                                <Label className="text-xs text-gray-600">Nome Oficial na Urna (Igual TSE) *</Label>
                                 <Input
-                                    placeholder="Ex: João Silva"
+                                    placeholder="Ex: JOÃO DA SILVA JUNIOR"
                                     className="h-10 border-gray-300"
                                     {...register("nomeUrna", { required: true })}
                                 />
+                                <p className="text-[10px] text-gray-400">
+                                    Importante: Deve ser IDÊNTICO ao registro do TSE para que o mapa de calor funcione.
+                                </p>
                             </div>
                         </div>
                         <div className="grid grid-cols-3 gap-4">

@@ -2,7 +2,6 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import NextImage from "next/image";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -81,26 +80,17 @@ export function DashboardSidebar({ campaignId }: { campaignId?: string }) {
                 <div className={cn("flex items-center h-24 mb-2 transition-all", isCollapsed ? "justify-center" : "px-8")}>
                     {!isCollapsed ? (
                         <div className="flex items-center gap-3">
-                            <div className="relative h-12 w-auto">
-                                <NextImage
-                                    src="/images/logo-prisma.png"
-                                    alt="Prisma 888"
-                                    width={180}
-                                    height={48}
-                                    className="h-12 w-auto object-contain"
-                                    priority
-                                />
+                            <div className="h-10 w-10 rounded-xl bg-gradient-to-tr from-slate-700 to-slate-900 shadow-lg shadow-slate-200 flex items-center justify-center transform hover:scale-105 transition-transform">
+                                <span className="text-white font-black text-lg">P8</span>
+                            </div>
+                            <div className="flex flex-col">
+                                <h2 className="font-bold text-xl text-slate-900 leading-tight">Prisma 888</h2>
+                                <p className="text-[10px] font-semibold text-slate-400 tracking-wider uppercase">Candidate Suite</p>
                             </div>
                         </div>
                     ) : (
-                        <div className="relative h-10 w-10 flex items-center justify-center">
-                            <NextImage
-                                src="/images/logo-prisma.png"
-                                alt="P8"
-                                width={40}
-                                height={40}
-                                className="h-10 w-10 object-contain"
-                            />
+                        <div className="h-10 w-10 rounded-xl bg-gradient-to-tr from-slate-700 to-slate-900 shadow-md flex items-center justify-center">
+                            <span className="text-white font-black text-lg">P8</span>
                         </div>
                     )}
                 </div>
