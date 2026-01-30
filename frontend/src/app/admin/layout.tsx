@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation"; // Import usePathname para active state
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { PrismaLogo } from "@/components/ui/prisma-logo";
 import {
     UserPlus,
     ListDashes,
@@ -44,16 +45,6 @@ export default function AdminLayout({
                     name: "Lista de Candidatos",
                     href: "/admin/candidatos",
                     icon: ListDashes
-                },
-                {
-                    name: "Políticos (Base)",
-                    href: "/admin/politicos",
-                    icon: User
-                },
-                {
-                    name: "Cidades",
-                    href: "/admin/cidades",
-                    icon: Buildings
                 }
             ]
         },
@@ -64,6 +55,16 @@ export default function AdminLayout({
                     name: "Painel de Monitoramento",
                     href: "/admin/radar",
                     icon: Crosshair
+                },
+                {
+                    name: "Políticos (Base)",
+                    href: "/admin/politicos",
+                    icon: User
+                },
+                {
+                    name: "Cidades",
+                    href: "/admin/cidades",
+                    icon: Buildings
                 }
             ]
         },
@@ -93,12 +94,7 @@ export default function AdminLayout({
         <div className="flex h-screen bg-slate-50 overflow-hidden">
             {/* Mobile Header */}
             <div className="md:hidden fixed top-0 left-0 right-0 h-16 bg-white border-b border-slate-100 flex items-center justify-between px-4 z-50 shadow-sm">
-                <div className="flex items-center gap-2">
-                    <div className="h-8 w-8 rounded-lg bg-gradient-to-tr from-slate-700 to-slate-900 flex items-center justify-center">
-                        <span className="text-white font-bold text-sm">P8</span>
-                    </div>
-                    <span className="font-bold text-slate-800">Prisma Admin</span>
-                </div>
+                <PrismaLogo href="/admin" size="sm" showSubtitle subtitle="Admin Panel" />
                 <Button variant="ghost" size="icon" onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}>
                     {isMobileMenuOpen ? <X className="h-6 w-6 text-slate-600" weight="duotone" /> : <List className="h-6 w-6 text-slate-600" weight="duotone" />}
                 </Button>
@@ -123,19 +119,9 @@ export default function AdminLayout({
                 {/* Header / Logo */}
                 <div className={cn("flex items-center h-24 mb-2 transition-all", isCollapsed ? "justify-center" : "px-8")}>
                     {!isCollapsed ? (
-                        <div className="flex items-center gap-3">
-                            <div className="h-10 w-10 rounded-xl bg-gradient-to-tr from-slate-700 to-slate-900 shadow-lg shadow-slate-200 flex items-center justify-center transform hover:scale-105 transition-transform">
-                                <span className="text-white font-black text-lg">P8</span>
-                            </div>
-                            <div className="flex flex-col">
-                                <h2 className="font-bold text-xl text-slate-900 leading-tight">Prisma Admin</h2>
-                                <p className="text-[10px] font-semibold text-slate-400 tracking-wider uppercase">System Control</p>
-                            </div>
-                        </div>
+                        <PrismaLogo href="/admin" size="md" showSubtitle subtitle="Admin Panel" />
                     ) : (
-                        <div className="h-10 w-10 rounded-xl bg-gradient-to-tr from-slate-700 to-slate-900 shadow-md flex items-center justify-center">
-                            <span className="text-white font-black text-lg">P8</span>
-                        </div>
+                        <PrismaLogo href="/admin" size="sm" showSubtitle={false} />
                     )}
                 </div>
 

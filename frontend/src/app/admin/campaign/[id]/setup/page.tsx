@@ -325,37 +325,43 @@ export default function CampaignSetupPage() {
 
     const fetchStrategies = async () => {
         setLoading(true);
-        console.log('🔍 [DEBUG] Fetching strategies for campaign:', campaignId);
-        console.log('🔍 [DEBUG] Campaign ID type:', typeof campaignId, 'Length:', campaignId?.length);
+        console.log('🔍 [DEBUG] ========== FETCH STRATEGIES ==========');
+        console.log('🔍 [DEBUG] Campaign ID:', campaignId);
+        console.log('🔍 [DEBUG] Selected Run ID:', selectedRunId);
 
-        const { data, error, count } = await supabase
-            .from("strategies")
-            .select("*", { count: 'exact' })
-            .eq("campaign_id", campaignId)
-            .order("created_at", { ascending: false });
+        try {
+            const { data, error, count } = await supabase
+                .from("strategies")
+                .select("*", { count: 'exact' })
+                .eq("campaign_id", campaignId)
+                .order("created_at", { ascending: false });
 
-        console.log('📡 [RESPONSE] Raw Supabase response:', { data, error, count });
-
-        if (error) {
-            console.error("❌ [ERROR] Erro ao buscar estratégias:", error);
-            console.error("❌ [ERROR] Error details:", JSON.stringify(error, null, 2));
-            toast({
-                title: "Erro",
-                description: `Não foi possível carregar as estratégias: ${error.message}`,
-                variant: "destructive",
+            console.log('📡 [RESPONSE] Supabase response:', {
+                dataLength: data?.length,
+                error: error?.message,
+                count
             });
-        } else {
-            console.log('✅ [SUCCESS] Estratégias carregadas:', data?.length || 0, 'total (count:', count, ')');
-            console.log('📊 [DATA] Primeiros 3 registros:', data?.slice(0, 3));
 
-            if (data && data.length > 0) {
-                console.log('📊 [DATA] Sample strategy:', data[0]);
-                console.log('📊 [DATA] Status values:', data.map(s => s.status));
+            if (error) {
+                console.error("❌ [ERROR] Erro ao buscar estratégias:", error);
+                toast({
+                    title: "Erro",
+                    description: `Não foi possível carregar as estratégias: ${error.message}`,
+                    variant: "destructive",
+                });
+            } else {
+                console.log('✅ [SUCCESS] Estratégias carregadas:', data?.length || 0);
+                if (data && data.length > 0) {
+                    console.log('📊 [DATA] Primeira estratégia:', data[0].title);
+                    console.log('📊 [DATA] Run IDs das estratégias:', [...new Set(data.map(s => s.run_id))]);
+                }
+                setStrategies(data || []);
             }
-
-            setStrategies(data || []);
+        } catch (err) {
+            console.error("❌ [EXCEPTION] Erro inesperado:", err);
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     };
 
     useEffect(() => {
@@ -560,24 +566,47 @@ export default function CampaignSetupPage() {
     const handleGenerationSuccess = async () => {
         console.log('🎉 [GENERATION] Nova análise concluída! Recarregando dados...');
 
+        // Espera um pouco mais para garantir que o backend persistiu tudo
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
         // Recarrega as runs
-        const { data: newRuns } = await supabase
+        const { data: newRuns, error: runsError } = await supabase
             .from("analysis_runs")
             .select("*")
             .eq("campaign_id", campaignId)
             .order("created_at", { ascending: false });
 
+        if (runsError) {
+            console.error('❌ [ERROR] Erro ao buscar runs:', runsError);
+        }
+
         if (newRuns && newRuns.length > 0) {
             setRuns(newRuns);
-            // FORÇA a seleção da run mais recente (mesmo se já houver uma selecionada)
-            setSelectedRunId(newRuns[0].id);
-            console.log('🆕 [AUTO-SELECT] Nova run selecionada automaticamente:', newRuns[0].id);
+            // FORÇA a seleção da run mais recente
+            const latestRunId = newRuns[0].id;
+            setSelectedRunId(latestRunId);
+            console.log('🆕 [AUTO-SELECT] Nova run selecionada:', latestRunId);
 
-            // Aguarda um pouco e recarrega as estratégias
-            setTimeout(() => {
-                fetchStrategies();
-            }, 1000);
+            // Busca estratégias diretamente com o run_id correto
+            const { data: newStrategies, error: stratError } = await supabase
+                .from("strategies")
+                .select("*")
+                .eq("campaign_id", campaignId)
+                .order("created_at", { ascending: false });
+
+            if (stratError) {
+                console.error('❌ [ERROR] Erro ao buscar estratégias:', stratError);
+            } else {
+                console.log('✅ [SUCCESS] Estratégias recarregadas:', newStrategies?.length || 0);
+                setStrategies(newStrategies || []);
+            }
         }
+
+        // Força mais uma atualização após 3 segundos (safety net)
+        setTimeout(() => {
+            console.log('🔄 [SAFETY] Recarregando estratégias (safety net)...');
+            fetchStrategies();
+        }, 3000);
     };
 
     const handleMove = async (strategyId: string, newStatus: "suggested" | "approved") => {

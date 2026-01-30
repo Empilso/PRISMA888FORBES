@@ -79,16 +79,59 @@ export function GeneratorDialog({ campaignId, trigger, onSuccess, onRunStarted }
         }
     };
 
+    const [strategyMode, setStrategyMode] = useState<string>("territory");
+
+    // Fetch initial strategy mode
+    useEffect(() => {
+        if (open && campaignId) {
+            const fetchMode = async () => {
+                const { data } = await supabase.from("campaigns").select("strategy_mode").eq("id", campaignId).single();
+                if (data?.strategy_mode) {
+                    setStrategyMode(data.strategy_mode);
+                }
+            };
+            fetchMode();
+        }
+    }, [open, campaignId]);
+
     const handleGenerate = async () => {
         if (!selectedPersonaName) return;
 
         setGenerating(true);
         try {
-            // POST para iniciar a Genesis
+            // 1. Salvar o Modo de Estratégia Escolhido (Tentativa Otimista)
+            try {
+                const { error: updateError } = await supabase
+                    .from("campaigns")
+                    .update({ strategy_mode: strategyMode })
+                    .eq("id", campaignId);
+
+                if (updateError) {
+                    // Se falhar (ex: coluna não existe pois migration não rodou), logamos mas NÃO paramos.
+                    // A geração vai acontecer, só não salvou a preferência para o futuro.
+                    console.warn("⚠️ Não foi possível salvar o modo de estratégia (Schema desatualizado?):", updateError);
+                    toast({
+                        title: "Aviso de Banco de Dados",
+                        description: "Sua escolha foi aplicada nesta análise, mas não pôde ser salva como padrão.",
+                        variant: "default", // Não é erro crítico
+                    });
+                }
+            } catch (ignoredDbError) {
+                console.warn("⚠️ Erro ignorado ao salvar modo:", ignoredDbError);
+            }
+
+            // Continua mesmo com erro no passo 1...
+
+            // 2. Iniciar a Genesis
+            // Enviamos o strategyMode também no corpo para garantir que a IA use o valor correto
+            // mesmo que o salvamento no banco tenha falhado.
             const res = await fetch(`/api/campaign/${campaignId}/genesis`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ persona: selectedPersonaName }),
+                body: JSON.stringify({
+                    persona: selectedPersonaName,
+                    strategy_mode: strategyMode
+                }),
             });
 
             if (!res.ok) throw new Error("Falha ao iniciar geração");
@@ -102,18 +145,15 @@ export function GeneratorDialog({ campaignId, trigger, onSuccess, onRunStarted }
 
             toast({
                 title: "IA Iniciada! 🚀",
-                description: "Acompanhe o progresso no console abaixo.",
+                description: `Estratégia: ${strategyMode.toUpperCase()}. Acompanhe o progresso.`,
                 variant: "default",
             });
 
             setOpen(false);
-            // NÃO chamamos onSuccess() aqui porque a geração é assíncrona.
-            // O handleRunStarted já foi chamado acima para abrir o console.
-            // if (onSuccess) onSuccess();
-        } catch (error) {
+        } catch (error: any) {
             toast({
                 title: "Erro",
-                description: "Não foi possível iniciar a geração.",
+                description: error.message || "Não foi possível iniciar a geração.",
                 variant: "destructive",
             });
         } finally {
@@ -140,13 +180,14 @@ export function GeneratorDialog({ campaignId, trigger, onSuccess, onRunStarted }
                         Configurar Inteligência
                     </DialogTitle>
                     <DialogDescription>
-                        Escolha um estrategista IA para analisar os dados da campanha e gerar um plano de ação.
+                        Escolha um estrategista IA e defina o foco da campanha.
                     </DialogDescription>
                 </DialogHeader>
 
                 <div className="grid gap-4 py-4">
+                    {/* SELETOR DE ESTRATEGISTA */}
                     <div className="space-y-2">
-                        <label className="text-sm font-medium">Escolha o Estrategista</label>
+                        <label className="text-sm font-medium">1. Escolha o Estrategista</label>
                         <Select
                             value={selectedPersonaName}
                             onValueChange={setSelectedPersonaName}
@@ -171,6 +212,42 @@ export function GeneratorDialog({ campaignId, trigger, onSuccess, onRunStarted }
                             <p className="text-muted-foreground text-xs">{selectedPersona.description}</p>
                         </div>
                     )}
+
+                    {/* SELETOR DE MODO DE ESTRATÉGIA */}
+                    <div className="space-y-2 pt-2 border-t">
+                        <label className="text-sm font-medium">2. Foco da Estratégia (Arquétipo)</label>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                            <div
+                                className={`cursor-pointer rounded-lg border p-3 hover:border-purple-500 transition-all ${strategyMode === 'territory' ? 'bg-purple-50 border-purple-600 ring-1 ring-purple-600' : 'bg-card'}`}
+                                onClick={() => setStrategyMode('territory')}
+                            >
+                                <div className="font-semibold text-sm mb-1 text-purple-900">🏙️ Território</div>
+                                <div className="text-[10px] text-muted-foreground leading-tight">
+                                    Para Prefeitos e Vereadores de Bairro. Foco em zeladoria e geografia.
+                                </div>
+                            </div>
+
+                            <div
+                                className={`cursor-pointer rounded-lg border p-3 hover:border-blue-500 transition-all ${strategyMode === 'structural' ? 'bg-blue-50 border-blue-600 ring-1 ring-blue-600' : 'bg-card'}`}
+                                onClick={() => setStrategyMode('structural')}
+                            >
+                                <div className="font-semibold text-sm mb-1 text-blue-900">🤝 Estrutura</div>
+                                <div className="text-[10px] text-muted-foreground leading-tight">
+                                    Para Deputados de Base e Dobradinhas. Foco em alianças e líderes.
+                                </div>
+                            </div>
+
+                            <div
+                                className={`cursor-pointer rounded-lg border p-3 hover:border-amber-500 transition-all ${strategyMode === 'ideological' ? 'bg-amber-50 border-amber-600 ring-1 ring-amber-600' : 'bg-card'}`}
+                                onClick={() => setStrategyMode('ideological')}
+                            >
+                                <div className="font-semibold text-sm mb-1 text-amber-900">📣 Opinião</div>
+                                <div className="text-[10px] text-muted-foreground leading-tight">
+                                    Para Voto Ideológico/Causa. Foco em redes sociais e temas.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <DialogFooter>

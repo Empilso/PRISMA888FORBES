@@ -72,17 +72,39 @@ export default function CandidatosPage() {
             if (campaigns && campaigns.length > 0) {
                 const campaignIds = campaigns.map(c => c.id);
 
-                // 1. Fetch Strategies Counts
-                const { data: strategies } = await supabase
-                    .from("strategies")
-                    .select("campaign_id, status")
-                    .in("campaign_id", campaignIds);
+                // 1. Fetch Strategies Counts (com fallback em caso de erro RLS)
+                let strategies: any[] = [];
+                try {
+                    const { data: strategiesData, error: stratErr } = await supabase
+                        .from("strategies")
+                        .select("campaign_id, status")
+                        .in("campaign_id", campaignIds);
 
-                // 2. Fetch Runs (to check has_plan)
-                const { data: runs } = await supabase
-                    .from("analysis_runs")
-                    .select("campaign_id")
-                    .in("campaign_id", campaignIds);
+                    if (stratErr) {
+                        console.warn("Não foi possível buscar strategies:", stratErr);
+                    } else {
+                        strategies = strategiesData || [];
+                    }
+                } catch (err) {
+                    console.warn("Erro ao buscar strategies (RLS?):", err);
+                }
+
+                // 2. Fetch Runs (com fallback em caso de erro RLS)
+                let runs: any[] = [];
+                try {
+                    const { data: runsData, error: runsErr } = await supabase
+                        .from("analysis_runs")
+                        .select("campaign_id")
+                        .in("campaign_id", campaignIds);
+
+                    if (runsErr) {
+                        console.warn("Não foi possível buscar analysis_runs:", runsErr);
+                    } else {
+                        runs = runsData || [];
+                    }
+                } catch (err) {
+                    console.warn("Erro ao buscar analysis_runs (RLS?):", err);
+                }
 
                 const enrichedCandidates = campaigns.map(c => {
                     const campStrategies = strategies?.filter(s => s.campaign_id === c.id) || [];
@@ -106,11 +128,12 @@ export default function CandidatosPage() {
                 setCandidates([]);
             }
 
-        } catch (error) {
+        } catch (error: any) {
             console.error("Erro ao buscar candidatos:", error);
+            console.error("Detalhes do erro:", JSON.stringify(error, null, 2));
             toast({
                 title: "Erro",
-                description: "Não foi possível carregar a lista de candidatos.",
+                description: error?.message || error?.details || "Não foi possível carregar a lista de candidatos.",
                 variant: "destructive",
             });
         } finally {

@@ -7,6 +7,7 @@ router = APIRouter(prefix="/api/campaign", tags=["genesis"])
 
 class GenesisRequest(BaseModel):
     persona: Optional[str] = "standard"
+    strategy_mode: Optional[str] = None  # Override opcional para garantir a execução
 
 
 @router.post("/{campaign_id}/genesis")
@@ -25,7 +26,7 @@ async def trigger_genesis(
     
     Args:
         campaign_id: UUID da campanha
-        request: Configurações (ex: persona)
+        request: Configurações (ex: persona, strategy_mode)
     
     Returns:
         Status da execução + run_id para monitoramento
@@ -49,10 +50,16 @@ async def trigger_genesis(
     
     run_id = run_result.data[0]["id"]
     
-    def run_genesis_crew(campaign_id: str, persona: str, run_id: str):
+    def run_genesis_crew(campaign_id: str, persona: str, run_id: str, strategy_mode_override: str = None):
         """Função executada em background"""
         try:
-            crew = GenesisCrew(campaign_id=campaign_id, persona=persona, run_id=run_id)
+            # Passamos o override do modo de estratégia se ele veio na request
+            crew = GenesisCrew(
+                campaign_id=campaign_id, 
+                persona=persona, 
+                run_id=run_id, 
+                strategy_mode_override=strategy_mode_override
+            )
             crew.log("🚀 Iniciando Genesis Crew", "System", "info")
             result = crew.execute()
             crew.log("✅ Genesis Crew finalizada com sucesso!", "System", "success")
@@ -88,7 +95,8 @@ async def trigger_genesis(
         run_genesis_crew,
         campaign_id,
         request.persona,
-        run_id
+        run_id,
+        request.strategy_mode
     )
     
     return {

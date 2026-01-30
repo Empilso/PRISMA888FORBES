@@ -14,7 +14,8 @@ import {
     MapPin,
     Calendar,
     X,
-    Loader2
+    Loader2,
+    Search
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -170,12 +171,20 @@ function CandidateForm() {
             if (result.success) {
                 toast({
                     title: "Sucesso!",
-                    description: isEditing ? "Dados atualizados." : "Candidato criado com sucesso.",
+                    description: isEditing ? "Dados atualizados." : "Candidato criado com sucesso. Redirecionando para configuração...",
                     variant: "default",
                 });
+
+                // Determina o ID para redirecionamento
+                const targetId = isEditing ? campaignId : (result as any).campaignId;
+
                 setTimeout(() => {
-                    router.push("/admin/candidatos");
-                }, 1000);
+                    if (targetId) {
+                        router.push(`/admin/campaign/${targetId}/setup`);
+                    } else {
+                        router.push("/admin/candidatos");
+                    }
+                }, 1500);
             } else {
                 toast({
                     title: "Erro",
@@ -305,14 +314,34 @@ function CandidateForm() {
                             </div>
                             <div className="space-y-1.5">
                                 <Label className="text-xs text-gray-600">Nome Oficial na Urna (Igual TSE) *</Label>
-                                <Input
-                                    placeholder="Ex: JOÃO DA SILVA JUNIOR"
-                                    className="h-10 border-gray-300"
-                                    {...register("nomeUrna", { required: true })}
-                                />
-                                <p className="text-[10px] text-gray-400">
-                                    Importante: Deve ser IDÊNTICO ao registro do TSE para que o mapa de calor funcione.
-                                </p>
+                                <div className="flex gap-2">
+                                    <Input
+                                        placeholder="Ex: JOÃO DA SILVA JUNIOR"
+                                        className="h-10 border-gray-300 flex-1"
+                                        {...register("nomeUrna", {
+                                            required: true,
+                                            onChange: (e) => e.target.value = e.target.value.toUpperCase() // Força uppercase visual
+                                        })}
+                                    />
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="icon"
+                                        className="h-10 w-10 shrink-0"
+                                        title="Consultar no DivulgaCand (TSE)"
+                                        onClick={() => window.open('https://divulgacandcontas.tse.jus.br/divulga/', '_blank')}
+                                    >
+                                        <Search className="h-4 w-4 text-blue-600" />
+                                    </Button>
+                                </div>
+                                <Alert className="bg-amber-50 border-amber-200 py-2 mt-1">
+                                    <div className="flex items-start gap-2">
+                                        <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5" />
+                                        <p className="text-[11px] text-amber-900 leading-tight">
+                                            <strong>Atenção Crítica:</strong> Este nome deve ser IDÊNTICO, letra por letra, ao registrado no TSE. Se estiver diferente, o mapa de calor não conseguirá identificar os votos do candidato.
+                                        </p>
+                                    </div>
+                                </Alert>
                             </div>
                         </div>
                         <div className="grid grid-cols-3 gap-4">

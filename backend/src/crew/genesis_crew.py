@@ -366,7 +366,7 @@ class GenesisCrew:
     3. Planejador → Gera 10 sugestões táticas específicas
     """
     
-    def __init__(self, campaign_id: str, persona: str = "standard", run_id: str = None):
+    def __init__(self, campaign_id: str, persona: str = "standard", run_id: str = None, strategy_mode_override: str = None):
         self.campaign_id = campaign_id
         self.persona = persona
         self.run_id = run_id  # ID da execução para logging
@@ -426,6 +426,21 @@ class GenesisCrew:
             self.log(f"Inicializando LLM: {llm_model}", "System", "info")
             self.llm = self._create_llm(llm_model, self.temperature)
             
+            # ===== CONTEXTO DA CAMPANHA (Strategy Mode) =====
+            # Prioridade: 1. Override (API) > 2. Banco de Dados > 3. Default ('territory')
+            if strategy_mode_override:
+                self.strategy_mode = strategy_mode_override
+                self.log(f"🎯 Modo de Estratégia (Override): {self.strategy_mode.upper()}", "System", "info")
+            else:
+                try:
+                    camp_res = self.supabase.table("campaigns").select("strategy_mode").eq("id", campaign_id).single().execute()
+                    self.strategy_mode = camp_res.data.get("strategy_mode", "territory") if camp_res.data else "territory"
+                    self.log(f"🎯 Modo de Estratégia (DB): {self.strategy_mode.upper()}", "System", "info")
+                except Exception as e:
+                    self.log(f"Erro ao buscar strategy_mode: {e}. Usando 'territory'.", "System", "warning")
+                    self.strategy_mode = "territory"
+
+
         except Exception as e:
             self.log(f"Erro ao inicializar: {e}", "System", "error")
             raise ValueError(f"Erro ao inicializar persona: {e}")
@@ -729,6 +744,35 @@ class GenesisCrew:
         strategist = agents.get("strategist") or list(agents.values())[min(1, len(agents)-1)]
         planner = agents.get("planner") or agents.get("writer") or list(agents.values())[-1]
         
+        # ===== LÓGICA DE MODOS DE ESTRATÉGIA (Arquétipos) =====
+        mode = getattr(self, "strategy_mode", "territory") # Default safe
+        
+        mode_instructions = {
+            "territory": """
+            🎯 FOCO ESTRATÉGICO: TERRITÓRIO (MAJORITÁRIO / LOCAL)
+            - Sua prioridade é a GEOGRAFIA e a ZELADORIA.
+            - Foque em problemas visíveis (buracos, iluminação, postos de saúde).
+            - Sugira ações de presença física: caminhadas, reuniões de bairro, café com vizinhos.
+            - O objetivo é "conquistar quarteirões". A lógica é de Prefeito ou Vereador comunitário.
+            """,
+            "ideological": """
+            🎯 FOCO ESTRATÉGICO: CAUSA & OPINIÃO (PROPORCIONAL / IDEOLÓGICO)
+            - Sua prioridade é a MENSAGEM e a MOBILIZAÇÃO DIGITAL.
+            - Foque em valores, defesa de bandeiras (ex: segurança, família, meio ambiente) e polêmicas estratégicas.
+            - Sugira ações de mídia: lives, cortes virais, artigos de opinião, pressão em votações.
+            - O mapa não é geográfico, é temático. Onde estão as pessoas que pensam assim?
+            """,
+            "structural": """
+            🎯 FOCO ESTRATÉGICO: ESTRUTURA & CORPORATIVO (PROPORCIONAL / BASE)
+            - Sua prioridade são as RELAÇÕES e as INSTITUIÇÕES.
+            - Foque em categorias profissionais (médicos, policiais, professores) e lideranças regionais.
+            - Sugira ações de bastidor: reuniões com sindicatos, apoio a eventos de associações, emendas parlamentares.
+            - A lógica é de "representante da classe" ou "padrinho da região".
+            """
+        }
+        
+        current_instruction = mode_instructions.get(mode, mode_instructions["territory"])
+        
         task1 = Task(
             description=f"""
             Analise PROFUNDAMENTE a campanha {self.campaign_id}.
@@ -741,6 +785,8 @@ class GenesisCrew:
                - 5 PONTOS FRACOS (lacunas, vulnerabilidades)
                - 5 OPORTUNIDADES (contexto político, demandas não atendidas)
             
+            {current_instruction}
+
             Formato de saída: Relatório estruturado em tópicos com justificativa para cada item.
             IMPORTANTE: Utilize um tom {self.tone} na sua análise.
             """,
@@ -749,9 +795,11 @@ class GenesisCrew:
         )
         
         task2 = Task(
-            description="""
+            description=f"""
             Baseado no relatório do Analista, defina OS 3 PILARES ESTRATÉGICOS da campanha.
             
+            {current_instruction}
+
             Cada pilar deve:
             - Ser um tema/narrativa central (ex: "Saúde de Qualidade", "Cidade Inteligente")
             - Conectar com os pontos fortes identificados
@@ -780,6 +828,8 @@ class GenesisCrew:
             description=f"""
             Crie UMA LISTA NUMERADA com EXATAMENTE {self.task_count} SUGESTÕES TÁTICAS CONCRETAS baseadas nos 3 pilares estratégicos.
             
+            {current_instruction}
+
             EXTREMAMENTE IMPORTANTE:
             1. Você DEVE gerar {self.task_count} itens. Nem menos, nem mais.
             2. Numere de 1 a {self.task_count}.
@@ -878,9 +928,10 @@ class GenesisCrew:
             Agora, gere o JSON.
             """,
             agent=planner,
-            expected_output=f"JSON válido contendo array 'strategies' com {self.task_count} itens",
+            expected_output=f"Um BLOCO JSON raw contendo array 'strategies' com {self.task_count} itens. NÃO USE MARKDOWN.",
             context=[task1, task2, task3, task4],
-            output_json=StrategiesList
+            # output_json=StrategiesList  <-- REMOVIDO: Causa erro de validação com DeepSeek
+            # Vamos usar parsing manual robusto no método run()
         )
         
         # Monta a lista de tarefas base

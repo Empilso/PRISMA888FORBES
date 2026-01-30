@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { PrismaLogo } from "@/components/ui/prisma-logo";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -79,19 +80,9 @@ export function DashboardSidebar({ campaignId }: { campaignId?: string }) {
                 {/* Header / Logo */}
                 <div className={cn("flex items-center h-24 mb-2 transition-all", isCollapsed ? "justify-center" : "px-8")}>
                     {!isCollapsed ? (
-                        <div className="flex items-center gap-3">
-                            <div className="h-10 w-10 rounded-xl bg-gradient-to-tr from-slate-700 to-slate-900 shadow-lg shadow-slate-200 flex items-center justify-center transform hover:scale-105 transition-transform">
-                                <span className="text-white font-black text-lg">P8</span>
-                            </div>
-                            <div className="flex flex-col">
-                                <h2 className="font-bold text-xl text-slate-900 leading-tight">Prisma 888</h2>
-                                <p className="text-[10px] font-semibold text-slate-400 tracking-wider uppercase">Candidate Suite</p>
-                            </div>
-                        </div>
+                        <PrismaLogo href={`/campaign/${campaignId}/dashboard`} size="md" showSubtitle subtitle="Candidate Suite" />
                     ) : (
-                        <div className="h-10 w-10 rounded-xl bg-gradient-to-tr from-slate-700 to-slate-900 shadow-md flex items-center justify-center">
-                            <span className="text-white font-black text-lg">P8</span>
-                        </div>
+                        <PrismaLogo href={`/campaign/${campaignId}/dashboard`} size="sm" showSubtitle={false} />
                     )}
                 </div>
 

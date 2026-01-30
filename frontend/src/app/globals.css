@@ -6,41 +6,43 @@
 :root {
   /* Color System - Google Material Inspired (Soft & Tech) */
   /* Primary: Google Blue (Vibrant yet accessible) */
-  --primary: 221 83% 53%; 
+  --primary: 221 83% 53%;
   --primary-foreground: 0 0% 100%;
-  
+
   /* Secondary: Soft Purple/Indigo */
   --secondary: 262 83% 58%;
   --secondary-foreground: 0 0% 100%;
-  
+
   /* Accent: Teal/Mint for refresh/success vibes */
   --accent: 170 70% 40%;
   --accent-foreground: 0 0% 100%;
-  
+
   /* Card: Pure White for maximum contrast against soft background */
   --card: 0 0% 100%;
   --card-foreground: 222 47% 11%;
-  
+
   /* Background: Ice Blue / Off-White (Not Stark White) */
   --background: 210 40% 98%;
-  --foreground: 222 47% 11%; /* Navy dark grey for text */
-  
+  --foreground: 222 47% 11%;
+  /* Navy dark grey for text */
+
   /* Muted: Soft greys for secondary text/backgrounds */
   --muted: 215 25% 95%;
   --muted-foreground: 215 20% 45%;
-  
+
   /* Borders: Very subtle, almost invisible */
   --border: 220 13% 91%;
   --input: 220 13% 91%;
-  
+
   --ring: 221 83% 53%;
-  
+
   --destructive: 0 84% 60%;
   --destructive-foreground: 0 0% 100%;
-  
+
   /* Radius: BIG curves (Material You style) */
-  --radius: 1rem; /* 16px */
-  
+  --radius: 1rem;
+  /* 16px */
+
   /* Chart Colors */
   --chart-1: 221 83% 53%;
   --chart-2: 170 70% 40%;
@@ -51,35 +53,35 @@
 
 .dark {
   /* Dark Mode: Deep Blue/Grey (Not pitch black) */
-  --background: 222 47% 11%; 
+  --background: 222 47% 11%;
   --foreground: 210 40% 98%;
-  
+
   /* Cards: Slightly lighter than background */
-  --card: 222 47% 15%; 
+  --card: 222 47% 15%;
   --card-foreground: 210 40% 98%;
-  
+
   --popover: 222 47% 15%;
   --popover-foreground: 210 40% 98%;
-  
+
   --primary: 221 83% 53%;
   --primary-foreground: 210 40% 98%;
-  
+
   --secondary: 262 83% 58%;
   --secondary-foreground: 210 40% 98%;
-  
+
   --muted: 217 33% 17%;
   --muted-foreground: 215 20% 65%;
-  
+
   --accent: 217 33% 17%;
   --accent-foreground: 210 40% 98%;
-  
+
   --destructive: 0 62.8% 30.6%;
   --destructive-foreground: 210 40% 98%;
-  
+
   --border: 217 33% 20%;
   --input: 217 33% 20%;
   --ring: 221 83% 53%;
-  
+
   --chart-1: 221 83% 53%;
   --chart-2: 160 60% 45%;
   --chart-3: 30 80% 55%;
@@ -88,6 +90,7 @@
 }
 
 @layer utilities {
+
   /* Glassmorphism Effect */
   .glass {
     background: rgba(255, 255, 255, 0.05);
@@ -95,47 +98,102 @@
     -webkit-backdrop-filter: blur(10px);
     border: 1px solid rgba(255, 255, 255, 0.1);
   }
-  
+
   .dark .glass {
     background: rgba(255, 255, 255, 0.03);
     border: 1px solid rgba(255, 255, 255, 0.05);
   }
-  
+
   /* Gradient Backgrounds */
   .gradient-primary {
     background: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--secondary)) 100%);
   }
-  
+
   .gradient-subtle {
     background: linear-gradient(135deg, hsl(var(--muted)) 0%, hsl(var(--background)) 100%);
   }
-  
+
   /* Smooth Animations */
   .animate-fade-in {
     animation: fadeIn 0.5s ease-in-out;
   }
-  
+
   .animate-slide-up {
     animation: slideUp 0.6s ease-out;
   }
-  
+
   @keyframes fadeIn {
     from {
       opacity: 0;
     }
+
     to {
       opacity: 1;
     }
   }
-  
+
   @keyframes slideUp {
     from {
       transform: translateY(20px);
       opacity: 0;
     }
+
     to {
       transform: translateY(0);
       opacity: 1;
+    }
+  }
+
+  /* Prisma Logo Animations - SUBTLE VERSION */
+  .animate-float {
+    animation: float 8s ease-in-out infinite;
+  }
+
+  .animate-glow {
+    animation: glow 6s ease-in-out infinite, gentleRotate 12s ease-in-out infinite;
+  }
+
+  @keyframes float {
+
+    0%,
+    100% {
+      transform: translateY(0px);
+    }
+
+    50% {
+      transform: translateY(-4px);
+    }
+  }
+
+  @keyframes glow {
+
+    0%,
+    100% {
+      filter: brightness(1) drop-shadow(0 0 1px rgba(255, 255, 255, 0.2));
+    }
+
+    50% {
+      filter: brightness(1.08) drop-shadow(0 0 4px rgba(255, 255, 255, 0.35));
+    }
+  }
+
+  @keyframes gentleRotate {
+
+    0%,
+    100% {
+      transform: rotate(0deg);
+    }
+
+    25% {
+      transform: rotate(1deg);
+    }
+
+    50% {
+      transform: rotate(0deg);
+    }
+
+    75% {
+      transform: rotate(-1deg);
     }
   }
 }
