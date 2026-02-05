@@ -86,16 +86,16 @@ async def activate_strategy(campaign_id: str, strategy_id: str):
         .select("*") \
         .eq("id", strategy_id) \
         .eq("campaign_id", campaign_id) \
-        .single() \
+        .limit(1) \
         .execute()
     
-    if not strategy_result.data:
+    if not strategy_result.data or len(strategy_result.data) == 0:
         raise HTTPException(
             status_code=404, 
             detail="Estratégia não encontrada ou não pertence a esta campanha"
         )
     
-    strategy = strategy_result.data
+    strategy = strategy_result.data[0]
     
     # Verificar se já foi executada
     if strategy.get("status") == "executed":
@@ -263,11 +263,41 @@ async def publish_campaign(campaign_id: str, request: PublishCampaignRequest):
         return {"success": True, "published_count": 0, "message": "Nenhuma estratégia para publicar."}
     
     published_count = 0
+    tasks_created = 0
     
     for strategy in strategies:
         # Pular se já publicada ou executada
         if strategy.get("status") in ["published", "executed"]:
             continue
+        
+        # 2. Criar Task correspondente
+        try:
+            # Mapear prioridade baseada no pilar
+            priority_map = {
+                "Fortaleza & Crescimento": "high",
+                "Zeladoria de Resultado": "medium", 
+                "Território & Presença": "medium",
+                "Mobilização & Engajamento": "high"
+            }
+            priority = priority_map.get(strategy.get("pillar"), "medium")
+            
+            task_data = {
+                "campaign_id": campaign_id,
+                "strategy_id": strategy["id"],
+                "title": strategy.get("title", "Tarefa sem título"),
+                "description": strategy.get("description", ""),
+                "status": "pending",
+                "priority": priority,
+                "pillar": strategy.get("pillar"),
+                "phase": strategy.get("phase"),
+                "tags": strategy.get("tags", []),
+                "examples": strategy.get("examples", [])
+            }
+            
+            supabase.table("tasks").insert(task_data).execute()
+            tasks_created += 1
+        except Exception as e:
+            print(f"Erro ao criar task para estratégia {strategy['id']}: {e}")
             
         # 3. Atualizar Status para Published
         supabase.table("strategies").update({"status": "published"}).eq("id", strategy["id"]).execute()
@@ -275,6 +305,8 @@ async def publish_campaign(campaign_id: str, request: PublishCampaignRequest):
         
     return {
         "success": True, 
-        "published_count": published_count, 
-        "message": f"{published_count} estratégias publicadas com sucesso!"
+        "published_count": published_count,
+        "tasks_created": tasks_created,
+        "message": f"{published_count} estratégias publicadas e {tasks_created} tarefas criadas!"
     }
+

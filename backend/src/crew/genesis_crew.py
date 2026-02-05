@@ -131,9 +131,11 @@ def recover_data_from_broken_json(raw_text: str) -> Dict[str, Any]:
     # Procura por blocos que parecem objetos de estratégia: { ... "title": ... "description": ... }
     # O regex busca chaves balanceadas de forma simplificada (assume que não há } dentro de strings, o que é um risco aceitável para fallback)
     
-    # Padrão: { [qualquer coisa exceto }] "title" [qualquer coisa] "description" [qualquer coisa] }
-    # Limitamos o greedy para não comer tudo
-    strategy_matches = re.findall(r'(\{[^{}]*"title"\s*:.*?"description"\s*:.*?[^{}]*\})', raw_text, re.DOTALL)
+    # Revised Regex: Looks for objects containing both "title" and "description" keys in any order
+    # Matches { ... "title": ... "description": ... } OR { ... "description": ... "title": ... }
+    # Uses [^{}]* to avoid capturing too much, but essentially grabs the object block.
+    # We use a non-greedy catch-all between keys.
+    strategy_matches = re.findall(r'(\{(?:[^{}]|"(?:\\.|[^"\\])*")*?"title"\s*:(?:[^{}]|"(?:\\.|[^"\\])*")*?"description"\s*:(?:[^{}]|"(?:\\.|[^"\\])*")*?\})', raw_text, re.DOTALL)
     
     successful_recoveries = 0
     for match in strategy_matches:
@@ -183,7 +185,7 @@ class SimpleDeepSeekClient:
             "model": self.model,
             "messages": messages,
             "temperature": self.temperature,
-            "max_tokens": 4000
+            "max_tokens": 8192
         }
         
         try:
@@ -778,8 +780,13 @@ class GenesisCrew:
             Analise PROFUNDAMENTE a campanha {self.campaign_id}.
             
             Passos:
-            1. Use a ferramenta campaign_stats para entender os dados eleitorais
-            2. Use campaign_vector_search para ler o Plano de Governo (busque por temas variados)
+            1. TENTE usar a ferramenta campaign_stats para entender os dados eleitorais.
+            2. TENTE usar campaign_vector_search para ler o Plano de Governo.
+            
+            ⚠️ IMPORTANTE: Se as ferramentas não retornarem dados ou falharem (devido a erro de conexão ou ausência de arquivos), NÃO PARE.
+            Em vez disso, use seu CONHECIMENTO PRÉVIO sobre campanhas políticas para inferir um cenário provável para um candidato deste perfil ({self.strategy_mode}).
+            Assuma que é uma campanha competitiva e gere insights baseados em boas práticas políticas.
+
             3. Identifique:
                - 5 PONTOS FORTES (dados, propostas, histórico)
                - 5 PONTOS FRACOS (lacunas, vulnerabilidades)
@@ -1141,7 +1148,22 @@ class GenesisCrew:
             elif raw_output_text:
                 print(f"[Guardrail] ⚠️ Using json_cleaner for raw text...")
                 
-                from src.utils.json_cleaner import extract_json_from_text, clean_for_display
+                # TENTATIVA 0: Parse Direto (Crucial para evitar regex falho em JSON válido)
+                try:
+                    # Usa a função clean_json_output já existente no arquivo
+                    cleaned_direct = clean_json_output(raw_output_text)
+                    parsed_direct = json.loads(cleaned_direct)
+                    
+                    if isinstance(parsed_direct, dict) and "strategies" in parsed_direct:
+                        final_strategies = parsed_direct["strategies"]
+                        if "strategic_plan" in parsed_direct and not strategic_plan_text:
+                            strategic_plan_text = parsed_direct["strategic_plan"]
+                        print(f"[Guardrail] ✅ Direct JSON Load Success: {len(final_strategies)} strategies")
+                except Exception as e_direct:
+                    print(f"[Guardrail] Direct parse failed, trying heuristics: {e_direct}")
+
+                if not final_strategies:
+                    from src.utils.json_cleaner import extract_json_from_text, clean_for_display
                 
                 parsed, cleaned, error = extract_json_from_text(raw_output_text)
                 

@@ -24,14 +24,26 @@ export async function POST(
         });
 
         // Pega a resposta do Python
-        const data = await response.json();
+        let data;
+        const responseText = await response.text();
+
+        try {
+            data = JSON.parse(responseText);
+        } catch (e) {
+            console.error("[Genesis Proxy] Failed to parse backend JSON:", responseText);
+            throw new Error(`Backend returned non-JSON: ${responseText}`);
+        }
+
+        if (!response.ok) {
+            console.error(`[Genesis Proxy] Backend Error (${response.status}):`, data);
+        }
 
         // Retorna a resposta para o frontend
         return NextResponse.json(data, { status: response.status });
     } catch (error) {
-        console.error("[Genesis Proxy] Error:", error);
+        console.error("[Genesis Proxy] Catch Error:", error);
         return NextResponse.json(
-            { error: "Failed to trigger Genesis Crew" },
+            { error: error instanceof Error ? error.message : "Failed to trigger Genesis Crew" },
             { status: 500 }
         );
     }

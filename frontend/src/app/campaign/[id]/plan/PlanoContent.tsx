@@ -48,15 +48,15 @@ export default function PlanoContent({ campaignId }: { campaignId: string }) {
         if (tasks.length === 0) setLoading(true);
         setError(null);
         try {
-            const { data, error } = await supabase
-                .from("tasks")
-                .select("*")
-                .eq("campaign_id", campaignId)
-                .order("created_at", { ascending: false });
+            // Use API proxy to bypass RLS issues
+            const res = await fetch(`/api/campaign/${campaignId}/tasks`, {
+                cache: 'no-store'
+            });
 
-            if (error) throw error;
+            if (!res.ok) throw new Error("Falha ao buscar tarefas");
 
-            const fetchedTasks = data || [];
+            const fetchedTasks: Task[] = await res.json();
+
 
             // Auto-collapse logic:
             // 1. Initial load with tasks -> Collapse

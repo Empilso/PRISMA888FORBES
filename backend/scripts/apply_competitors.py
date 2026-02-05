@@ -16,6 +16,24 @@ def apply_competitors_v2():
         return
 
     try:
+        # FORCE IPv4 Resolution
+        import socket
+        from urllib.parse import urlparse, urlunparse
+
+        parsed = urlparse(db_url)
+        host = parsed.hostname
+        
+        try:
+            # Get the first IPv4 address
+            ipv4 = socket.gethostbyname(host)
+            print(f"🌍 IPv4 Resolvido: {ipv4} (Original: {host})")
+            
+            # Reconstruct URL with IPv4 to bypass IPv6 issues
+            new_netloc = parsed.netloc.replace(host, ipv4)
+            db_url = urlunparse(parsed._replace(netloc=new_netloc))
+        except Exception as dns_err:
+            print(f"⚠️ Falha ao resolver IPv4: {dns_err}. Tentando original...")
+
         conn = psycopg2.connect(db_url)
         conn.autocommit = True
         cursor = conn.cursor()

@@ -142,6 +142,7 @@ from src.api.tcesp_debug import router as tcesp_debug_router
 from src.api.cities_politicians import router as cities_politicians_router
 from src.api.radar_premium import router as radar_premium_router
 from src.api.tse import router as tse_router
+from src.api.competitors import router as competitors_router
 
 app = FastAPI()
 
@@ -169,6 +170,7 @@ app.include_router(tcesp_debug_router)
 app.include_router(cities_politicians_router)
 app.include_router(radar_premium_router)
 app.include_router(tse_router)
+app.include_router(competitors_router)
 
 @app.get("/")
 async def root():

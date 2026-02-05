@@ -22,6 +22,7 @@ import { Loader2, Sparkles, Bot } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { createClient } from "@/lib/supabase/client";
 import { ExecutionConsole } from "@/components/admin/ExecutionConsole";
+import { CompetitorList } from "@/components/campaign/CompetitorList";
 
 interface Persona {
     id: string;
@@ -247,6 +248,11 @@ export function GeneratorDialog({ campaignId, trigger, onSuccess, onRunStarted }
                                 </div>
                             </div>
                         </div>
+                    </div>
+
+                    {/* Radar de Competidores (Novo Enterprise Feature) */}
+                    <div className="bg-slate-50 p-4 rounded-lg border border-slate-100 mt-4">
+                        <CompetitorList campaignId={campaignId} />
                     </div>
                 </div>
 

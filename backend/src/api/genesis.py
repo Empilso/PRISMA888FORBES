@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 from typing import Optional
+from src.crew.genesis_crew import GenesisCrew
 
 router = APIRouter(prefix="/api/campaign", tags=["genesis"])
 
@@ -33,22 +34,26 @@ async def trigger_genesis(
     """
     import os
     from supabase import create_client
-    from src.crew.genesis_crew import GenesisCrew
+    # from src.crew.genesis_crew import GenesisCrew  <-- Moved to top to avoid lag
     
     # Cria o registro de execução ANTES de iniciar
-    supabase_url = os.getenv("SUPABASE_URL")
-    supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-    supabase = create_client(supabase_url, supabase_key)
-    
-    # Cria o run com status "running"
-    run_result = supabase.table("analysis_runs").insert({
-        "campaign_id": campaign_id,
-        "persona_name": request.persona,
-        "status": "running",
-        "strategic_plan_text": ""  # Será preenchido depois
-    }).execute()
-    
-    run_id = run_result.data[0]["id"]
+    try:
+        supabase_url = os.getenv("SUPABASE_URL")
+        supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+        supabase = create_client(supabase_url, supabase_key)
+        
+        # Cria o run com status "running"
+        run_result = supabase.table("analysis_runs").insert({
+            "campaign_id": campaign_id,
+            "persona_name": request.persona,
+            "status": "running",
+            "strategic_plan_text": ""  # Será preenchido depois
+        }).execute()
+        
+        run_id = run_result.data[0]["id"]
+    except Exception as e:
+        print(f"❌ Erro ao criar run: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to initialize run: {str(e)}")
     
     def run_genesis_crew(campaign_id: str, persona: str, run_id: str, strategy_mode_override: str = None):
         """Função executada em background"""

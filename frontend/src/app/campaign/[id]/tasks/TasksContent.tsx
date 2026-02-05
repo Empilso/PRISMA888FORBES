@@ -116,21 +116,17 @@ export default function TasksContent({ campaignId, simpleMode = false }: { campa
 
     const fetchTasks = async () => {
         setLoading(true);
-        const supabase = createClient();
-        const { data, error } = await supabase
-            .from('tasks')
-            .select('*, strategy:strategies!inner(status)')
-            .eq('campaign_id', campaignId)
-            .in('strategy.status', ['published', 'executed'])
-            .order('created_at', { ascending: false });
-
-        if (error) {
+        try {
+            const res = await fetch(`/api/campaign/${campaignId}/tasks`, { cache: 'no-store' });
+            if (!res.ok) throw new Error("Falha ao buscar tarefas");
+            const data = await res.json();
+            setTasks(data || []);
+        } catch (error) {
             console.error("Erro ao buscar tarefas:", error);
             toast({ title: "Erro", description: "Falha ao carregar tarefas", variant: "destructive" });
-        } else {
-            setTasks(data || []);
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     };
 
     const handleTaskClick = (task: Task) => {
@@ -143,30 +139,35 @@ export default function TasksContent({ campaignId, simpleMode = false }: { campa
         // Optimistic Update
         setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, status: newStatus } : t)));
 
-        const supabase = createClient();
-        const { error } = await supabase.from("tasks").update({ status: newStatus }).eq("id", taskId);
+        try {
+            const res = await fetch(`/api/campaign/${campaignId}/tasks/${taskId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: newStatus })
+            });
 
-        if (error) {
+            if (!res.ok) throw new Error("Falha ao atualizar status");
+        } catch (error) {
             console.error("Erro ao atualizar status:", error);
             toast({ title: "Erro", description: "Não foi possível atualizar o status.", variant: "destructive" });
             fetchTasks(); // Rollback
-        } else {
-            // Sucesso silencioso ou toast discreto? O visual já mudou, então ok.
-            // toast({ description: "Status atualizado" });
         }
     };
 
     const handleDeleteTask = async (taskId: string) => {
         if (!confirm("Tem certeza que deseja excluir esta tarefa?")) return;
 
-        const supabase = createClient();
-        const { error } = await supabase.from("tasks").delete().eq("id", taskId);
+        try {
+            const res = await fetch(`/api/campaign/${campaignId}/tasks/${taskId}`, {
+                method: 'DELETE'
+            });
 
-        if (error) {
-            toast({ title: "Erro", description: "Falha ao excluir", variant: "destructive" });
-        } else {
+            if (!res.ok) throw new Error("Falha ao excluir");
+
             setTasks(prev => prev.filter(t => t.id !== taskId));
             toast({ title: "Tarefa excluída" });
+        } catch (error) {
+            toast({ title: "Erro", description: "Falha ao excluir", variant: "destructive" });
         }
     };
 

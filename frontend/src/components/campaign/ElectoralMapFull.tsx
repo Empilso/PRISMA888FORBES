@@ -5,7 +5,7 @@ import { useState, useEffect } from "react";
 import { useToast } from "@/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Layers, Filter, MapIcon, Zap, Search, Loader2, StickyNote, Plus, Trash2 } from "lucide-react";
+import { Layers, Filter, MapIcon, Zap, Search, Loader2, StickyNote, Plus, Trash2, Users, Eye, EyeOff } from "lucide-react";
 import dynamic from "next/dynamic";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from "@/components/ui/sheet";
 import { MapNotesLayer, MapNote } from "@/components/map/MapNotesLayer";
@@ -72,6 +72,13 @@ export function ElectoralMapFull({ campaignId }: ElectoralMapFullProps) {
     const [ballotName, setBallotName] = useState<string>("");
     const [isGeneratingAction, setIsGeneratingAction] = useState(false);
 
+    // Competitor Overlay State
+    const [showCompetitorOverlay, setShowCompetitorOverlay] = useState(false);
+    const [competitors, setCompetitors] = useState<{ id: string, name: string, color: string }[]>([]);
+    const [selectedCompetitorId, setSelectedCompetitorId] = useState<string | null>(null);
+    const [competitorLocations, setCompetitorLocations] = useState<Location[]>([]);
+    const [loadingCompetitor, setLoadingCompetitor] = useState(false);
+
     // 1. Fetch Campaign Info & Notes
     useEffect(() => {
         const fetchCampaign = async () => {
@@ -96,6 +103,81 @@ export function ElectoralMapFull({ campaignId }: ElectoralMapFullProps) {
             }
         } catch (e) {
             console.error("Failed to fetch map notes", e);
+        }
+    };
+
+    // Fetch competitors list
+    useEffect(() => {
+        const fetchCompetitors = async () => {
+            try {
+                const { data, error } = await supabase
+                    .from('competitors')
+                    .select('id, name, color')
+                    .eq('campaign_id', campaignId);
+                if (data) setCompetitors(data);
+            } catch (e) {
+                console.error("Failed to fetch competitors", e);
+            }
+        };
+        fetchCompetitors();
+    }, [campaignId]);
+
+    // Fetch competitor locations when selected
+    const fetchCompetitorGeo = async (competitorId: string) => {
+        setLoadingCompetitor(true);
+        try {
+            const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+            const res = await fetch(`${apiUrl}/api/competitor/${competitorId}/votes/geo`);
+            if (res.ok) {
+                const data = await res.json();
+                // Convert to Location format
+                const locs: Location[] = data.locations.map((loc: any) => ({
+                    id: loc.id,
+                    name: loc.name,
+                    address: '',
+                    position: loc.position,
+                    votes: loc.total_votes || 0,
+                    meta: 0,
+                    color: 'red',
+                    my_votes: loc.votes,
+                    my_share: loc.percentage
+                }));
+                setCompetitorLocations(locs);
+                if (data.matched > 0) {
+                    toast({
+                        title: `📍 ${data.competitor_name}`,
+                        description: `${data.matched} locais carregados no mapa`
+                    });
+                }
+            }
+        } catch (e) {
+            console.error("Failed to fetch competitor geo", e);
+        } finally {
+            setLoadingCompetitor(false);
+        }
+    };
+
+    // Toggle competitor overlay
+    const handleToggleCompetitor = () => {
+        if (showCompetitorOverlay) {
+            // Desligando
+            setShowCompetitorOverlay(false);
+            setCompetitorLocations([]);
+            setSelectedCompetitorId(null);
+        } else {
+            // Ligando - se tiver competidor selecionado, carrega
+            setShowCompetitorOverlay(true);
+            if (selectedCompetitorId) {
+                fetchCompetitorGeo(selectedCompetitorId);
+            }
+        }
+    };
+
+    // When competitor selection changes
+    const handleCompetitorChange = (competitorId: string) => {
+        setSelectedCompetitorId(competitorId);
+        if (showCompetitorOverlay && competitorId) {
+            fetchCompetitorGeo(competitorId);
         }
     };
 
@@ -353,6 +435,39 @@ export function ElectoralMapFull({ campaignId }: ElectoralMapFullProps) {
                         <StickyNote className="h-4 w-4" />
                     </Button>
 
+                    {/* Competitor Overlay Toggle */}
+                    {competitors.length > 0 && (
+                        <div className="flex items-center gap-1 ml-2 pl-2 border-l">
+                            <select
+                                className="h-8 text-xs p-1 rounded border bg-white dark:bg-slate-800 w-28"
+                                value={selectedCompetitorId || ''}
+                                onChange={(e) => handleCompetitorChange(e.target.value)}
+                                disabled={loadingCompetitor}
+                            >
+                                <option value="">Concorrente</option>
+                                {competitors.map(c => (
+                                    <option key={c.id} value={c.id}>{c.name}</option>
+                                ))}
+                            </select>
+                            <Button
+                                variant={showCompetitorOverlay ? "default" : "ghost"}
+                                size="icon"
+                                className={`h-8 w-8 ${showCompetitorOverlay ? "bg-red-500 text-white hover:bg-red-600" : ""}`}
+                                onClick={handleToggleCompetitor}
+                                disabled={!selectedCompetitorId || loadingCompetitor}
+                                title={showCompetitorOverlay ? "Ocultar Concorrente" : "Mostrar Concorrente"}
+                            >
+                                {loadingCompetitor ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : showCompetitorOverlay ? (
+                                    <EyeOff className="h-4 w-4" />
+                                ) : (
+                                    <Eye className="h-4 w-4" />
+                                )}
+                            </Button>
+                        </div>
+                    )}
+
                     <Button variant="ghost" size="icon" className="h-8 w-8"><Filter className="h-4 w-4" /></Button>
                     <Button variant="ghost" size="icon" className="h-8 w-8"><MapIcon className="h-4 w-4" /></Button>
                 </div>
@@ -412,9 +527,9 @@ export function ElectoralMapFull({ campaignId }: ElectoralMapFullProps) {
                 )}
                 <MapComponent
                     locations={locations}
+                    competitorLocations={showCompetitorOverlay ? competitorLocations : []}
                     onLocationClick={handleLocationClick}
                     mapStyle={mapStyle}
-                    pinStyle={pinStyle}
                     centerPosition={centerPosition}
                 >
                     <MapNotesLayer
