@@ -402,6 +402,37 @@ async def get_competitor_votes_geo(competitor_id: str):
         
     except HTTPException:
         raise
+
+@router.post("/{competitor_id}/analyze")
+async def analyze_competitor_adversarial(competitor_id: str):
+    """
+    DISPARA O MOTOR ADVERSÁRIO (Counter-Intel).
+    Gera um relatório de pontos fracos e contra-ataques.
+    """
+    try:
+        supabase = get_supabase()
+        
+        # 1. Busca dados do concorrente
+        comp_result = supabase.table("competitors").select("id, name, campaign_id").eq("id", competitor_id).single().execute()
+        if not comp_result.data:
+            raise HTTPException(status_code=404, detail="Concorrente não encontrado")
+            
+        competitor_name = comp_result.data["name"]
+        campaign_id = comp_result.data["campaign_id"]
+        
+        # 2. Instancia a Crew (Modo Adversário)
+        from src.crew.genesis_crew import GenesisCrew
+        
+        # Usa persona "standard" ou "strategist" como base, mas a Crew vai focar no agente Counter-Intel
+        crew = GenesisCrew(campaign_id=campaign_id, persona="standard")
+        
+        # 3. Executa a análise
+        result = crew.run_adversarial_analysis(competitor_name)
+        
+        return result
+        
+    except HTTPException:
+        raise
     except Exception as e:
-        print(f"❌ Erro ao buscar votos geo: {e}")
+        print(f"❌ Erro na análise adversária: {e}")
         raise HTTPException(status_code=500, detail=str(e))

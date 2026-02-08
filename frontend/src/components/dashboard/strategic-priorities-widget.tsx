@@ -64,22 +64,22 @@ export function StrategicPrioritiesWidget({ campaignId }: { campaignId: string }
     };
 
     return (
-        <Card className="rounded-[2rem] border border-slate-100 shadow-sm bg-white overflow-hidden">
-            <CardHeader className="border-b border-slate-50 pb-4">
+        <Card className="rounded-[2rem] border border-[var(--border-default)] shadow-sm bg-[var(--bg-secondary)] overflow-hidden">
+            <CardHeader className="border-b border-[var(--border-muted)] pb-4">
                 <div className="flex items-center justify-between">
                     <div>
-                        <CardTitle className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                        <CardTitle className="text-xl font-bold text-[var(--text-primary)] flex items-center gap-2">
                             Prioridades Estratégicas
                             <Badge variant="secondary" className="text-xs font-normal">IA Recomendada</Badge>
                         </CardTitle>
-                        <p className="text-xs text-slate-500 font-medium mt-1">
+                        <p className="text-xs text-[var(--text-secondary)] font-medium mt-1">
                             Ações de alto impacto baseadas no cenário atual
                         </p>
                     </div>
                     <Button
                         size="sm"
                         variant="ghost"
-                        className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
+                        className="text-[var(--brand-primary)] hover:text-[var(--brand-primary)] hover:bg-[var(--brand-muted)]"
                         onClick={() => router.push(`/campaign/${campaignId}/plan`)}
                     >
                         Ver Plano Completo <ArrowRight className="ml-1 h-3 w-3" />
@@ -89,21 +89,21 @@ export function StrategicPrioritiesWidget({ campaignId }: { campaignId: string }
             <CardContent className="p-0">
                 {loading ? (
                     <div className="p-12 flex justify-center">
-                        <Loader2 className="h-8 w-8 animate-spin text-slate-300" />
+                        <Loader2 className="h-8 w-8 animate-spin text-[var(--text-tertiary)]" />
                     </div>
                 ) : tasks.length === 0 ? (
-                    <div className="p-8 text-center text-muted-foreground">
+                    <div className="p-8 text-center text-[var(--text-tertiary)]">
                         <p>Nenhuma prioridade crítica detectada no momento.</p>
                         <Button variant="link" onClick={() => router.push(`/campaign/${campaignId}/plan`)}>
                             Gerar novas estratégias
                         </Button>
                     </div>
                 ) : (
-                    <div className="divide-y divide-slate-50">
+                    <div className="divide-y divide-[var(--border-muted)]">
                         {tasks.map((task) => (
                             <div
                                 key={task.id}
-                                className="p-6 hover:bg-slate-50/50 transition-colors group cursor-pointer"
+                                className="p-6 hover:bg-[var(--bg-tertiary)] transition-colors group cursor-pointer"
                                 onClick={() => router.push(`/campaign/${campaignId}/tasks?taskId=${task.id}`)}
                             >
                                 <div className="flex items-start justify-between gap-4">
@@ -111,28 +111,28 @@ export function StrategicPrioritiesWidget({ campaignId }: { campaignId: string }
                                         <div className="flex items-center gap-2 mb-1">
                                             {getPriorityIcon(task.priority)}
                                             {task.pillar && (
-                                                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 border px-1.5 py-0.5 rounded">
+                                                <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-tertiary)] border border-[var(--border-muted)] px-1.5 py-0.5 rounded">
                                                     {task.pillar}
                                                 </span>
                                             )}
                                         </div>
-                                        <h3 className="text-base font-semibold text-slate-900 group-hover:text-indigo-700 transition-colors">
+                                        <h3 className="text-base font-semibold text-[var(--text-primary)] group-hover:text-[var(--brand-primary)] transition-colors">
                                             {task.title}
                                         </h3>
-                                        <p className="text-sm text-slate-500 line-clamp-2 leading-relaxed">
+                                        <p className="text-sm text-[var(--text-secondary)] line-clamp-2 leading-relaxed">
                                             {task.description}
                                         </p>
 
                                         <div className="flex items-center gap-3 mt-3">
                                             {getStatusLabel(task.status)}
-                                            <div className="flex items-center text-[10px] text-slate-400 gap-1">
+                                            <div className="flex items-center text-[10px] text-[var(--text-tertiary)] gap-1">
                                                 <Clock className="h-3 w-3" />
                                                 <span>Sugerido pela IA recentemente</span>
                                             </div>
                                         </div>
                                     </div>
 
-                                    <Button size="sm" className="hidden group-hover:flex bg-indigo-600 text-white rounded-full h-8 px-4 shadow-indigo-200 shadow-md">
+                                    <Button size="sm" className="hidden group-hover:flex bg-[var(--brand-primary)] text-white rounded-full h-8 px-4 shadow-md">
                                         Executar
                                     </Button>
                                 </div>

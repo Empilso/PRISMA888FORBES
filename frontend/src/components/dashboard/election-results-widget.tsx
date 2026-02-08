@@ -88,16 +88,16 @@ export function ElectionResultsWidget({ campaignId }: { campaignId: string }) {
     };
 
     return (
-        <Card className="rounded-[2rem] shadow-sm border border-slate-100 overflow-hidden bg-white">
-            <CardHeader className="border-b border-slate-50 pb-4">
+        <Card className="rounded-[2rem] shadow-sm border border-[var(--border-default)] overflow-hidden bg-[var(--bg-secondary)]">
+            <CardHeader className="border-b border-[var(--border-muted)] pb-4">
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                        <div className="p-2 bg-amber-100/50 rounded-lg text-amber-600">
+                        <div className="p-2 bg-amber-100/10 rounded-lg text-amber-500">
                             <Trophy className="h-5 w-5" />
                         </div>
                         <div>
-                            <CardTitle className="text-xl font-bold text-slate-800">Resultados da Última Eleição</CardTitle>
-                            <p className="text-xs text-slate-500 font-medium mt-0.5">Baseado no arquivo eleitoral importado</p>
+                            <CardTitle className="text-xl font-bold text-[var(--text-primary)]">Resultados da Última Eleição</CardTitle>
+                            <p className="text-xs text-[var(--text-secondary)] font-medium mt-0.5">Baseado no arquivo eleitoral importado</p>
                         </div>
                     </div>
                 </div>
@@ -105,23 +105,23 @@ export function ElectionResultsWidget({ campaignId }: { campaignId: string }) {
             <CardContent className="p-0">
                 {loading ? (
                     <div className="p-8 flex justify-center">
-                        <Loader2 className="h-8 w-8 animate-spin text-slate-300" />
+                        <Loader2 className="h-8 w-8 animate-spin text-[var(--text-tertiary)]" />
                     </div>
                 ) : (
                     <Table>
                         <TableHeader>
-                            <TableRow className="hover:bg-transparent border-slate-50">
-                                <TableHead className="w-[80px] text-center">Pos</TableHead>
-                                <TableHead>Candidato</TableHead>
-                                <TableHead className="text-right">Votos</TableHead>
-                                <TableHead className="text-right">% Válidos</TableHead>
-                                <TableHead className="text-center w-[120px]">Status</TableHead>
+                            <TableRow className="hover:bg-transparent border-[var(--border-muted)]">
+                                <TableHead className="w-[80px] text-center text-[var(--text-secondary)]">Pos</TableHead>
+                                <TableHead className="text-[var(--text-secondary)]">Candidato</TableHead>
+                                <TableHead className="text-right text-[var(--text-secondary)]">Votos</TableHead>
+                                <TableHead className="text-right text-[var(--text-secondary)]">% Válidos</TableHead>
+                                <TableHead className="text-center w-[120px] text-[var(--text-secondary)]">Status</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {results.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                                    <TableCell colSpan={5} className="text-center py-8 text-[var(--text-tertiary)]">
                                         Nenhum dado eleitoral encontrado. Importe o arquivo CSV.
                                     </TableCell>
                                 </TableRow>
@@ -129,18 +129,18 @@ export function ElectionResultsWidget({ campaignId }: { campaignId: string }) {
                                 results.map((r, i) => {
                                     const isMyCandidate = campaignName && r.name.toLowerCase().includes(campaignName.toLowerCase());
                                     return (
-                                        <TableRow key={r.name} className={isMyCandidate ? "bg-indigo-50/30 hover:bg-indigo-50/50" : "hover:bg-slate-50/50"}>
-                                            <TableCell className="text-center font-medium text-slate-500">
+                                        <TableRow key={r.name} className={isMyCandidate ? "bg-indigo-500/10 hover:bg-indigo-500/20 border-[var(--border-muted)]" : "hover:bg-[var(--bg-tertiary)] border-[var(--border-muted)]"}>
+                                            <TableCell className="text-center font-medium text-[var(--text-secondary)]">
                                                 {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `${i + 1}º`}
                                             </TableCell>
-                                            <TableCell className="font-medium text-slate-700">
+                                            <TableCell className="font-medium text-[var(--text-primary)]">
                                                 {r.name}
-                                                {isMyCandidate && <span className="ml-2 text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded font-bold">VOCÊ</span>}
+                                                {isMyCandidate && <span className="ml-2 text-[10px] bg-indigo-500/20 text-indigo-400 px-1.5 py-0.5 rounded font-bold">VOCÊ</span>}
                                             </TableCell>
-                                            <TableCell className="text-right font-mono text-slate-600">
+                                            <TableCell className="text-right font-mono text-[var(--text-secondary)]">
                                                 {r.total_votes.toLocaleString()}
                                             </TableCell>
-                                            <TableCell className="text-right font-mono text-slate-600">
+                                            <TableCell className="text-right font-mono text-[var(--text-secondary)]">
                                                 {r.percentage.toFixed(2)}%
                                             </TableCell>
                                             <TableCell className="text-center">

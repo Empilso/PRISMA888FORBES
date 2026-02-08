@@ -8,9 +8,7 @@ import { ElectionResultsWidget } from "@/components/dashboard/election-results-w
 import { ElectoralMapFull } from "@/components/campaign/ElectoralMapFull"; // Real Interactive Map
 import { StrategicPrioritiesWidget } from "@/components/dashboard/strategic-priorities-widget"; // Real Data Widget
 import { RecentDiagnosesWidget } from "@/components/dashboard/recent-diagnoses-widget"; // Real Data Widget
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
+import { AdversarialDialog } from "@/components/campaign/adversarial-dialog"; // NEW Component
 import { createClient } from "@/lib/supabase/client";
 
 export default function DashboardPage() {
@@ -74,7 +72,19 @@ export default function DashboardPage() {
     }, [campaignId]);
 
     return (
-        <div className="space-y-8 animate-fade-in p-8 bg-slate-50/50 min-h-screen">
+        <div className="space-y-8 animate-fade-in p-8 bg-[var(--bg-primary)] min-h-screen">
+
+            {/* Header with War Room Button */}
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div>
+                    <h1 className="text-3xl font-bold text-[var(--text-primary)] tracking-tight">Visão Geral</h1>
+                    <p className="text-[var(--text-secondary)]">Monitoramento em tempo real da campanha.</p>
+                </div>
+                <div className="flex gap-2">
+                    <AdversarialDialog campaignId={campaignId} />
+                </div>
+            </div>
+
             {/* Stats Grid */}
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
                 <StatsCard
@@ -108,7 +118,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Electoral Map - REAL INTERACTIVE MAP */}
-            <div className="h-[500px] w-full bg-white rounded-[2rem] shadow-sm border border-slate-100 overflow-hidden relative group transition-all hover:shadow-md">
+            <div className="h-[500px] w-full bg-[var(--bg-secondary)] rounded-[2rem] shadow-sm border border-[var(--border-default)] overflow-hidden relative group transition-all hover:shadow-md">
                 <ElectoralMapFull campaignId={campaignId} />
             </div>
 

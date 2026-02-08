@@ -1,108 +1,66 @@
 "use client";
 
-import React, { use, useEffect, useState } from "react";
-import { RadarPremium } from "@/components/campaign/RadarPremium";
+import React from "react";
 import { Button } from "@/components/ui/button";
-import { CaretLeft, Spinner } from "@phosphor-icons/react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { ArrowRight, WarningCircle } from "@phosphor-icons/react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 
-export default function RadarDetailPage({ params }: { params: Promise<{ id: string }> }) {
-    const { id: politicianId } = use(params);
-    const [campaignId, setCampaignId] = useState<string | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-
-    useEffect(() => {
-        const fetchContext = async () => {
-            try {
-                // 1. We need to find the campaign for this politician.
-                // Assuming we can fetch the politician and get their campaign_id directly.
-                // Or verify if they have a 'mandate'.
-                // For now, let's try to fetch politician details.
-
-                // HACK: In this MVP, we might treat the politician_id as the SLUG or ID.
-                // Let's assume we can query politicians endpoint.
-
-                // Try searching for the politician to resolve campaign
-                // We'll search by ID.
-                const res = await fetch(`${API_URL}/api/politicians/${politicianId}`);
-
-                if (res.ok) {
-                    const data = await res.json();
-                    if (data.campaign_id) {
-                        setCampaignId(data.campaign_id);
-                    } else {
-                        // Fallback: If no campaign_id directly on politician (legacy?), try mandates?
-                        setError("Este político não está associado a uma campanha ativa.");
-                    }
-                } else {
-                    // Maybe it's a slug "candidate"?
-                    if (politicianId === 'candidate') {
-                        // Fallback for "candidate" slug used in mocks
-                        // We need a valid UUID for the campaign. Let's assume there's a default one or we can fetch list of campaigns.
-                        // But for now, let's fail gracefully if API fails.
-                        setError("Não foi possível carregar os dados do político.");
-                    } else {
-                        setError("Político não encontrado.");
-                    }
-                }
-            } catch (err) {
-                console.error(err);
-                setError("Erro de conexão ao buscar dados.");
-            } finally {
-                setIsLoading(false);
-            }
-        };
-
-        if (politicianId) {
-            fetchContext();
-        }
-    }, [politicianId]);
-
-    if (isLoading) {
-        return (
-            <div className="h-[50vh] flex flex-col items-center justify-center gap-4">
-                <Spinner className="h-8 w-8 animate-spin text-violet-600" />
-                <p className="text-slate-500 font-medium">Carregando contexto do Radar...</p>
-            </div>
-        );
-    }
-
-    if (error || !campaignId) {
-        return (
-            <div className="p-8 max-w-2xl mx-auto text-center space-y-6">
-                <div className="bg-red-50 p-6 rounded-2xl border border-red-100">
-                    <h2 className="text-lg font-bold text-red-800 mb-2">Erro de Acesso</h2>
-                    <p className="text-red-600">{error || "Campanha não identificada."}</p>
-                </div>
-                <Button variant="outline" asChild>
-                    <Link href="/admin/radar">
-                        <CaretLeft className="mr-2 h-4 w-4" />
-                        Voltar para Lista
-                    </Link>
-                </Button>
-            </div>
-        );
-    }
-
+export default function DeprecatedRadarPage() {
     return (
-        <div className="p-6 space-y-6 bg-slate-50 min-h-screen">
-            {/* Breadcrumb / Back Navigation */}
-            <div className="flex items-center gap-2 text-sm text-slate-500 mb-4">
-                <Link href="/admin/radar" className="hover:text-violet-600 hover:underline flex items-center transition-colors">
-                    <CaretLeft className="mr-1 h-3 w-3" />
-                    Radar
-                </Link>
-                <span>/</span>
-                <span className="font-medium text-slate-900">Detalhamento</span>
-            </div>
+        <div className="min-h-screen bg-slate-50 flex items-center justify-center p-8">
+            <div className="max-w-2xl w-full space-y-6">
+                <Alert className="border-amber-200 bg-amber-50">
+                    <WarningCircle className="h-5 w-5 text-amber-600" />
+                    <AlertTitle className="text-amber-900 font-bold text-lg">
+                        🚧 Página Descontinuada
+                    </AlertTitle>
+                    <AlertDescription className="text-amber-800 mt-2">
+                        Esta página faz parte do sistema antigo (Janeiro 2026) e foi arquivada para evitar instabilidades.
+                    </AlertDescription>
+                </Alert>
 
-            {/* Render with initialPoliticianId to allow auto-selection inside RadarPremium */}
-            {/* Note: We need to update RadarPremium to verify if it accepts initialPoliticoId or if we need to modify it */}
-            <RadarPremium campaignId={campaignId} initialPoliticianId={politicianId} />
+                <div className="bg-white p-8 rounded-2xl border shadow-sm space-y-6">
+                    <div>
+                        <h1 className="text-2xl font-bold text-slate-900 mb-2">
+                            Sistema Atualizado para Modo Enterprise
+                        </h1>
+                        <p className="text-slate-600">
+                            O módulo de Radar foi completamente refatorado e agora está disponível no Dashboard principal
+                            com funcionalidades aprimoradas de análise adversária.
+                        </p>
+                    </div>
+
+                    <div className="border-t pt-6">
+                        <h2 className="font-bold text-slate-800 mb-3">Novas Funcionalidades:</h2>
+                        <ul className="space-y-2 text-slate-600">
+                            <li className="flex items-start gap-2">
+                                <span className="text-green-600 mt-1">✓</span>
+                                <span><strong>Sala de Guerra:</strong> Análise adversária com IA de contra-inteligência</span>
+                            </li>
+                            <li className="flex items-start gap-2">
+                                <span className="text-green-600 mt-1">✓</span>
+                                <span><strong>Seleção Inteligente:</strong> Concorrentes automaticamente detectados por cargo e cidade</span>
+                            </li>
+                            <li className="flex items-start gap-2">
+                                <span className="text-green-600 mt-1">✓</span>
+                                <span><strong>Logs em Tempo Real:</strong> Rastreamento completo de execuções da IA</span>
+                            </li>
+                        </ul>
+                    </div>
+
+                    <Button asChild className="w-full bg-violet-600 hover:bg-violet-700" size="lg">
+                        <Link href="/campaign">
+                            Acessar Dashboard Enterprise
+                            <ArrowRight className="ml-2 h-4 w-4" />
+                        </Link>
+                    </Button>
+                </div>
+
+                <p className="text-center text-sm text-slate-400">
+                    Os componentes antigos foram arquivados em <code className="bg-slate-100 px-2 py-1 rounded text-xs">old_legacy_january/</code>
+                </p>
+            </div>
         </div>
     );
 }

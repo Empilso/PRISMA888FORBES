@@ -29,6 +29,33 @@ class PersonaCreate(BaseModel):
     llm_model: Optional[str] = "gpt-4o-mini"
     type: Optional[str] = "strategy"
     is_active: Optional[bool] = True
+    agent_id: Optional[str] = None  # FK para tabela agents (Inheritance Base)
+
+# ... (Update and List unchanged) ...
+
+@router.post("")
+async def create_persona(persona: PersonaCreate):
+    # ... (check existing unchanged) ...
+        
+        # Cria a persona
+        payload = {
+            "name": persona.name,
+            "display_name": persona.display_name,
+            "description": persona.description,
+            "icon": persona.icon,
+            "config": persona.config,
+            "llm_model": persona.llm_model,
+            "type": persona.type or "strategy",
+            "is_active": persona.is_active
+        }
+        
+        # Add agent_id if present (Inheritance Link)
+        if persona.agent_id:
+            payload["agent_id"] = persona.agent_id
+
+        result = supabase.table("personas").insert(payload).execute()
+        
+        return result.data[0]
 
 
 class PersonaUpdate(BaseModel):
@@ -89,53 +116,6 @@ async def get_persona(persona_id: str):
     return result.data
 
 
-@router.post("")
-async def create_persona(persona: PersonaCreate):
-    """
-    Cria uma nova persona.
-    
-    Args:
-        persona: Dados da nova persona
-    
-    Returns:
-        Persona criada
-    """
-    try:
-        supabase = get_supabase_client()
-        
-        # Verifica se já existe uma persona com esse nome
-        existing = supabase.table("personas") \
-            .select("id") \
-            .eq("name", persona.name) \
-            .execute()
-        
-        if existing.data:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Já existe uma persona com o nome '{persona.name}'"
-            )
-        
-        # Cria a persona (config já é Dict[str, Any])
-        result = supabase.table("personas").insert({
-            "name": persona.name,
-            "display_name": persona.display_name,
-            "description": persona.description,
-            "icon": persona.icon,
-            "config": persona.config,  # Já é dict, não precisa de model_dump()
-            "llm_model": persona.llm_model,
-            "type": persona.type or "strategy",
-            "is_active": persona.is_active
-        }).execute()
-        
-        return result.data[0]
-    
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"❌ [PERSONAS API] Erro ao criar persona: {e}")
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.put("/{persona_id}")

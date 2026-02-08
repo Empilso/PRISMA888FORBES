@@ -50,7 +50,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { TaskDetailsSheet } from "@/components/tasks/task-details-sheet";
+import { TaskDetailsDialog } from "@/components/tasks/task-details-dialog";
 import { TaskStatusSelector } from "@/components/tasks/TaskStatusSelector";
 
 interface Task {
@@ -494,8 +494,8 @@ export default function TasksContent({ campaignId, simpleMode = false }: { campa
                 </TabsContent>
             </Tabs>
 
-            {/* Task Details Sheet */}
-            <TaskDetailsSheet
+            {/* Task Details Dialog (Refactored for focus) */}
+            <TaskDetailsDialog
                 task={selectedTask as any}
                 open={isSheetOpen}
                 onOpenChange={(open) => {

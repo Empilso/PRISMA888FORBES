@@ -85,7 +85,7 @@ export function useMapClusters({
     }, [locations]);
 
     // Configurações do Supercluster
-    const clusterOptions: Supercluster.Options<ClusterProperties, ClusterProperties> = {
+    const clusterOptions = useMemo((): Supercluster.Options<ClusterProperties, ClusterProperties> => ({
         radius: 75, // Raio de clustering em pixels (ajustar conforme necessário)
         maxZoom: 16, // Zoom máximo onde clustering ainda acontece
         minZoom: 3,
@@ -109,7 +109,7 @@ export function useMapClusters({
             else accumulated.color = 'red';
         },
         ...options
-    };
+    }), [JSON.stringify(options)]); // Estabiliza as opções para evitar recriação a cada render
 
     // Usa o hook do use-supercluster
     const { clusters, supercluster } = useSupercluster({

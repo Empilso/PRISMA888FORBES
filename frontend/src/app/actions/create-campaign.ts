@@ -158,9 +158,9 @@ export async function createCampaign(formData: FormData) {
             .from("profiles")
             .update({
                 campaign_id: campaign.id,
-                role: "candidate"
-                // phone: telefone, // TODO: Adicionar no banco
-                // cpf: cpf // TODO: Adicionar no banco
+                role: "candidate",
+                phone: telefone,
+                cpf: cpf
             })
             .eq("id", authUser.user.id);
 

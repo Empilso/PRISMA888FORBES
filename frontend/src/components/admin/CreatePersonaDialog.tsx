@@ -1,4 +1,4 @@
-    "use client";
+"use client";
 
 import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -212,7 +212,10 @@ export function CreatePersonaDialog({ onPersonaCreated, trigger }: CreatePersona
 
             // Monta o objeto de agentes baseado no template
             template.agents.forEach(agentId => {
-                agents[agentId] = AVAILABLE_AGENTS[agentId];
+                agents[agentId] = {
+                    ...AVAILABLE_AGENTS[agentId],
+                    agent_id: agentId // Enterprise Link: ID for Inheritance
+                };
             });
 
             // Cria o config dinâmico

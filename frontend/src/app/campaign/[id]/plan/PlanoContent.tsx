@@ -8,7 +8,7 @@ import { AIStrategiesList } from "@/components/campaign/ai-strategies-list";
 import { CampaignManifesto } from "@/components/campaign/CampaignManifesto";
 import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
-import { TaskDetailsSheet } from "@/components/tasks/task-details-sheet";
+import { TaskDetailsDialog } from "@/components/tasks/task-details-dialog";
 import { ExamplesRenderer } from "@/components/tasks/ExamplesRenderer";
 
 interface Task {
@@ -310,8 +310,8 @@ export default function PlanoContent({ campaignId }: { campaignId: string }) {
                 )}
             </div>
 
-            {/* Rich Task Modal */}
-            <TaskDetailsSheet
+            {/* Rich Task Modal - Focused Dialog */}
+            <TaskDetailsDialog
                 task={selectedTask as any}
                 open={isSheetOpen}
                 onOpenChange={(open) => {

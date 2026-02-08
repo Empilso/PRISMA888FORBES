@@ -15,6 +15,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Rocket, Target, Users, Zap, Loader2, X, AlertTriangle, Calendar as CalendarIcon, User, Tag, Clock } from "lucide-react";
 
+import { TraceLogViewer } from "@/components/console/TraceLogViewer";
+
 interface Strategy {
     id: string;
     title: string;
@@ -30,6 +32,7 @@ interface StrategyDetailModalProps {
     onClose: () => void;
     onActivate: (strategyId: string, strategyTitle: string) => Promise<void>;
     onReject: (strategyId: string, strategyTitle: string) => Promise<void>;
+    personaId?: string; // Enterprise Feature
 }
 
 // Mapeamento de fases
@@ -51,7 +54,8 @@ const normalizePhase = (phase: string | null | undefined): string => {
     return map[phase] || map[phase.toLowerCase()] || phase;
 };
 
-export function StrategyDetailModal({ strategy, isOpen, onClose, onActivate, onReject }: StrategyDetailModalProps) {
+export function StrategyDetailModal(props: StrategyDetailModalProps) {
+    const { strategy, isOpen, onClose, onActivate, onReject, personaId } = props;
     const [activating, setActivating] = useState(false);
     const [rejecting, setRejecting] = useState(false);
 
@@ -125,6 +129,23 @@ export function StrategyDetailModal({ strategy, isOpen, onClose, onActivate, onR
                                         className="min-h-[300px] text-base leading-relaxed bg-slate-50/30 border-slate-200 resize-none focus-visible:ring-1 focus-visible:ring-primary/20"
                                         defaultValue={strategy.description}
                                     />
+
+                                    {/* --- Enterprise Log Viewer --- */}
+                                    <div className="border-t my-6 border-slate-100" />
+                                    <div className="space-y-4">
+                                        <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
+                                            📜 Histórico de Execução (Neural Trace)
+                                        </h3>
+                                        {props.personaId ? (
+                                            <div className="rounded-lg overflow-hidden border border-slate-200 shadow-sm">
+                                                <TraceLogViewer personaId={props.personaId} className="h-[300px]" />
+                                            </div>
+                                        ) : (
+                                            <div className="text-xs text-slate-400 italic">
+                                                ID do Agente não vinculado a esta estratégia.
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             </TabsContent>
                             <TabsContent value="history" className="py-8 text-center text-slate-400">

@@ -1,0 +1,75 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// 1. Tabela Agents (Biblioteca de Blueprints)
+model agents {
+  id               String   @id @default(uuid())
+  role             String
+  goal             String
+  backstory        String
+  // Enterprise Fields
+  version          Int      @default(1)
+  tools            Json     // ["web_search", "db_query"]
+  compliance_rules Json?    // { "allowed_domains": [], "forbidden_words": [] }
+  is_active        Boolean  @default(true)
+  metadata         Json?    // { "cost_per_token": 0.003, "preferred_model": "gpt-4o" }
+  
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+  
+  // Relations
+  personas         personas[]
+}
+
+// 2. Tabela Personas (Instâncias de Campanha)
+model personas {
+  id          String   @id @default(uuid())
+  name        String   // display_name
+  description String?
+  campaign_id String?  // Optional link to campaign
+  
+  // Enterprise Fields
+  agent_id    String?
+  agent       agents?  @relation(fields: [agent_id], references: [id])
+  
+  overrides   Json?    // { "prompts": "..." } - Diferenças do pai
+  status      String   @default("idle") // idle, running, paused, error
+  
+  config      Json?    // Legacy/Full config dump
+  
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  // Relations
+  logs        ai_execution_logs[]
+}
+
+// 3. Tabela de Auditoria (Observabilidade)
+model ai_execution_logs {
+  id            String   @id @default(uuid())
+  
+  persona_id    String
+  persona       personas @relation(fields: [persona_id], references: [id], onDelete: Cascade)
+  
+  trace_id      String   @unique // Para rastrear a cadeia completa
+  step_name     String   // "Research", "Drafting"
+  agent_role    String
+  model_used    String
+  
+  input_tokens  Int?
+  output_tokens Int?
+  
+  raw_input     String   @db.Text
+  raw_output    String   @db.Text
+  
+  tool_calls    Json?
+  
+  is_success    Boolean  @default(true)
+  created_at    DateTime @default(now())
+}

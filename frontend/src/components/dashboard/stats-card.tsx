@@ -17,10 +17,10 @@ interface StatsCardProps {
 }
 
 const variantStyles = {
-    default: "bg-blue-50 text-blue-600 dark:bg-blue-950 dark:text-blue-400",
-    primary: "bg-primary/10 text-primary",
-    success: "bg-green-50 text-green-600 dark:bg-green-950 dark:text-green-400",
-    warning: "bg-amber-50 text-amber-600 dark:bg-amber-950 dark:text-amber-400",
+    default: "bg-[var(--bg-tertiary)] text-[var(--text-primary)] border border-[var(--border-default)]",
+    primary: "bg-[var(--brand-muted)] text-[var(--brand-primary)]",
+    success: "bg-[var(--success-muted)] text-[var(--success)]",
+    warning: "bg-[var(--warning-muted)] text-[var(--warning)]",
 };
 
 export function StatsCard({

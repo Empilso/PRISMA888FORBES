@@ -8,12 +8,12 @@ const buttonVariants = cva(
     {
         variants: {
             variant: {
-                default: "bg-primary text-primary-foreground hover:bg-primary/90 shadow-md shadow-primary/30",
-                destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/90 shadow-md shadow-destructive/30",
-                outline: "border border-input bg-background hover:bg-accent hover:text-accent-foreground",
-                secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80 shadow-sm",
-                ghost: "hover:bg-accent hover:text-accent-foreground",
-                link: "text-primary underline-offset-4 hover:underline",
+                default: "bg-[var(--brand-primary)] text-white hover:bg-[var(--brand-hover)] active:bg-[var(--brand-active)] shadow-md shadow-[var(--brand-muted)]",
+                destructive: "bg-[var(--danger)] text-white hover:bg-[var(--danger)]/90 shadow-md shadow-[var(--danger-muted)]",
+                outline: "border border-[var(--border-default)] bg-transparent hover:bg-[var(--bg-tertiary)] text-[var(--text-primary)]",
+                secondary: "bg-[var(--bg-tertiary)] text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] border border-[var(--border-default)] shadow-sm",
+                ghost: "hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)]",
+                link: "text-[var(--brand-primary)] underline-offset-4 hover:underline",
             },
             size: {
                 default: "h-11 px-6 py-2", /* Taller and wider for better touch targets */

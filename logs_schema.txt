@@ -1,0 +1,30 @@
+
+--- TABLE: ai_execution_logs SCHEMA ---
+Column               | Type            | Nullable   | Default
+------------------------------------------------------------
+id                   | uuid            | NO         | uuid_generate_v4()
+persona_id           | uuid            | NO         | None
+trace_id             | text            | NO         | None
+step_name            | text            | NO         | None
+agent_role           | text            | NO         | None
+model_used           | text            | NO         | None
+input_tokens         | integer         | YES        | None
+output_tokens        | integer         | YES        | None
+raw_input            | text            | NO         | None
+raw_output           | text            | NO         | None
+tool_calls           | jsonb           | YES        | None
+is_success           | boolean         | NO         | true
+created_at           | timestamp without time zone | NO         | CURRENT_TIMESTAMP
+
+--- CONSTRAINTS ---
+Name: ai_execution_logs_persona_id_fkey | Type: f | Def: FOREIGN KEY (persona_id) REFERENCES personas(id) ON UPDATE CASCADE ON DELETE CASCADE
+Name: ai_execution_logs_pkey | Type: p | Def: PRIMARY KEY (id)
+
+--- RECENT DATA (Last 5) ---
+('1c4b2808-769e-44e4-8410-b4d06154d06f', '8cf73621-34c1-4ed0-9104-40519378b872', '{}\n```\n\n```', 'Thought: Preciso analisar a campanha com foco em G', datetime.datetime(2026, 2, 7, 9, 45, 5, 854000))
+('cea22949-b855-4aa1-9eaf-84b9e95545fd', '5ff45413-7568-4e42-b265-e963e050d438', '{}', 'Thought: Preciso analisar a campanha 045a77c6-38b2', datetime.datetime(2026, 2, 7, 0, 5, 11, 710000))
+('50e27e40-8e1d-4456-9e0a-bc30e3de1687', 'd75733ad-8186-4108-bb34-7aa9cceffcb4', '{}', 'Thought: Preciso analisar a campanha 045a77c6-38b2', datetime.datetime(2026, 2, 6, 11, 55, 30, 926000))
+('c1e2a1fc-0d8b-4cfb-8f7f-5b87c0fa996b', '14e370d2-de24-41d4-b82c-4ee77f47f5a3', 'Task Context', '**3 PILARES ESTRATÉGICOS PARA A CAMPANHA**\n\n**PILA', datetime.datetime(2026, 2, 6, 11, 38, 41, 666000))
+
+--- TRACE_ID DUPLICATES ---
+No duplicates found.

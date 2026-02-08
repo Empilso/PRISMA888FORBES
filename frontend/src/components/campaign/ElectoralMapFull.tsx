@@ -11,6 +11,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFo
 import { MapNotesLayer, MapNote } from "@/components/map/MapNotesLayer";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 
 // Importação dinâmica do mapa (SSR false)
 const MapComponent = dynamic(() => import("@/components/dashboard/map-component"), {
@@ -408,6 +409,10 @@ export function ElectoralMapFull({ campaignId }: ElectoralMapFullProps) {
         <div className="relative h-[calc(100vh-4rem)] w-full overflow-hidden flex flex-col bg-slate-50 border rounded-2xl shadow-sm">
 
             {/* Toolbar e Top Left */}
+
+            // ... (inside component)
+
+            // ... (Toolbar section)
             <div className="absolute top-4 left-4 z-[100] flex flex-col gap-2">
                 <div className="bg-white dark:bg-slate-950 p-1 rounded-md shadow-md border flex flex-col gap-1">
                     <Button
@@ -415,7 +420,7 @@ export function ElectoralMapFull({ campaignId }: ElectoralMapFullProps) {
                         size="icon"
                         className="h-8 w-8"
                         onClick={() => setShowControls(!showControls)}
-                        title="Configurações do Mapa"
+                        title="Configurações e Camadas"
                     >
                         <Layers className="h-4 w-4" />
                     </Button>
@@ -435,49 +440,18 @@ export function ElectoralMapFull({ campaignId }: ElectoralMapFullProps) {
                         <StickyNote className="h-4 w-4" />
                     </Button>
 
-                    {/* Competitor Overlay Toggle */}
-                    {competitors.length > 0 && (
-                        <div className="flex items-center gap-1 ml-2 pl-2 border-l">
-                            <select
-                                className="h-8 text-xs p-1 rounded border bg-white dark:bg-slate-800 w-28"
-                                value={selectedCompetitorId || ''}
-                                onChange={(e) => handleCompetitorChange(e.target.value)}
-                                disabled={loadingCompetitor}
-                            >
-                                <option value="">Concorrente</option>
-                                {competitors.map(c => (
-                                    <option key={c.id} value={c.id}>{c.name}</option>
-                                ))}
-                            </select>
-                            <Button
-                                variant={showCompetitorOverlay ? "default" : "ghost"}
-                                size="icon"
-                                className={`h-8 w-8 ${showCompetitorOverlay ? "bg-red-500 text-white hover:bg-red-600" : ""}`}
-                                onClick={handleToggleCompetitor}
-                                disabled={!selectedCompetitorId || loadingCompetitor}
-                                title={showCompetitorOverlay ? "Ocultar Concorrente" : "Mostrar Concorrente"}
-                            >
-                                {loadingCompetitor ? (
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : showCompetitorOverlay ? (
-                                    <EyeOff className="h-4 w-4" />
-                                ) : (
-                                    <Eye className="h-4 w-4" />
-                                )}
-                            </Button>
-                        </div>
-                    )}
-
                     <Button variant="ghost" size="icon" className="h-8 w-8"><Filter className="h-4 w-4" /></Button>
                     <Button variant="ghost" size="icon" className="h-8 w-8"><MapIcon className="h-4 w-4" /></Button>
                 </div>
 
                 {showControls && (
-                    <div className="bg-white dark:bg-slate-950 p-4 rounded-md shadow-lg border w-64 space-y-4 animate-in slide-in-from-left-2">
-                        <div className="space-y-2">
-                            <label className="text-xs font-bold uppercase text-muted-foreground">Estilo do Mapa</label>
+                    <div className="bg-white dark:bg-slate-950 p-4 rounded-md shadow-lg border w-72 space-y-6 animate-in slide-in-from-left-2">
+                        <div className="space-y-3">
+                            <h4 className="text-xs font-bold uppercase text-muted-foreground flex items-center gap-2">
+                                <MapIcon className="h-3 w-3" /> Estilo do Mapa
+                            </h4>
                             <select
-                                className="w-full text-sm p-2 rounded border bg-background"
+                                className="w-full text-sm p-2 rounded border bg-background hover:bg-slate-50 transition-colors"
                                 value={mapStyle}
                                 onChange={(e) => setMapStyle(e.target.value)}
                             >
@@ -487,6 +461,47 @@ export function ElectoralMapFull({ campaignId }: ElectoralMapFullProps) {
                                 <option value="satellite">Satélite</option>
                                 <option value="carto-dark">Carto Dark</option>
                             </select>
+                        </div>
+
+                        <div className="space-y-3 pt-4 border-t border-slate-100">
+                            <h4 className="text-xs font-bold uppercase text-muted-foreground flex items-center gap-2">
+                                <Users className="h-3 w-3" /> Radar de Concorrentes
+                            </h4>
+
+                            {competitors.length === 0 ? (
+                                <p className="text-xs text-muted-foreground">Nenhum concorrente cadastrado.</p>
+                            ) : (
+                                <div className="space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <Label htmlFor="competitor-mode" className="text-sm font-medium text-slate-700">
+                                            Exibir Camada
+                                        </Label>
+                                        <Switch
+                                            id="competitor-mode"
+                                            checked={showCompetitorOverlay}
+                                            onCheckedChange={handleToggleCompetitor}
+                                            disabled={loadingCompetitor}
+                                        />
+                                    </div>
+
+                                    {showCompetitorOverlay && (
+                                        <div className="animate-in fade-in slide-in-from-top-1">
+                                            <select
+                                                className="w-full text-sm p-2 rounded border bg-background hover:bg-slate-50 transition-colors"
+                                                value={selectedCompetitorId || ''}
+                                                onChange={(e) => handleCompetitorChange(e.target.value)}
+                                                disabled={loadingCompetitor}
+                                            >
+                                                <option value="" disabled>Selecione um alvo...</option>
+                                                {competitors.map(c => (
+                                                    <option key={c.id} value={c.id}>🔴 {c.name}</option>
+                                                ))}
+                                            </select>
+                                            {loadingCompetitor && <p className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Carregando pontos...</p>}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     </div>
                 )}

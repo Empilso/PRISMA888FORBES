@@ -7,7 +7,7 @@ import { DashboardSidebar } from "@/components/dashboard/dashboard-sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Loader2, Sparkles, CheckCircle, Send, GripVertical, Grid3x3, LayoutList, Clock, Bot, RefreshCcw, AlertTriangle, Trash2, ArrowRight, ArrowLeft, Edit, Calendar } from "lucide-react";
+import { Loader2, Sparkles, CheckCircle, Send, GripVertical, Grid3x3, LayoutList, Clock, Bot, RefreshCcw, AlertTriangle, Trash2, ArrowRight, ArrowLeft, Edit, Calendar, ChevronDown, Terminal } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 import { useParams, useRouter } from "next/navigation";
@@ -25,7 +25,10 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { ExecutionConsole } from "@/components/admin/ExecutionConsole";
+import { CollapsibleConsole } from "@/components/console/CollapsibleConsole";
+
+
+
 
 interface Strategy {
     id: string;
@@ -803,15 +806,29 @@ export default function CampaignSetupPage() {
                         {runs.length > 0 && (
                             <div className="flex items-center gap-1 border-l pl-4 ml-2">
                                 <Select value={selectedRunId || ""} onValueChange={setSelectedRunId}>
-                                    <SelectTrigger className="h-8 w-[180px] text-xs">
-                                        <SelectValue placeholder="Versão" />
+                                    <SelectTrigger className="h-8 w-[220px] text-xs flex justify-between items-center group">
+                                        <div className="flex items-center gap-2 truncate">
+                                            <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                                            <SelectValue placeholder="Versão" />
+                                        </div>
+                                        <div className="opacity-50 group-hover:opacity-100 transition-opacity">
+                                            {/* Chevron visual indicator handled by Select primitive or added here */}
+                                        </div>
                                     </SelectTrigger>
-                                    <SelectContent>
-                                        {runs.map((run, index) => (
-                                            <SelectItem key={run.id} value={run.id} className="text-xs">
-                                                v{runs.length - index} • {new Date(run.created_at).toLocaleDateString()}
-                                            </SelectItem>
-                                        ))}
+                                    <SelectContent className="z-[60] min-w-[240px]">
+                                        {runs.map((run, index) => {
+                                            const count = strategies.filter(s => s.run_id === run.id).length;
+                                            return (
+                                                <SelectItem key={run.id} value={run.id} className="text-xs cursor-pointer focus:bg-slate-50">
+                                                    <span className="font-semibold text-slate-700">v{runs.length - index}</span>{' '}
+                                                    <span className="text-slate-500">
+                                                        ({count} {count === 1 ? 'tarefa' : 'tarefas'})
+                                                    </span>{' '}
+                                                    <span className="text-slate-300 mx-1">•</span>{' '}
+                                                    {new Date(run.created_at).toLocaleDateString()}
+                                                </SelectItem>
+                                            );
+                                        })}
                                     </SelectContent>
                                 </Select>
 
@@ -987,174 +1004,172 @@ export default function CampaignSetupPage() {
                 )}
 
                 {/* Content Area - Full Height no Kanban, Auto no resto */}
-                <div className={`flex-1 flex flex-col ${viewMode === 'kanban' ? 'overflow-hidden' : 'overflow-y-auto'}`}>
-                    {/* Dossiê Fixo no Topo (Opcional, pode rolar se quiser, mas aqui vou deixar fixo ou scrollando com conteúdo) */}
-                    {/* Vou colocar dentro do container de conteúdo mas acima do scroll das colunas */}
-
-                    {strategies.length > 0 && (
-                        <div className="px-6 pt-4 pb-2 shrink-0">
-                            <CampaignManifesto
-                                campaignId={campaignId}
-                                planContent={selectedRun?.strategic_plan_text}
-                            />
-                        </div>
-                    )}
-
-                    <div className={`flex-1 px-6 pb-6 ${viewMode === 'kanban' ? 'overflow-hidden' : ''}`}>
-                        {loading ? (
-                            <div className="flex items-center justify-center h-full">
-                                <Loader2 className="h-12 w-12 animate-spin text-primary" />
-                            </div>
-                        ) : strategies.length === 0 ? (
-                            // EMPTY STATE
-                            <div className="flex flex-col items-center justify-center h-full space-y-6 text-center animate-in fade-in zoom-in duration-500">
-                                <div className="relative">
-                                    <div className="absolute inset-0 bg-purple-500/20 blur-3xl rounded-full" />
-                                    <Bot className="h-32 w-32 text-purple-600 relative z-10" />
-                                </div>
-                                <div className="max-w-md space-y-2">
-                                    <h3 className="text-2xl font-bold text-slate-900">Nenhuma estratégia gerada</h3>
-                                    <p className="text-muted-foreground">
-                                        A IA ainda não analisou o perfil deste candidato. Escolha um estrategista para começar.
-                                    </p>
-                                </div>
-                                <GeneratorDialog
+                <div className={`flex-1 flex flex-col overflow-hidden relative pb-12`}>
+                    <div className="flex-1 overflow-y-auto custom-scrollbar">
+                        {/* Dossiê Fixo no Topo */}
+                        {strategies.length > 0 && (
+                            <div className="px-6 pt-4 pb-2 shrink-0">
+                                <CampaignManifesto
                                     campaignId={campaignId}
-                                    onSuccess={handleGenerationSuccess}
-                                    onRunStarted={handleRunStarted}
-                                    trigger={
-                                        <Button size="lg" className="gap-2 bg-purple-600 hover:bg-purple-700 text-lg px-8 py-6 h-auto shadow-xl hover:shadow-2xl transition-all hover:-translate-y-1">
-                                            <Sparkles className="h-6 w-6" />
-                                            Iniciar Inteligência Artificial
-                                        </Button>
-                                    }
+                                    planContent={selectedRun?.strategic_plan_text}
                                 />
                             </div>
-                        ) : (
-                            <>
-                                {/* Visualizações: Kanban ou Matriz */}
-                                {viewMode === 'matrix' ? (
-                                    <StrategicMatrix
-                                        strategies={strategiesForMatrix}
-                                        onStrategyClick={handleStrategyClick}
+                        )}
+
+                        <div className={`px-6 pb-12`}>
+                            {loading ? (
+                                <div className="flex items-center justify-center p-20">
+                                    <Loader2 className="h-12 w-12 animate-spin text-primary" />
+                                </div>
+                            ) : strategies.length === 0 ? (
+                                // EMPTY STATE
+                                <div className="flex flex-col items-center justify-center min-h-[400px] space-y-6 text-center animate-in fade-in zoom-in duration-500">
+                                    <div className="relative">
+                                        <div className="absolute inset-0 bg-purple-500/20 blur-3xl rounded-full" />
+                                        <Bot className="h-32 w-32 text-purple-600 relative z-10" />
+                                    </div>
+                                    <div className="max-w-md space-y-2">
+                                        <h3 className="text-2xl font-bold text-slate-900">Nenhuma estratégia gerada</h3>
+                                        <p className="text-muted-foreground">
+                                            A IA ainda não analisou o perfil deste candidato. Escolha um estrategista para começar.
+                                        </p>
+                                    </div>
+                                    <GeneratorDialog
+                                        campaignId={campaignId}
+                                        onSuccess={handleGenerationSuccess}
+                                        onRunStarted={handleRunStarted}
+                                        trigger={
+                                            <Button size="lg" className="gap-2 bg-purple-600 hover:bg-purple-700 text-lg px-8 py-6 h-auto shadow-xl hover:shadow-2xl transition-all hover:-translate-y-1">
+                                                <Sparkles className="h-6 w-6" />
+                                                Iniciar Inteligência Artificial
+                                            </Button>
+                                        }
                                     />
-                                ) : (
-                                    <DndContext
-                                        sensors={sensors}
-                                        collisionDetection={closestCorners}
-                                        onDragStart={handleDragStart}
-                                        onDragEnd={handleDragEnd}
-                                    >
-                                        <div className="grid grid-cols-2 gap-6 h-full">
-                                            {/* Sugestões da IA */}
-                                            <div className="bg-white rounded-xl shadow-sm border overflow-hidden flex flex-col h-full">
-                                                <DroppableColumn
-                                                    id="suggested"
-                                                    title="Sugestões da IA"
-                                                    icon={<Sparkles className="h-5 w-5 text-purple-600" />}
-                                                    count={suggestedStrategies.length}
-                                                    actionButton={
-                                                        suggestedStrategies.length > 0 && (
+                                </div>
+                            ) : (
+                                <div className="space-y-8">
+                                    {/* Visualizações: Kanban ou Matriz */}
+                                    {viewMode === 'matrix' ? (
+                                        <StrategicMatrix
+                                            strategies={strategiesForMatrix}
+                                            onStrategyClick={handleStrategyClick}
+                                        />
+                                    ) : (
+                                        <DndContext
+                                            sensors={sensors}
+                                            collisionDetection={closestCorners}
+                                            onDragStart={handleDragStart}
+                                            onDragEnd={handleDragEnd}
+                                        >
+                                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                                                {/* Sugestões da IA */}
+                                                <div className="space-y-4">
+                                                    <div className="flex items-center justify-between">
+                                                        <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                                                            <Sparkles className="h-5 w-5 text-purple-600" />
+                                                            Sugestões da IA
+                                                            <span className="text-sm font-normal text-slate-400 ml-1">({suggestedStrategies.length})</span>
+                                                        </h3>
+                                                        {suggestedStrategies.length > 0 && (
                                                             <Button
-                                                                variant="outline"
+                                                                variant="ghost"
                                                                 size="sm"
                                                                 onClick={handleApproveAll}
                                                                 disabled={approvingAll}
-                                                                className="h-8 text-xs border-green-300 text-green-700 hover:bg-green-50"
+                                                                className="h-8 text-xs text-purple-600 hover:bg-purple-50"
                                                             >
-                                                                {approvingAll ? (
-                                                                    <>
-                                                                        <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                                                                        Aprovando...
-                                                                    </>
-                                                                ) : (
-                                                                    <>
-                                                                        <CheckCircle className="h-3 w-3 mr-1" />
-                                                                        Aprovar Todas
-                                                                    </>
-                                                                )}
+                                                                Aprovar Todas
                                                             </Button>
-                                                        )
-                                                    }
-                                                >
-                                                    <div className="space-y-3">
-                                                        {suggestedStrategies.map((strategy) => (
-                                                            <DraggableStrategyCard
-                                                                key={strategy.id}
-                                                                strategy={strategy}
-                                                                onClick={() => handleStrategyClick(strategy)}
-                                                                onMove={handleMove}
-                                                            />
-                                                        ))}
+                                                        )}
                                                     </div>
-                                                </DroppableColumn>
-                                            </div>
-
-                                            {/* Aprovado para Candidato */}
-                                            <div className="bg-white rounded-xl shadow-sm border border-l-4 border-l-emerald-500 overflow-hidden flex flex-col h-full">
-                                                <DroppableColumn
-                                                    id="approved"
-                                                    title="Aprovado para Publicação"
-                                                    icon={<CheckCircle className="h-5 w-5 text-emerald-600" />}
-                                                    count={approvedStrategies.length}
-                                                >
-                                                    <div className="space-y-3 pb-4">
-                                                        {approvedStrategies.map((strategy) => (
-                                                            <DraggableStrategyCard
-                                                                key={strategy.id}
-                                                                strategy={strategy}
-                                                                onClick={() => handleStrategyClick(strategy)}
-                                                                onMove={handleMove}
-                                                            />
-                                                        ))}
+                                                    <div className="bg-slate-50/30 rounded-xl p-4 border border-slate-100 min-h-[300px]">
+                                                        <DroppableColumn
+                                                            id="suggested"
+                                                            title=""
+                                                            icon={null}
+                                                            count={suggestedStrategies.length}
+                                                        >
+                                                            <div className="space-y-3">
+                                                                {suggestedStrategies.map((strategy) => (
+                                                                    <DraggableStrategyCard
+                                                                        key={strategy.id}
+                                                                        strategy={strategy}
+                                                                        onClick={() => handleStrategyClick(strategy)}
+                                                                        onMove={handleMove}
+                                                                    />
+                                                                ))}
+                                                            </div>
+                                                        </DroppableColumn>
                                                     </div>
-                                                </DroppableColumn>
-                                            </div>
-                                        </div>
-
-                                        <DragOverlay>
-                                            {activeId && strategies.find(s => s.id === activeId) ? (
-                                                <div className="opacity-95 scale-105 rotate-2 shadow-2xl">
-                                                    <Card className="border-l-4" style={{ borderLeftColor: strategies.find(s => s.id === activeId)?.pillar === "Credibilidade" ? "#3b82f6" : strategies.find(s => s.id === activeId)?.pillar === "Proximidade" ? "#22c55e" : "#9333ea" }}>
-                                                        <CardHeader className="pb-3">
-                                                            <CardTitle className="text-sm">{strategies.find(s => s.id === activeId)?.title}</CardTitle>
-                                                        </CardHeader>
-                                                    </Card>
                                                 </div>
-                                            ) : null}
-                                        </DragOverlay>
-                                    </DndContext>
-                                )}
-                            </>
-                        )}
 
-                        {viewMode === 'timeline' && (
-                            <div className="h-full overflow-hidden">
-                                <StrategicTimeline
-                                    strategies={strategiesForMatrix}
-                                    onStrategyClick={handleStrategyClick}
-                                    onStrategyUpdate={handleStrategySave}
-                                />
-                            </div>
-                        )}
+                                                {/* Aprovado para Candidato */}
+                                                <div className="space-y-4">
+                                                    <div className="flex items-center justify-between">
+                                                        <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                                                            <CheckCircle className="h-5 w-5 text-emerald-600" />
+                                                            Aprovado para Publicação
+                                                            <span className="text-sm font-normal text-slate-400 ml-1">({approvedStrategies.length})</span>
+                                                        </h3>
+                                                    </div>
+                                                    <div className="bg-emerald-50/20 rounded-xl p-4 border border-emerald-100/50 min-h-[300px]">
+                                                        <DroppableColumn
+                                                            id="approved"
+                                                            title=""
+                                                            icon={null}
+                                                            count={approvedStrategies.length}
+                                                        >
+                                                            <div className="space-y-3 pb-4">
+                                                                {approvedStrategies.map((strategy) => (
+                                                                    <DraggableStrategyCard
+                                                                        key={strategy.id}
+                                                                        strategy={strategy}
+                                                                        onClick={() => handleStrategyClick(strategy)}
+                                                                        onMove={handleMove}
+                                                                    />
+                                                                ))}
+                                                            </div>
+                                                        </DroppableColumn>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <DragOverlay>
+                                                {activeId && strategies.find(s => s.id === activeId) ? (
+                                                    <div className="opacity-95 scale-105 rotate-2 shadow-2xl">
+                                                        <Card className="border-l-4" style={{ borderLeftColor: strategies.find(s => s.id === activeId)?.pillar === "Credibilidade" ? "#3b82f6" : strategies.find(s => s.id === activeId)?.pillar === "Proximidade" ? "#22c55e" : "#9333ea" }}>
+                                                            <CardHeader className="pb-3">
+                                                                <CardTitle className="text-sm">{strategies.find(s => s.id === activeId)?.title}</CardTitle>
+                                                            </CardHeader>
+                                                        </Card>
+                                                    </div>
+                                                ) : null}
+                                            </DragOverlay>
+                                        </DndContext>
+                                    )}
+                                </div>
+                            )}
+
+                            {viewMode === 'timeline' && (
+                                <div className="h-full min-h-[500px]">
+                                    <StrategicTimeline
+                                        strategies={strategiesForMatrix}
+                                        onStrategyClick={handleStrategyClick}
+                                        onStrategyUpdate={handleStrategySave}
+                                    />
+                                </div>
+                            )}
+                        </div>
                     </div>
 
-                    {/* Strategy Editor Sheet */}
-                    <StrategyEditorSheet
-                        strategy={selectedStrategy}
-                        isOpen={isEditorOpen}
-                        onClose={() => setIsEditorOpen(false)}
-                        onSave={handleStrategySave}
-                    />
-
-                    {/* 🖥️ Console Global */}
-                    <ExecutionConsole
-                        runId={currentRunId}
+                    {/* 🖥️ Console Global (Collapsible Footer) */}
+                    <CollapsibleConsole
                         campaignId={campaignId}
-                        isOpen={isConsoleOpen}
-                        onToggle={() => setIsConsoleOpen(!isConsoleOpen)}
+                        isRunning={!!currentRunId}
+                        logsCount={strategies.length}
                     />
                 </div>
+
             </div>
         </div>
     );

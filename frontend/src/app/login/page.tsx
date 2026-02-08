@@ -1,52 +1,84 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { Shield, User } from "lucide-react";
+import { Loader2, AlertCircle } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export default function LoginPage() {
     const router = useRouter();
+    const searchParams = useSearchParams();
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState("");
 
-    const handleLogin = (e: React.FormEvent) => {
+    const supabase = createClient();
+
+    const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
-        // Lógica real de login viria aqui
-        console.log("Login com:", email, password);
-    };
+        setLoading(true);
+        setError("");
 
-    const handleQuickLogin = (role: "admin" | "candidate") => {
-        if (role === "admin") {
-            router.push("/admin/dashboard");
-        } else {
-            // Redireciona para o dashboard da campanha mockada (ID: camp_123)
-            router.push("/campaign/camp_123/dashboard");
+        try {
+            const { error: signInError } = await supabase.auth.signInWithPassword({
+                email,
+                password,
+            });
+
+            if (signInError) {
+                setError(signInError.message === "Invalid login credentials"
+                    ? "Email ou senha incorretos."
+                    : signInError.message);
+                return;
+            }
+
+            // Redirect logic check
+            const redirectTo = searchParams.get('redirectedFrom') || "/admin/dashboard";
+
+            // Force hard refresh/navigation to ensure new session cookies are picked up
+            window.location.href = redirectTo;
+
+        } catch (err) {
+            setError("Ocorreu um erro inesperado. Tente novamente.");
+        } finally {
+            setLoading(false);
         }
     };
 
     return (
-        <div className="flex items-center justify-center min-h-screen bg-slate-50 dark:bg-slate-900">
-            <Card className="w-full max-w-md">
+        <div className="flex items-center justify-center min-h-screen bg-[var(--bg-primary)] px-4">
+            <Card className="w-full max-w-md shadow-lg">
                 <CardHeader className="space-y-1">
                     <CardTitle className="text-2xl font-bold text-center">Prisma 888</CardTitle>
                     <CardDescription className="text-center">
-                        Entre na sua conta para continuar
+                        Portal Enterprise
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                    {error && (
+                        <Alert variant="destructive">
+                            <AlertCircle className="h-4 w-4" />
+                            <AlertDescription>{error}</AlertDescription>
+                        </Alert>
+                    )}
+
                     <form onSubmit={handleLogin} className="space-y-4">
                         <div className="space-y-2">
-                            <Label htmlFor="email">Email</Label>
+                            <Label htmlFor="email">Email Corporativo</Label>
                             <Input
                                 id="email"
                                 type="email"
-                                placeholder="nome@exemplo.com"
+                                placeholder="admin@prisma888.com"
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
+                                required
+                                disabled={loading}
                             />
                         </div>
                         <div className="space-y-2">
@@ -56,46 +88,18 @@ export default function LoginPage() {
                                 type="password"
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
+                                required
+                                disabled={loading}
                             />
                         </div>
-                        <Button type="submit" className="w-full">Entrar</Button>
+                        <Button type="submit" className="w-full font-semibold" disabled={loading}>
+                            {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Acessar Portal"}
+                        </Button>
                     </form>
-
-                    <div className="relative">
-                        <div className="absolute inset-0 flex items-center">
-                            <span className="w-full border-t" />
-                        </div>
-                        <div className="relative flex justify-center text-xs uppercase">
-                            <span className="bg-background px-2 text-muted-foreground">
-                                Acesso Rápido (Dev)
-                            </span>
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                        <Button
-                            variant="outline"
-                            className="flex flex-col items-center h-auto py-4 gap-2 hover:bg-slate-100 dark:hover:bg-slate-800"
-                            onClick={() => handleQuickLogin("admin")}
-                        >
-                            <Shield className="h-6 w-6 text-purple-600" />
-                            <span className="text-xs font-semibold">Super Admin</span>
-                            <span className="text-[10px] text-muted-foreground">Visão Global</span>
-                        </Button>
-                        <Button
-                            variant="outline"
-                            className="flex flex-col items-center h-auto py-4 gap-2 hover:bg-slate-100 dark:hover:bg-slate-800"
-                            onClick={() => handleQuickLogin("candidate")}
-                        >
-                            <User className="h-6 w-6 text-blue-600" />
-                            <span className="text-xs font-semibold">Candidato</span>
-                            <span className="text-[10px] text-muted-foreground">Visão Tenant</span>
-                        </Button>
-                    </div>
                 </CardContent>
-                <CardFooter className="flex justify-center">
-                    <p className="text-xs text-muted-foreground">
-                        &copy; 2024 Prisma 888. Todos os direitos reservados.
+                <CardFooter className="flex justify-center flex-col gap-4">
+                    <p className="text-xs text-muted-foreground text-center">
+                        &copy; 2026 Prisma 888 Enterprise. <br />Acesso restrito e monitorado.
                     </p>
                 </CardFooter>
             </Card>

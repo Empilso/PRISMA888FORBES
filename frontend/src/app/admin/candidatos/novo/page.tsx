@@ -231,10 +231,10 @@ function CandidateForm() {
         <div className="max-w-6xl mx-auto p-8 space-y-6">
             {/* HEADER */}
             <div className="mb-6">
-                <h1 className="text-2xl font-semibold text-gray-900">
+                <h1 className="text-2xl font-semibold text-[var(--text-primary)]">
                     {isEditing ? "Editar Candidato" : "Adicionar Candidato"}
                 </h1>
-                <p className="text-sm text-gray-500 mt-1">
+                <p className="text-sm text-[var(--text-secondary)] mt-1">
                     {isEditing ? "Atualize os dados da campanha e do candidato" : "Complete o cadastro e carregue os dados eleitorais"}
                 </p>
             </div>
@@ -242,7 +242,7 @@ function CandidateForm() {
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
 
                 {/* CARD 1: ARQUIVOS */}
-                <Card className="border border-gray-200">
+                <Card className="border border-[var(--border-default)]">
                     <CardHeader className="pb-3">
                         <CardTitle className="text-xs font-semibold uppercase text-gray-500 tracking-wide">
                             ARQUIVOS {isEditing && "(Envie apenas se quiser substituir)"}
@@ -295,29 +295,29 @@ function CandidateForm() {
                 </Card>
 
                 {/* CARD 2: INFORMAÇÕES PESSOAIS */}
-                <Card className="border border-gray-200">
+                <Card className="border border-[var(--border-default)]">
                     <CardHeader className="pb-3 flex flex-row items-center gap-2">
                         <User className="h-4 w-4 text-blue-600" />
-                        <CardTitle className="text-sm font-semibold text-gray-700">
+                        <CardTitle className="text-sm font-semibold text-[var(--text-primary)]">
                             Informações Pessoais
                         </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-1.5">
-                                <Label className="text-xs text-gray-600">Nome Completo *</Label>
+                                <Label className="text-xs text-[var(--text-secondary)]">Nome Completo *</Label>
                                 <Input
                                     placeholder="Ex: João Silva"
-                                    className="h-10 border-gray-300"
+                                    className="h-10"
                                     {...register("nome", { required: true })}
                                 />
                             </div>
                             <div className="space-y-1.5">
-                                <Label className="text-xs text-gray-600">Nome Oficial na Urna (Igual TSE) *</Label>
+                                <Label className="text-xs text-[var(--text-secondary)]">Nome Oficial na Urna (Igual TSE) *</Label>
                                 <div className="flex gap-2">
                                     <Input
                                         placeholder="Ex: JOÃO DA SILVA JUNIOR"
-                                        className="h-10 border-gray-300 flex-1"
+                                        className="h-10 flex-1"
                                         {...register("nomeUrna", {
                                             required: true,
                                             onChange: (e) => e.target.value = e.target.value.toUpperCase() // Força uppercase visual
@@ -346,7 +346,7 @@ function CandidateForm() {
                         </div>
                         <div className="grid grid-cols-3 gap-4">
                             <div className="space-y-1.5">
-                                <Label className="text-xs text-gray-600">CPF</Label>
+                                <Label className="text-xs text-[var(--text-secondary)]">CPF</Label>
                                 <Input
                                     placeholder="000.000.000-00"
                                     className="h-10 border-gray-300"
@@ -354,7 +354,7 @@ function CandidateForm() {
                                 />
                             </div>
                             <div className="space-y-1.5">
-                                <Label className="text-xs text-gray-600">Email</Label>
+                                <Label className="text-xs text-[var(--text-secondary)]">Email</Label>
                                 <Input
                                     type="email"
                                     placeholder="email@example.com"
@@ -363,7 +363,7 @@ function CandidateForm() {
                                 />
                             </div>
                             <div className="space-y-1.5">
-                                <Label className="text-xs text-gray-600">Telefone</Label>
+                                <Label className="text-xs text-[var(--text-secondary)]">Telefone</Label>
                                 <Input
                                     placeholder="(00) 00000-0000"
                                     className="h-10 border-gray-300"
@@ -376,7 +376,7 @@ function CandidateForm() {
 
                 {/* CARD 3: CREDENCIAIS DE ACESSO */}
                 {!isEditing && (
-                    <Card className="border border-gray-200">
+                    <Card className="border border-[var(--border-default)]">
                         <CardHeader className="pb-3 flex flex-row items-center gap-2">
                             <Key className="h-4 w-4 text-purple-600" />
                             <CardTitle className="text-sm font-semibold text-gray-700">
@@ -386,10 +386,10 @@ function CandidateForm() {
                         <CardContent className="space-y-4">
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-1.5">
-                                    <Label className="text-xs text-gray-600">Login (gerado automaticamente)</Label>
+                                    <Label className="text-xs text-[var(--text-secondary)]">Login (gerado automaticamente)</Label>
                                     <div className="relative">
                                         <Input
-                                            className="h-10 border-gray-300 pr-10 bg-gray-50 font-mono text-sm"
+                                            className="h-10 pr-10 bg-[var(--bg-tertiary)] font-mono text-sm"
                                             readOnly
                                             {...register("login")}
                                         />
@@ -403,10 +403,10 @@ function CandidateForm() {
                                     </div>
                                 </div>
                                 <div className="space-y-1.5">
-                                    <Label className="text-xs text-gray-600">Senha (gerado automaticamente)</Label>
+                                    <Label className="text-xs text-[var(--text-secondary)]">Senha (gerado automaticamente)</Label>
                                     <div className="relative">
                                         <Input
-                                            className="h-10 border-gray-300 pr-10 bg-gray-50 font-mono text-sm"
+                                            className="h-10 pr-10 bg-[var(--bg-tertiary)] font-mono text-sm"
                                             readOnly
                                             {...register("password")}
                                         />
@@ -432,7 +432,7 @@ function CandidateForm() {
                 )}
 
                 {/* CARD 4: INFORMAÇÕES ELEITORAIS */}
-                <Card className="border border-gray-200">
+                <Card className="border border-[var(--border-default)]">
                     <CardHeader className="pb-3 flex flex-row items-center gap-2">
                         <MapPin className="h-4 w-4 text-green-600" />
                         <CardTitle className="text-sm font-semibold text-gray-700">
@@ -442,7 +442,7 @@ function CandidateForm() {
                     <CardContent className="space-y-4">
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-1.5">
-                                <Label className="text-xs text-gray-600">Cargo *</Label>
+                                <Label className="text-xs text-[var(--text-secondary)]">Cargo *</Label>
                                 <Select onValueChange={(v) => setValue("cargo", v)} value={watch("cargo")}>
                                     <SelectTrigger className="h-10 border-gray-300">
                                         <SelectValue placeholder="Selecione o cargo..." />
@@ -467,7 +467,7 @@ function CandidateForm() {
                                 </Select>
                             </div>
                             <div className="space-y-1.5">
-                                <Label className="text-xs text-gray-600">Número *</Label>
+                                <Label className="text-xs text-[var(--text-secondary)]">Número *</Label>
                                 <Input
                                     type="number"
                                     placeholder="Ex: 15"
@@ -478,7 +478,7 @@ function CandidateForm() {
                         </div>
                         <div className="grid grid-cols-3 gap-4">
                             <div className="space-y-1.5">
-                                <Label className="text-xs text-gray-600">Partido *</Label>
+                                <Label className="text-xs text-[var(--text-secondary)]">Partido *</Label>
                                 <Input
                                     placeholder="Ex: PL"
                                     className="h-10 border-gray-300"
@@ -486,7 +486,7 @@ function CandidateForm() {
                                 />
                             </div>
                             <div className="space-y-1.5">
-                                <Label className="text-xs text-gray-600">Cidade *</Label>
+                                <Label className="text-xs text-[var(--text-secondary)]">Cidade *</Label>
                                 <Input
                                     placeholder="Ex: Itupiranga"
                                     className="h-10 border-gray-300"
@@ -514,7 +514,7 @@ function CandidateForm() {
                         type="button"
                         variant="outline"
                         onClick={() => router.back()}
-                        className="border-gray-300 text-gray-700 h-11 px-6"
+                        className="border-[var(--border-default)] text-[var(--text-primary)] h-11 px-6"
                         disabled={isLoading}
                     >
                         Cancelar

@@ -14,6 +14,9 @@ from supabase import create_client, Client
 from crewai.tools import BaseTool
 from pydantic import BaseModel, Field
 from typing import Optional
+import datetime
+import json
+
 
 
 def get_supabase_client() -> Client:
@@ -407,6 +410,7 @@ campaign_stats = CampaignStatsTool()
 
 # Ferramentas Táticas (Micro-Targeting)
 location_competitor_analysis = LocationCompetitorAnalysisTool()
+competitor_vector_search = CampaignVectorSearchTool() # Alias: A mesma tool suporta 'author' param para rivais
 
 
 # ============================================================
@@ -450,3 +454,83 @@ if __name__ == "__main__":
             query=sys.argv[1],
             campaign_id=sys.argv[2] if len(sys.argv) > 2 else None
         )
+
+# ============================================================
+# FERRAMENTA 4: GASTOS MUNICIPAIS (TCESP)
+# ============================================================
+
+class MunicipalSpendInput(BaseModel):
+    """Schema de input para busca de gastos municipais"""
+    query: str = Field(
+        ..., 
+        description="Pergunta em linguagem natural sobre gastos. Ex: 'Quanto gastou com educação em 2024?' ou 'Gastos com fornecedor X'"
+    )
+
+class MunicipalSpendTool(BaseTool):
+    name: str = "Search Municipal Expenses"
+    description: str = """
+    Pesquisa gastos públicos municipais (TCESP).
+    Útil para encontrar valores pagos a fornecedores, gastos por categoria (educação, saúde, obras) e datas.
+    
+    A ferramenta tenta extrair o ano e categoria da sua pergunta.
+    Exemplo: "Quanto a prefeitura pagou de asfalto em 2024?"
+    """
+    args_schema: type[BaseModel] = MunicipalSpendInput
+
+    def _run(self, query: str) -> str:
+        """Executa busca de gastos no Supabase."""
+        try:
+            print(f"🔎 Municipal Tool analyzing: {query}")
+            
+            # Initialize Supabase (reusing helper from this file)
+            supabase = get_supabase_client()
+
+            # Default to current year or look for year in query
+            current_year = datetime.datetime.now().year
+            target_year = current_year
+            for y in range(2020, current_year + 2):
+                if str(y) in query:
+                    target_year = y
+                    break
+            
+            # Simple keyword search
+            db_query = supabase.table("municipal_expenses") \
+                .select("funcao, forn_nome_razao_social, valor, historico, data_emissao") \
+                .order("valor", desc=True) \
+                .limit(15)
+            
+            # Text Search
+            # remove year from query to avoid noise
+            search_term = query.replace(str(target_year), "").strip()
+            
+            # Remove common stop words for better search
+            for stop in ["quanto", "gastou", "com", "em", "de", "prefeitura", "municipio"]:
+                search_term = search_term.replace(stop, "").strip()
+                
+            if search_term:
+                 db_query = db_query.ilike("historico", f"%{search_term}%")
+
+            results = db_query.execute()
+            
+            if not results.data:
+                return f"Nenhum gasto encontrado para '{search_term}' em {target_year}."
+
+            # Format Response
+            summary = f"💰 Gastos Municipais identificados para '{search_term}' ({target_year}):\n"
+            total = 0
+            for item in results.data:
+                val = float(item.get('valor', 0))
+                total += val
+                forn = item.get('forn_nome_razao_social') or "Fornecedor Desconhecido"
+                func = item.get('funcao') or "Geral"
+                hist = item.get('historico', '')[:50] + "..."
+                summary += f"- R$ {val:,.2f}: {forn} ({func}) [{hist}]\n"
+            
+            summary += f"\nTotal listado (Top 15): R$ {total:,.2f}"
+            return summary
+
+        except Exception as e:
+            return f"Erro ao buscar gastos: {str(e)}"
+
+# Instância exportada
+municipal_spend_tool = MunicipalSpendTool()

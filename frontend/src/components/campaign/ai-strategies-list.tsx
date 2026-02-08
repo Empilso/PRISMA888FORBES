@@ -79,9 +79,14 @@ export function AIStrategiesList({ campaignId, onTaskCreated, activePhase = "all
             if (!response.ok) {
                 let errorDetails;
                 try {
-                    errorDetails = await response.json();
-                } catch {
-                    errorDetails = await response.text();
+                    const text = await response.text();
+                    try {
+                        errorDetails = JSON.parse(text);
+                    } catch {
+                        errorDetails = text;
+                    }
+                } catch (e) {
+                    errorDetails = "Erro desconhecido ao ler resposta";
                 }
 
                 console.error(`Erro ao buscar estratégias (Proxy) [${response.status}]:`, errorDetails);

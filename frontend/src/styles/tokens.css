@@ -1,0 +1,79 @@
+:root {
+    /* Light Mode (Base) */
+    --bg-primary: #ffffff;
+    --bg-secondary: #f6f8fa;
+    --bg-tertiary: #f3f4f6;
+    /* Added for hover states in light mode */
+    --bg-elevated: #ffffff;
+
+    --text-primary: #1f2328;
+    --text-secondary: #656d76;
+    --text-tertiary: #545d68;
+    /* Added to match dark mode parity */
+    --text-disabled: #8c959f;
+    --text-inverse: #ffffff;
+
+    --brand-primary: #7c3aed;
+    --brand-hover: #8b5cf6;
+    --brand-active: #6d28d9;
+    --brand-muted: rgba(124, 58, 237, 0.1);
+
+    --success: #1a7f37;
+    --success-muted: rgba(26, 127, 55, 0.15);
+    --warning: #9a6700;
+    --warning-muted: rgba(154, 103, 0, 0.15);
+    --danger: #cf222e;
+    --danger-muted: rgba(207, 34, 46, 0.15);
+    --info: #0969da;
+    --info-muted: rgba(9, 105, 218, 0.15);
+
+    --border-default: #d0d7de;
+    --border-muted: #d8dee4;
+    --border-strong: #8c959f;
+
+    --shadow: rgba(140, 149, 159, 0.2);
+}
+
+[data-theme="dark"] {
+    /* Dark Mode Tokens (GitHub Dark Dimmed / Vercel Inspired) */
+    --bg-primary: #22272e;
+    /* Fundo principal (mais escuro) */
+    --bg-secondary: #2d333b;
+    /* Cards, painéis elevados */
+    --bg-tertiary: #373e47;
+    /* Hover states, inputs */
+    --bg-elevated: #444c56;
+    /* Modais, dropdowns */
+
+    --text-primary: #adbac7;
+    /* Texto principal (branco suave) */
+    --text-secondary: #768390;
+    /* Texto secundário (cinza médio) */
+    --text-tertiary: #545d68;
+    /* Texto terciário (cinza escuro) */
+    --text-disabled: #444c56;
+    /* Texto desabilitado */
+    --text-inverse: #ffffff;
+    /* Texto sobre backgrounds escuros */
+
+    --brand-primary: #7c3aed;
+    /* Roxo principal (manter branding) */
+    --brand-hover: #8b5cf6;
+    --brand-active: #6d28d9;
+    --brand-muted: rgba(124, 58, 237, 0.15);
+
+    --success: #3fb950;
+    --success-muted: rgba(63, 185, 80, 0.15);
+    --warning: #d29922;
+    --warning-muted: rgba(210, 153, 34, 0.15);
+    --danger: #f85149;
+    --danger-muted: rgba(248, 81, 73, 0.15);
+    --info: #58a6ff;
+    --info-muted: rgba(88, 166, 255, 0.15);
+
+    --border-default: #444c56;
+    --border-muted: #373e47;
+    --border-strong: #768390;
+
+    --shadow: rgba(1, 4, 9, 0.85);
+}

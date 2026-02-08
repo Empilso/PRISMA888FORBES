@@ -8,6 +8,15 @@ from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 from tavily import TavilyClient
 from crewai.tools import BaseTool
+from crewai_tools import PDFSearchTool, ScrapeWebsiteTool, FileReadTool # Knowledge Tools
+
+# IMPORT ENTERPRISE MODELS
+from src.models.enterprise import (
+    PromiseExtractionResult, 
+    FiscalAnalysisResult, 
+    MediaScanResult,
+    MediaItem # Needed for direct instantiation if dict returned
+)
 
 load_dotenv()
 
@@ -17,19 +26,6 @@ def get_supabase_client():
     if not url or not key:
         raise ValueError("Supabase credentials not found in environment")
     return create_client(url, key)
-
-# --- PYDANTIC MODELS FOR STRUCTURED OUTPUT ---
-class MediaItem(BaseModel):
-    date: str = Field(description="Date of the news/article in YYYY-MM-DD format (or 'Recent' if unknown)")
-    source: str = Field(description="Name of the news source, newspaper, or website")
-    title: str = Field(description="Headline or title of the article")
-    sentiment: str = Field(description="Sentiment analysis of the content: 'positive', 'neutral', or 'negative'")
-    url: str = Field(description="Direct URL to the source article")
-    summary: str = Field(description="Brief summary of the content and how it relates to campaign promises")
-
-class MediaScanResult(BaseModel):
-    items: List[MediaItem] = Field(description="List of media items found during the scan")
-    overview: str = Field(description="General overview or conclusion of the media landscape")
 
 # --- CUSTOM TAVILY TOOL (CLASSIC APPROACH) ---
 class TavilySearchTool(BaseTool):
@@ -79,9 +75,6 @@ class RadarCrew:
                  model_name = f"deepseek/{model_name}" if "/" not in model_name else model_name
             
             clean_model = model_name.replace("deepseek/", "")
-            
-            # Audit
-            print(f"[System] LLM_AUDIT create provider=deepseek base_url={base_url} model={clean_model} source=radar_crew.py")
             
             return ChatOpenAI(
                 model=clean_model,
@@ -137,6 +130,30 @@ class RadarCrew:
             return self._get_persona_config_legacy(agent_name)
         return resp.data
 
+    def _get_knowledge_tools(self, agent_data: Dict) -> List[Any]:
+        """Resolves Knowledge Base items into Tools."""
+        kb_tools = []
+        knowledge_base = agent_data.get("knowledge_base", [])
+        
+        if not knowledge_base or not isinstance(knowledge_base, list):
+            return []
+
+        for item in knowledge_base:
+            try:
+                path = item.get("url") or item.get("path")
+                if not path: continue
+                
+                if path.startswith("http"):
+                    kb_tools.append(ScrapeWebsiteTool(website_url=path))
+                elif path.endswith(".pdf") and os.path.exists(path):
+                    kb_tools.append(PDFSearchTool(pdf=path))
+                elif os.path.exists(path):
+                    kb_tools.append(FileReadTool(file_path=path))
+            except Exception as e:
+                print(f"Error loading KB item {item}: {e}")
+                
+        return kb_tools
+
     def _get_persona_config_legacy(self, persona_name: str):
         try:
             resp = self.supabase.table("personas").select("*").eq("name", persona_name).single().execute()
@@ -146,17 +163,20 @@ class RadarCrew:
                 return {
                     "role": config.get("role", "Agente"),
                     "system_prompt": config.get("system_message", ""),
-                    "llm_model": p.get("llm_model")
+                    "llm_model": p.get("llm_model"),
+                    "knowledge_base": [] # Default empty
                 }
         except:
             pass
         raise ValueError(f"Agente '{persona_name}' não encontrado.")
 
-    # --- FASE 1: EXTRAÇÃO ---
+    # --- FASE 1: EXTRAÇÃO (REFATORADA) ---
     def run_extraction(self, document_text: str) -> Dict:
         agent_name = "radar-extrator-promessas"
         agent_data = self._get_agent_config(agent_name)
         
+        kb_tools = self._get_knowledge_tools(agent_data)
+
         agent = Agent(
             role=agent_data.get("role", "Extractor"),
             goal="Extrair promessas de documentos",
@@ -164,7 +184,8 @@ class RadarCrew:
             llm=self._create_llm(agent_data.get("llm_model"), 0.3),
             max_iter=10,
             verbose=True,
-            allow_delegation=False
+            allow_delegation=False,
+            tools=kb_tools # Inject KB Tools
         )
 
         sys_msg = agent_data.get("system_prompt", "")
@@ -173,14 +194,14 @@ class RadarCrew:
             description=f"""
             {sys_msg}
             ANALYZE THE FOLLOWING TEXT AND EXTRACT PROMISES FROM THE GOVERNMENT PLAN.
-            IF THE TEXT IS EMPTY, RETURN [].
-            OUTPUT FORMAT MUST BE A VALID JSON ARRAY.
+            IF THE TEXT IS EMPTY, RETURN EMPTY LIST.
             
             DOCUMENT TEXT:
             {document_text[:50000]} 
             """,
             agent=agent,
-            expected_output="JSON array with extracted promises keys: resumo_promessa, categoria, verbos_chave, entidades_citadas, local, origem, trecho_original"
+            expected_output="Structured JSON with extracted promises.",
+            output_pydantic=PromiseExtractionResult # ENTERPRISE STANDARD
         )
 
         crew = Crew(
@@ -190,25 +211,35 @@ class RadarCrew:
             step_callback=self._log_step
         )
         
-        self.log(f"Iniciando extração com {agent_name}", "System")
-        result = crew.kickoff()
+        self.log(f"Iniciando extração com {agent_name} (Mode: Pydantic)", "System")
         
-        # Simple manual parse for Phase 1 (staying robust but simple)
-        raw = str(result)
-        if "```json" in raw: raw = raw.split("```json")[1].split("```")[0]
-        elif "```" in raw: raw = raw.split("```")[1].split("```")[0]
-             
         try:
-            return json.loads(raw.strip())
-        except json.JSONDecodeError:
-            self.log("Erro ao parsear JSON da IA", "System", "error")
-            return {"raw_output": raw, "error": "json_parse_error"}
+            result = crew.kickoff()
+            
+            # Helper for Pydantic Extraction
+            output_data = {}
+            if hasattr(result, 'pydantic') and result.pydantic:
+                output_data = result.pydantic.model_dump()
+            elif hasattr(result, 'to_dict'):
+                output_data = result.to_dict()
+            else:
+                # Fallback purely defencive
+                print(f"Fallback Dict Parsing for extraction result: {type(result)}")
+                output_data = result.to_dict() if hasattr(result, 'to_dict') else {}
 
-    # --- FASE 2: ANÁLISE FISCAL ---
+            return output_data
+
+        except Exception as e:
+            self.log(f"Erro na extração: {e}", "System", "error")
+            return {"error": str(e), "promises": []}
+
+    # --- FASE 2: ANÁLISE FISCAL (REFATORADA) ---
     def run_fiscal_analysis(self, promises_summary: List[Dict], expenses_summary: Dict) -> Dict:
         agent_name = "radar-fiscal-verbas"
         agent_data = self._get_agent_config(agent_name)
         
+        kb_tools = self._get_knowledge_tools(agent_data)
+
         agent = Agent(
             role=agent_data.get("role", "Auditor"),
             goal="Cruzar promessas com execução orçamentária",
@@ -216,7 +247,8 @@ class RadarCrew:
             llm=self._create_llm(agent_data.get("llm_model"), 0.3),
             max_iter=10,
             verbose=True,
-            allow_delegation=False
+            allow_delegation=False,
+            tools=kb_tools # Inject KB Tools
         )
 
         sys_msg = agent_data.get("system_prompt", "")
@@ -226,7 +258,8 @@ class RadarCrew:
         task = Task(
             description=f"{sys_msg}\nINPUT DATA (JSON):\n{input_json}",
             agent=agent,
-            expected_output="JSON with fiscal analysis and semaphore evaluation"
+            expected_output="Structured JSON with fiscal analysis.",
+            output_pydantic=FiscalAnalysisResult # ENTERPRISE STANDARD
         )
 
         crew = Crew(
@@ -236,20 +269,25 @@ class RadarCrew:
             step_callback=self._log_step
         )
         
-        self.log(f"Iniciando análise fiscal com {agent_name}", "System")
-        result = crew.kickoff()
+        self.log(f"Iniciando análise fiscal com {agent_name} (Mode: Pydantic)", "System")
         
-        raw = str(result)
-        if "```json" in raw: raw = raw.split("```json")[1].split("```")[0]
-        elif "```" in raw: raw = raw.split("```")[1].split("```")[0]
-             
         try:
-            return json.loads(raw.strip())
-        except json.JSONDecodeError:
-            self.log("Erro ao parsear JSON da IA (Fiscal)", "System", "error")
-            return {"raw_output": raw, "error": "json_parse_error"}
+            result = crew.kickoff()
+            
+            output_data = {}
+            if hasattr(result, 'pydantic') and result.pydantic:
+                output_data = result.pydantic.model_dump()
+            elif hasattr(result, 'to_dict'):
+                output_data = result.to_dict()
+                
+            return output_data
 
-    # --- FASE 3: VARREDURA (REFATURADA COM TAVILY E PYDANTIC) ---
+        except Exception as e:
+            self.log(f"Erro fiscal: {e}", "System", "error")
+            return {"error": str(e), "analysis": []}
+
+
+    # --- FASE 3: VARREDURA (JÁ PYDANTIC) ---
     def run_google_scan(self, politician_name: str, city_name: str, agent_name: str = "radar-google-scanner", target_sites: List[str] = [], search_mode: str = "hybrid", max_results: int = 10) -> Dict:
         """
         Fase 3: Executa o agente 'Radar - Investigador Google' usando Tavily Search Tool.
@@ -260,12 +298,15 @@ class RadarCrew:
         tavily_tool = TavilySearchTool(api_key=os.getenv("TAVILY_API_KEY"))
         
         # 2. Setup Agent
+        kb_tools = self._get_knowledge_tools(agent_data)
+        all_tools = [tavily_tool] + kb_tools
+        
         agent = Agent(
             role=agent_data.get("role", "Investigador"),
             goal=agent_data.get("goal", "Identificar promessas e notícias em tempo real"),
             backstory=agent_data.get("description", "Especialista em OSINT e checagem de fatos."),
             llm=self._create_llm(agent_data.get("llm_model"), 0.5), # Higher temp for search synthesis
-            tools=[tavily_tool],
+            tools=all_tools,
             max_iter=15, # Allow more steps for search
             verbose=True,
             allow_delegation=False
@@ -317,23 +358,18 @@ class RadarCrew:
         self.log(f"Iniciando Varredura Real (Tavily) com Pydantic para {politician_name}", "System")
         
         try:
-            result = crew.kickoff() # This returns a MediaScanResult object directly
+            result = crew.kickoff() 
             
-            # Access pydantic fields directly from result if it's the object, 
-            # Or accessing the pydantic attribute depending on CrewAI version output.
-            # In recent CrewAI, result.pydantic or direct access if casted.
-            
-            # Safe access logic handling potential wrapper types
             items = []
-            if hasattr(result, 'items'):
-                items = result.items
-            elif hasattr(result, 'pydantic') and result.pydantic:
+            if hasattr(result, 'pydantic') and result.pydantic:
                 items = result.pydantic.items
             elif isinstance(result, dict) and 'items' in result:
-                items = result['items']
-            # Fallback if result is just correct structure
-            elif hasattr(result, 'dict'):
-                 items = result.dict().get('items', [])
+                # Handle direct dict return if applicable
+                items = [MediaItem(**i) for i in result['items']]
+            elif hasattr(result, 'to_dict'):
+                 # Fallback
+                 d = result.to_dict()
+                 items = d.get('items', [])
             
             # Convert to dict list for JSON serialization
             serialized_items = [item.dict() if hasattr(item, 'dict') else item for item in items]

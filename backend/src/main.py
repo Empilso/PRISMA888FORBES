@@ -143,6 +143,7 @@ from src.api.cities_politicians import router as cities_politicians_router
 from src.api.radar_premium import router as radar_premium_router
 from src.api.tse import router as tse_router
 from src.api.competitors import router as competitors_router
+from src.api.knowledge import router as knowledge_router
 
 app = FastAPI()
 
@@ -157,6 +158,7 @@ app.add_middleware(
 
 # Include routers
 app.include_router(ingestion_router)
+app.include_router(knowledge_router)
 app.include_router(genesis_router)
 app.include_router(personas_router)
 app.include_router(strategies_router)

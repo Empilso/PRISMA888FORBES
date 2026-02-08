@@ -38,7 +38,7 @@ function ClusteredMarkers({ locations, onLocationClick, isCompetitor = false }: 
     const [bounds, setBounds] = useState<[number, number, number, number] | null>(null);
     const [zoom, setZoom] = useState(map.getZoom());
 
-    // Atualiza bounds e zoom quando o mapa muda
+    // Atualiza bounds e zoom quando o mapa muda (com check de igualdade para evitar loop)
     const updateBounds = useCallback(() => {
         const b = map.getBounds();
         const newBounds: [number, number, number, number] = [
@@ -47,9 +47,23 @@ function ClusteredMarkers({ locations, onLocationClick, isCompetitor = false }: 
             b.getEast(),
             b.getNorth()
         ];
-        setBounds(newBounds);
-        setZoom(map.getZoom());
-    }, [map]);
+
+        // Verifica se houve mudança real nos valores (evita setState loop)
+        const hasBoundsChanged = !bounds ||
+            newBounds[0] !== bounds[0] ||
+            newBounds[1] !== bounds[1] ||
+            newBounds[2] !== bounds[2] ||
+            newBounds[3] !== bounds[3];
+
+        if (hasBoundsChanged) {
+            setBounds(newBounds);
+        }
+
+        const newZoom = map.getZoom();
+        if (newZoom !== zoom) {
+            setZoom(newZoom);
+        }
+    }, [map, bounds, zoom]);
 
     // Subscreve eventos do mapa
     useMapEvents({

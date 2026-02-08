@@ -1,7 +1,18 @@
+@import '../styles/tokens.css';
 @import '@xyflow/react/dist/style.css';
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  * {
+    @apply border-[var(--border-default)];
+  }
+
+  body {
+    @apply bg-[var(--bg-primary)] text-[var(--text-primary)];
+  }
+}
 
 :root {
   /* Color System - Google Material Inspired (Soft & Tech) */
@@ -194,6 +205,81 @@
 
     75% {
       transform: rotate(-1deg);
+    }
+  }
+  /* Gradiente rainbow fluido (estático) */
+  .rainbow-gradient {
+    background: linear-gradient(
+      90deg,
+      #FF0000 0%,     /* Vermelho */
+      #FF7F00 16.67%, /* Laranja */
+      #FFFF00 33.33%, /* Amarelo */
+      #00FF00 50%,    /* Verde */
+      #0000FF 66.67%, /* Azul */
+      #4B0082 83.33%, /* Índigo */
+      #9400D3 100%    /* Violeta */
+    );
+    background-size: 200% 100%;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* Gradiente animado (se move) */
+  .rainbow-gradient-animated {
+    background: linear-gradient(
+      90deg,
+      #FF0000 0%,
+      #FF7F00 14.28%,
+      #FFFF00 28.56%,
+      #00FF00 42.84%,
+      #0000FF 57.12%,
+      #4B0082 71.40%,
+      #9400D3 85.68%,
+      #FF0000 100%    /* Volta pro vermelho pra loop suave */
+    );
+    background-size: 200% 100%;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: rainbow-flow 8s linear infinite;
+  }
+
+  @keyframes rainbow-flow {
+    0% {
+      background-position: 0% 50%;
+    }
+    100% {
+      background-position: 200% 50%;
+    }
+  }
+
+  /* Gradiente vertical (efeito diferente) */
+  .rainbow-gradient-vertical {
+    background: linear-gradient(
+      180deg,
+      #FF0000 0%,
+      #FF7F00 16.67%,
+      #FFFF00 33.33%,
+      #00FF00 50%,
+      #0000FF 66.67%,
+      #4B0082 83.33%,
+      #9400D3 100%
+    );
+    background-size: 100% 200%;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: rainbow-flow-vertical 8s linear infinite;
+  }
+
+  @keyframes rainbow-flow-vertical {
+    0% {
+      background-position: 50% 0%;
+    }
+    100% {
+      background-position: 50% 200%;
     }
   }
 }

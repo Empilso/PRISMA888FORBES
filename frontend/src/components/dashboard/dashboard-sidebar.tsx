@@ -22,6 +22,7 @@ import {
     Crosshair,
     Shield
 } from "@phosphor-icons/react";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 export function DashboardSidebar({ campaignId }: { campaignId?: string }) {
     const pathname = usePathname();
@@ -78,7 +79,8 @@ export function DashboardSidebar({ campaignId }: { campaignId?: string }) {
 
             <div
                 className={cn(
-                    "fixed md:static inset-y-0 left-0 z-50 flex flex-col bg-white border-r border-slate-100 transition-all duration-300 ease-in-out h-full shadow-[1px_0_20px_rgba(0,0,0,0.02)]",
+                    "fixed md:static inset-y-0 left-0 z-50 flex flex-col transition-all duration-300 ease-in-out h-full shadow-[1px_0_20px_rgba(0,0,0,0.02)]",
+                    "bg-[var(--bg-secondary)] border-r border-[var(--border-default)] text-[var(--text-primary)]",
                     isCollapsed ? "w-20" : "w-72",
                     isMobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
                 )}
@@ -115,8 +117,8 @@ export function DashboardSidebar({ campaignId }: { campaignId?: string }) {
                                 className={cn(
                                     "group flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 border border-transparent",
                                     isActive
-                                        ? "bg-blue-50 text-blue-700 font-medium shadow-sm border-blue-100/50"
-                                        : "text-slate-500 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-100",
+                                        ? "bg-[var(--brand-muted)] text-[var(--brand-primary)] font-medium shadow-sm border border-[var(--brand-muted)]"
+                                        : "text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)] hover:border-[var(--border-muted)]",
                                     isCollapsed && "justify-center px-0 py-3"
                                 )}
                                 title={isCollapsed ? item.name : undefined}
@@ -125,7 +127,7 @@ export function DashboardSidebar({ campaignId }: { campaignId?: string }) {
                                     weight="duotone"
                                     className={cn(
                                         "transition-colors duration-200",
-                                        isActive ? "text-blue-600" : "text-slate-400 group-hover:text-slate-600",
+                                        isActive ? "text-[var(--brand-primary)]" : "text-[var(--text-tertiary)] group-hover:text-[var(--text-primary)]",
                                         isCollapsed ? "h-6 w-6" : "h-5 w-5"
                                     )}
                                 />
@@ -146,8 +148,8 @@ export function DashboardSidebar({ campaignId }: { campaignId?: string }) {
                             className={cn(
                                 "group flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 border border-transparent",
                                 pathname?.includes('/files')
-                                    ? "bg-blue-50 text-blue-700 font-medium shadow-sm border-blue-100/50"
-                                    : "text-slate-500 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-100",
+                                    ? "bg-[var(--brand-muted)] text-[var(--brand-primary)] font-medium shadow-sm border border-[var(--brand-muted)]"
+                                    : "text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)] hover:border-[var(--border-muted)]",
                                 isCollapsed && "justify-center px-0 py-3"
                             )}
                             title={isCollapsed ? "Repositório" : undefined}
@@ -156,7 +158,7 @@ export function DashboardSidebar({ campaignId }: { campaignId?: string }) {
                                 weight="duotone"
                                 className={cn(
                                     "transition-colors duration-200",
-                                    pathname?.includes('/files') ? "text-blue-600" : "text-slate-400 group-hover:text-slate-600",
+                                    pathname?.includes('/files') ? "text-[var(--brand-primary)]" : "text-[var(--text-tertiary)] group-hover:text-[var(--text-primary)]",
                                     isCollapsed ? "h-6 w-6" : "h-5 w-5"
                                 )}
                             />
@@ -195,12 +197,12 @@ export function DashboardSidebar({ campaignId }: { campaignId?: string }) {
                 )}
 
                 {/* Footer / User / Config */}
-                <div className="p-4 border-t border-slate-50 bg-slate-50/50">
+                <div className="p-4 border-t border-[var(--border-muted)] bg-[var(--bg-secondary)]/50">
                     <div className="flex items-center gap-2">
                         <Link
                             href="/dashboard/configuracoes"
                             className={cn(
-                                "flex-1 flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-slate-500 hover:bg-white hover:text-slate-900 hover:shadow-sm transition-all border border-transparent hover:border-slate-100",
+                                "flex-1 flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)] hover:shadow-sm transition-all border border-transparent hover:border-[var(--border-muted)]",
                                 isCollapsed && "justify-center px-0"
                             )}
                             title="Configurações"
@@ -209,11 +211,16 @@ export function DashboardSidebar({ campaignId }: { campaignId?: string }) {
                             {!isCollapsed && <span>Configurações</span>}
                         </Link>
 
+                        {/* Theme Toggle */}
+                        <div className={cn("flex items-center", isCollapsed && "hidden")}>
+                            <ThemeToggle />
+                        </div>
+
                         {/* Collapse Button */}
                         <Button
                             variant="ghost"
                             size="icon"
-                            className="hidden md:flex h-8 w-8 text-slate-400 hover:text-slate-700 hover:bg-white hover:shadow-sm"
+                            className="hidden md:flex h-8 w-8 text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] hover:shadow-sm"
                             onClick={() => setIsCollapsed(!isCollapsed)}
                         >
                             {isCollapsed ? <CaretRight weight="bold" /> : <CaretLeft weight="bold" />}

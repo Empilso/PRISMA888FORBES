@@ -11,7 +11,9 @@ import os
 import json
 import logging
 from supabase import create_client
-from openai import OpenAI
+
+# Clean Arch: Import Service
+from src.services.radar_service import RadarService
 
 # Setup logging
 logger = logging.getLogger("radar_premium")
@@ -344,7 +346,6 @@ async def get_mandate_phase_status(mandate_id: UUID):
                 )
                 
                 # Fetch logs if accessible (focused on running or recently finished)
-                # To capture real-time progress for the UI console
                 if execution_row["status"] in ["running", "ok", "error"]:
                      logs_res = supabase.table("agent_logs") \
                         .select("created_at, message, agent_name, status") \
@@ -354,8 +355,6 @@ async def get_mandate_phase_status(mandate_id: UUID):
                         .execute()
                      if logs_res.data:
                          exec_read.logs = logs_res.data
-
-
 
                 if phase == "phase1":
                     status.phase1 = exec_read
@@ -369,124 +368,6 @@ async def get_mandate_phase_status(mandate_id: UUID):
     return status
 
 
-# ============ BACKGROUND TASK HELPER ============
-
-def _extract_promises_background(
-    campaign_id: str,
-    mandate_id: str,
-    politician_id: str,
-    exec_id: str
-):
-    """
-    Background task for heavy PDF processing.
-    This runs asynchronously after the HTTP response is sent.
-    """
-    logger.info(f"🚀 INICIANDO EXTRAÇÃO BACKGROUND para campanha {campaign_id[:8]}, mandate {mandate_id[:8]}")
-    
-    supabase = get_supabase_client()
-    
-    try:
-        # 1. Find the document
-        docs_res = supabase.table("documents") \
-            .select("id, filename, file_url, content_text") \
-            .eq("person_id", politician_id) \
-            .eq("doc_type", "government_plan") \
-            .limit(1) \
-            .execute()
-        
-        if not docs_res.data:
-            logger.error(f"❌ Documento não encontrado para politician_id {politician_id[:8]}")
-            supabase.table("radar_executions").update({
-                "status": "error",
-                "finished_at": datetime.now().isoformat(),
-                "error_message": "Documento não encontrado"
-            }).eq("id", exec_id).execute()
-            return
-        
-        doc = docs_res.data[0]
-        full_text = doc.get("content_text", "")
-        
-        # 2. Extract text if not cached
-        if not full_text or len(full_text) < 100:
-            logger.info(f"📄 Extraindo texto do PDF {doc.get('filename')}...")
-            
-            from src.services.pdf_service import PDFExtractionService
-            service = PDFExtractionService()
-            result = service.extract_text(doc.get("file_url", ""))
-            
-            if result.success:
-                full_text = result.text
-                # Cache it
-                supabase.table("documents").update({"content_text": full_text}).eq("id", doc["id"]).execute()
-                logger.info(f"✅ Texto extraído e cacheado: {len(full_text)} chars")
-            else:
-                logger.error(f"❌ Falha na extração PDF: {result.error}")
-                supabase.table("radar_executions").update({
-                    "status": "error",
-                    "finished_at": datetime.now().isoformat(),
-                    "error_message": f"Falha na extração: {result.error}"
-                }).eq("id", exec_id).execute()
-                return
-        
-        # 3. Extract promises using AI
-        logger.info(f"🤖 Extraindo promessas com DeepSeek ({len(full_text)} chars)...")
-        
-        from src.services.ai_service import AIService
-        ai = AIService()
-        promessas_raw = ai.extract_promises_from_text(full_text)
-        
-        logger.info(f"📋 DeepSeek retornou {len(promessas_raw)} promessas")
-        
-        # 4. Save promises (delete existing first - idempotent)
-        supabase.table("promises") \
-            .delete() \
-            .eq("campaign_id", campaign_id) \
-            .eq("politico_id", politician_id) \
-            .eq("mandate_id", mandate_id) \
-            .eq("origem", "Plano de Governo") \
-            .execute()
-        
-        inserted_count = 0
-        for p in promessas_raw:
-            promise_data = {
-                "campaign_id": campaign_id,
-                "politico_id": politician_id,
-                "mandate_id": mandate_id,
-                "resumo_promessa": (p.get("titulo", "") + " - " + p.get("descricao", ""))[:500],
-                "categoria": p.get("area", "Outro"),
-                "origem": "Plano de Governo",
-                "source_type": "PLANO_GOVERNO",
-                "data_promessa": datetime.now().date().isoformat()
-            }
-            if promise_data["resumo_promessa"]:
-                supabase.table("promises").insert(promise_data).execute()
-                inserted_count += 1
-        
-        # 5. Update execution log with success
-        summary = {
-            "status": "ok",
-            "promises_count": inserted_count,
-            "document": doc.get("filename"),
-            "extracted_at": datetime.now().isoformat()
-        }
-        
-        supabase.table("radar_executions").update({
-            "status": "ok",
-            "finished_at": datetime.now().isoformat(),
-            "summary": summary
-        }).eq("id", exec_id).execute()
-        
-        logger.info(f"✅ EXTRAÇÃO CONCLUÍDA. Promessas salvas: {inserted_count}")
-        
-    except Exception as e:
-        logger.error(f"❌ ERRO NA EXTRAÇÃO BACKGROUND: {e}")
-        supabase.table("radar_executions").update({
-            "status": "error",
-            "finished_at": datetime.now().isoformat(),
-            "error_message": str(e)
-        }).eq("id", exec_id).execute()
-
-
 # ============ CAMPAIGN EXECUTION ENDPOINTS (Prefix: /campaigns) ============
 
 @router.post("/api/campaigns/{campaign_id}/radar/{mandate_id}/phase1")
@@ -496,15 +377,7 @@ async def execute_phase1(
     background_tasks: BackgroundTasks,
     force: bool = Query(False, description="Force re-extraction even if promises exist")
 ):
-    """
-    Phase 1: Extract promises from government plan PDF.
-    
-    Uses fire-and-forget pattern with BackgroundTasks.
-    Returns immediately with status "processing".
-    
-    Args:
-        force: If True, re-extracts even if promises already exist
-    """
+    """Phase 1: Extract promises using Service"""
     supabase = get_supabase_client()
     
     # 1. Get mandate details
@@ -514,7 +387,7 @@ async def execute_phase1(
     
     politician_id = mandate_res.data["politician_id"]
     
-    # 2. IDEMPOTENCY CHECK: Skip if promises already exist
+    # 2. IDEMPOTENCY CHECK
     if not force:
         existing = supabase.table("promises") \
             .select("count", count="exact") \
@@ -547,7 +420,7 @@ async def execute_phase1(
     
     doc = docs_res.data[0]
     
-    # 4. Create execution log (status: "processing")
+    # 4. Create execution log
     exec_log = supabase.table("radar_executions").insert({
         "campaign_id": str(campaign_id),
         "mandate_id": mandate_id,
@@ -557,18 +430,17 @@ async def execute_phase1(
     
     exec_id = exec_log.data[0]["id"] if exec_log.data else None
     
-    # 5. Dispatch background task
-    logger.info(f"📤 Despachando extração em background para {doc.get('filename')}")
+    # 5. Dispatch background task via Service
+    logger.info(f"📤 Despachando extração via RadarService")
     
     background_tasks.add_task(
-        _extract_promises_background,
+        RadarService.extract_promises_background,
         campaign_id=str(campaign_id),
         mandate_id=mandate_id,
         politician_id=politician_id,
         exec_id=exec_id
     )
     
-    # 6. Return immediately
     return {
         "status": "running",
         "message": f"Extração iniciada em segundo plano para '{doc.get('filename')}'. Isso pode levar alguns minutos.",
@@ -578,86 +450,15 @@ async def execute_phase1(
     }
 
 
-# ============ PHASE 2 BACKGROUND TASK ============
-
-def _process_phase2_background(
-    campaign_id: str,
-    mandate_id: str,
-    politician_id: str,
-    municipio_slug: str,
-    exec_id: str,
-    target_year: int = None
-):
-    """
-    Background worker for Phase 2.
-    """
-    logger.info(f"🏗️ EXECUTANDO PHASE 2 BACKGROUND (ID: {exec_id}) para {municipio_slug}...")
-    supabase = get_supabase_client()
-    
-    try:
-        from src.services.radar_matcher import RadarMatcher
-        
-        matcher = RadarMatcher()
-        
-        # Determine year: if target_year provided, use it. Else default to now().year inside matcher.
-        result = matcher.run_matching(
-            politico_id=politician_id,
-            municipio_slug=municipio_slug, 
-            campaign_id=str(campaign_id),
-            target_year=target_year
-        )
-        
-        logger.info(f"📊 Matching concluído: {result.get('matches_found', 0)} matches")
-        
-        # Save summary to promise_budget_summaries
-        summary_payload = {
-            "matching_result": result,
-            "data_sources": ["municipal_expenses"],
-            "matcher_version": "v1.0"
-        }
-        
-        try:
-            supabase.table("promise_budget_summaries").insert({
-                "campaign_id": campaign_id,
-                "mandate_id": mandate_id,
-                "payload_json": summary_payload
-            }).execute()
-        except Exception as e:
-            logger.warning(f"⚠️ Erro ao salvar summary (não-crítico): {e}")
-        
-        # Update execution log
-        supabase.table("radar_executions").update({
-            "status": "ok",
-            "finished_at": datetime.now().isoformat(),
-            "summary": result
-        }).eq("id", exec_id).execute()
-        
-        logger.info(f"✅ FASE 2 CONCLUÍDA. {result.get('matches_found', 0)} promessas correlacionadas.")
-        
-    except Exception as e:
-        logger.error(f"❌ ERRO NA FASE 2 BACKGROUND: {e}")
-        supabase.table("radar_executions").update({
-            "status": "error",
-            "finished_at": datetime.now().isoformat(),
-            "error_message": str(e)
-        }).eq("id", exec_id).execute()
-
-
-# ============ PREVIEW ENDPOINT (LIVE DATA) ============
-
 @router.get("/api/campaigns/{campaign_id}/radar/{mandate_id}/preview-expenses")
 async def preview_expenses(
     campaign_id: UUID,
     mandate_id: str,
     year: int = 2025
 ):
-    """
-    Returns LIVE totals from TCESP API without saving to DB.
-    Used for user validation before ingestion.
-    """
+    """Returns LIVE totals from TCESP API"""
     try:
         from src.services.tcesp_live import fetch_live_totals
-        
         # We assume Votorantim for now, but could fetch city slug from mandate
         data = fetch_live_totals(year, "votorantim")
         
@@ -671,8 +472,6 @@ async def preview_expenses(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ============ PHASE 2 - DADOS OFICIAIS ============
-
 @router.post("/api/campaigns/{campaign_id}/radar/{mandate_id}/phase2")
 async def execute_phase2(
     campaign_id: UUID, 
@@ -681,12 +480,7 @@ async def execute_phase2(
     force: bool = Query(False, description="Force re-matching even if verifications exist"),
     target_year: int = Query(None, description="Year to analyze (default: current year)")
 ):
-    """
-    Phase 2: Data Sources (Official Data).
-    
-    Uses RadarMatcher to cross-reference promises with municipal expenses.
-    Returns immediately and processes in background.
-    """
+    """Phase 2: Use RadarService for data matching"""
     supabase = get_supabase_client()
     
     # 1. Get mandate details
@@ -697,18 +491,16 @@ async def execute_phase2(
     politician_id = mandate.data["politician_id"]
     city_id = mandate.data.get("city_id")
     
-    # 2. Get municipio_slug from city
+    # 2. Get municipio_slug
     municipio_slug = "votorantim"  # Default
     if city_id:
         city = supabase.table("cities").select("slug").eq("id", city_id).limit(1).execute()
         if city.data:
             slug = city.data[0].get("slug", "votorantim")
-            # Normalize: expenses use 'votorantim', city uses 'votorantim-sp'
             municipio_slug = slug.split('-')[0] if '-' in slug else slug
     
-    # 3. IDEMPOTENCY CHECK: Skip if recent successful execution exists
+    # 3. IDEMPOTENCY CHECK
     if not force:
-        # Check if any recent phase2 execution exists with status=ok
         recent_exec = supabase.table("radar_executions") \
             .select("id, finished_at, summary") \
             .eq("mandate_id", mandate_id) \
@@ -731,7 +523,7 @@ async def execute_phase2(
                 "action": "Use force=true para re-processar ou veja os resultados abaixo."
             }
     
-    # 4. Check if promises exist
+    # 4. Check promises
     promises_check = supabase.table("promises") \
         .select("count", count="exact") \
         .eq("politico_id", politician_id) \
@@ -754,11 +546,11 @@ async def execute_phase2(
     
     exec_id = exec_log.data[0]["id"] if exec_log.data else None
     
-    # 6. Dispatch background task
-    logger.info(f"📤 Despachando matching Fase 2 em background para {promises_check.count} promessas")
+    # 6. Dispatch background task via Service
+    logger.info(f"📤 Despachando matching Fase 2 via RadarService")
     
     background_tasks.add_task(
-        _process_phase2_background,
+        RadarService.process_phase2_background,
         campaign_id=str(campaign_id),
         mandate_id=mandate_id,
         politician_id=politician_id,
@@ -767,7 +559,6 @@ async def execute_phase2(
         target_year=target_year
     )
     
-    # 7. Return immediately
     return {
         "status": "running",
         "message": f"Cruzamento de dados iniciado para {promises_check.count} promessas. Isso pode levar alguns minutos.",
@@ -775,61 +566,6 @@ async def execute_phase2(
         "promises_count": promises_check.count,
         "hint": "Atualize a página em 1-2 minutos para ver os resultados."
     }
-
-
-# ============ PHASE 3 - MÍDIA/GOOGLE (BACKGROUND) ============
-
-def _run_phase3_background(
-    campaign_id: str,
-    mandate_id: str,
-    politician_name: str,
-    city_name: str,
-    agent_slug: str,
-    exec_id: str,
-    target_sites: List[str] = [],
-    search_mode: str = "hybrid",
-    max_results: int = 10
-):
-    """
-    Background task for Phase 3 Media Scan.
-    Executes the CrewAI agent and updates the execution status.
-    """
-    logger.info(f"🚀 INICIANDO VARREDURA PHASE 3 BACKGROUND com {agent_slug}...")
-    supabase = get_supabase_client()
-    
-    try:
-        from src.crew.radar_crew import RadarCrew
-        
-        # Initialize Crew with run_id for logging
-        crew = RadarCrew(campaign_id=str(campaign_id), run_id=exec_id)
-        
-        # Execute the Agent
-        # logs are automatically saved to agent_logs by the crew logger
-        result = crew.run_google_scan(
-            politician_name=politician_name,
-            city_name=city_name,
-            agent_name=agent_slug,
-            target_sites=target_sites,
-            search_mode=search_mode,
-            max_results=max_results
-        )
-        
-        # Update Execution with Success
-        supabase.table("radar_executions").update({
-            "status": "ok",
-            "finished_at": datetime.now().isoformat(),
-            "summary": result
-        }).eq("id", exec_id).execute()
-        
-        logger.info(f"✅ VARREDURA CONCLUÍDA.")
-        
-    except Exception as e:
-        logger.error(f"❌ ERRO NA VARREDURA BACKGROUND: {e}")
-        supabase.table("radar_executions").update({
-            "status": "error",
-            "finished_at": datetime.now().isoformat(),
-            "error_message": str(e)
-        }).eq("id", exec_id).execute()
 
 
 @router.post("/api/campaigns/{campaign_id}/radar/{mandate_id}/phase3")
@@ -841,10 +577,7 @@ async def execute_phase3(
     agent_slug: str = Query("radar-google-scanner", description="Slug name of the agent to use"),
     request_body: Phase3Request = Body(default=Phase3Request())
 ):
-    """
-    Phase 3: Media Scan (Google/Social).
-    Executes via RadarCrew using the selected agent in background.
-    """
+    """Phase 3: Media Scan using RadarService"""
     supabase = get_supabase_client()
     
     # Check existing execution
@@ -863,11 +596,8 @@ async def execute_phase3(
     mandate = supabase.table("mandates").select("*, politicians(name), cities(name)").eq("id", mandate_id).single().execute()
     if not mandate.data:
         raise HTTPException(status_code=404, detail="Mandate not found")
-        
-    politician_name = mandate.data["politicians"]["name"]
-    city_name = mandate.data["cities"]["name"]
-
-    # Create Execution Record (Running)
+    
+    # Create Execution Record
     exec_log = supabase.table("radar_executions").insert({
         "campaign_id": str(campaign_id),
         "mandate_id": mandate_id,
@@ -881,18 +611,14 @@ async def execute_phase3(
         
     exec_id = exec_log.data[0]["id"]
     
-    # Dispatch Background Task
+    # Dispatch Background Task via Service
     background_tasks.add_task(
-        _run_phase3_background,
+        RadarService.run_phase3_background,
         campaign_id=str(campaign_id),
         mandate_id=mandate_id,
-        politician_name=politician_name,
-        city_name=city_name,
         agent_slug=agent_slug,
         exec_id=exec_id,
-        target_sites=request_body.target_sites,
-        search_mode=request_body.search_mode,
-        max_results=request_body.max_results
+        search_params=request_body.dict()
     )
     
     return {
@@ -911,28 +637,24 @@ class ChamberSupportUpdate(BaseModel):
 
 @router.get("/api/campaigns/{campaign_id}/chamber")
 async def list_chamber_support(campaign_id: UUID):
-    """
-    List councilors (Vereadores) for the campaign's city,
-    enriched with their support status (base/oposicao/neutro).
-    """
+    """List councilors with support status"""
     supabase = get_supabase_client()
     
     # 1. Get Campaign City
-    # Note: Column is named 'city' (which stores the Name string), not 'city_id'
     camp = supabase.table("campaigns").select("city").eq("id", str(campaign_id)).single().execute()
     if not camp.data or not camp.data.get("city"):
          return []
     
     city_name = camp.data["city"]
     
-    # Resolve City ID from Name
+    # Resolve City ID
     city_res = supabase.table("cities").select("id").ilike("name", city_name).limit(1).execute()
     if not city_res.data:
         return []
         
     city_id = city_res.data[0]["id"]
 
-    # 2. Get Councilors (Vereadores) for this city
+    # 2. Get Councilors
     councilors_res = supabase.table("politicians") \
         .select("id, name, partido, slug, foto_url") \
         .eq("city_id", city_id) \
@@ -958,7 +680,6 @@ async def list_chamber_support(campaign_id: UUID):
         support_map = {s["politician_id"]: s for s in support_res.data} if support_res.data else {}
     except Exception as e:
         print(f"⚠️ Legislative Support Fetch Failed: {e}")
-        # Continue without support data (defaults to neutro)
 
     # 4. Merge
     result = []
@@ -979,9 +700,7 @@ async def list_chamber_support(campaign_id: UUID):
 
 @router.post("/api/campaigns/{campaign_id}/chamber/{politician_id}/status")
 async def update_chamber_support(campaign_id: UUID, politician_id: str, payload: ChamberSupportUpdate):
-    """
-    Update support status for a councilor.
-    """
+    """Update support status for a councilor"""
     supabase = get_supabase_client()
     
     data = {
@@ -1003,13 +722,10 @@ async def update_chamber_support(campaign_id: UUID, politician_id: str, payload:
 
 @router.get("/api/mandates/{mandate_id}/document")
 async def get_mandate_document(mandate_id: str):
-    """
-    Get the government plan document for a mandate.
-    Returns document info if exists, null otherwise.
-    """
+    """Get the government plan document for a mandate"""
     supabase = get_supabase_client()
     
-    # Get politician_id from mandate
+    # Get politician_id
     mandate = supabase.table("mandates").select("politician_id").eq("id", mandate_id).single().execute()
     if not mandate.data:
         raise HTTPException(status_code=404, detail="Mandate not found")
@@ -1044,9 +760,7 @@ async def get_mandate_document(mandate_id: str):
 
 @router.delete("/api/mandates/{mandate_id}/document/{doc_id}")
 async def delete_mandate_document(mandate_id: str, doc_id: str):
-    """
-    Delete a government plan document.
-    """
+    """Delete a government plan document"""
     supabase = get_supabase_client()
     
     # Verify ownership
@@ -1056,7 +770,7 @@ async def delete_mandate_document(mandate_id: str, doc_id: str):
     
     politician_id = mandate.data["politician_id"]
     
-    # Get document to verify ownership
+    # Get document
     doc = supabase.table("documents") \
         .select("id, file_url") \
         .eq("id", doc_id) \
@@ -1067,10 +781,9 @@ async def delete_mandate_document(mandate_id: str, doc_id: str):
     if not doc.data:
         raise HTTPException(status_code=404, detail="Document not found or not owned by this politician")
     
-    # Delete from storage (extract path from URL)
+    # Delete from storage
     try:
         file_url = doc.data["file_url"]
-        # URL format: .../government-plans/politician_id/filename
         if "government-plans" in file_url:
             path_part = file_url.split("government-plans/")[1].split("?")[0]
             supabase.storage.from_("government-plans").remove([path_part])
@@ -1089,12 +802,7 @@ async def upload_government_plan(
     mandate_id: str,
     file: UploadFile = File(...)
 ):
-    """
-    Uploads a Government Plan PDF manually.
-    - Saves to Supabase Storage (bucket: government-plans)
-    - Creates/Updates 'documents' record
-    - Triggers immediate text extraction
-    """
+    """Uploads a Government Plan PDF manually"""
     supabase = get_supabase_client()
     
     # 1. Get Politician ID
@@ -1135,7 +843,6 @@ async def upload_government_plan(
         
     # 3. Upsert Document Record
     try:
-        # Check if doc exists
         existing_doc = supabase.table("documents") \
             .select("id") \
             .eq("person_id", politician_id) \
@@ -1158,7 +865,7 @@ async def upload_government_plan(
             res = supabase.table("documents").insert(doc_data).execute()
             doc_id = res.data[0]["id"]
             
-        # 4. Immediate Extraction
+        # 4. Immediate Extraction via Service
         from src.services.pdf_service import PDFExtractionService
         service = PDFExtractionService()
         result = service.extract_text(public_url)

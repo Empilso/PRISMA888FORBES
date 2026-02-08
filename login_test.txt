@@ -1,0 +1,21 @@
+HTTP/2 200 
+date: Sat, 07 Feb 2026 00:49:25 GMT
+content-type: application/json
+server: cloudflare
+cf-ray: 9c9ee323a9d6eef1-GRU
+cf-cache-status: DYNAMIC
+strict-transport-security: max-age=31536000; includeSubDomains; preload
+vary: Origin, Accept-Encoding
+x-content-type-options: nosniff
+sb-auth-refresh-token-prefix: mhx2z
+sb-auth-session-id: 3bfeb8b1-6a0b-4299-b1d5-840cfa877980
+sb-auth-user-id: 7476a854-ff79-4db6-b058-7dec03ad80d9
+sb-gateway-version: 1
+sb-project-ref: gsmmanjpsdbfwmnmtgpg
+sb-request-id: 019c3593-3253-7d84-b6d8-491981274b4b
+x-envoy-attempt-count: 1
+x-envoy-upstream-service-time: 88
+set-cookie: __cf_bm=zKyDmF_UtjP_epBmv5GC5biYaxf4UH6LVPgpEoy5qcs-1770425365-1.0.1.1-cDWQ5ET7SBuz8vwnRnuJnoJG8LWEUcwemLF2_GUp.COF_vxu6jtQAFNSSjeriEZ8nUdFWZgfQCKB_iGfBU6hKcbu4mYPgX6.uk0wETKVllo; path=/; expires=Sat, 07-Feb-26 01:19:25 GMT; domain=.supabase.co; HttpOnly; Secure; SameSite=None
+alt-svc: h3=":443"; ma=86400
+
+{"access_token":"eyJhbGciOiJIUzI1NiIsImtpZCI6Ik92ZGEvSjBoUDJ2KytRenoiLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL2dzbW1hbmpwc2RiZndtbm10Z3BnLnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiI3NDc2YTg1NC1mZjc5LTRkYjYtYjA1OC03ZGVjMDNhZDgwZDkiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzcwNDI4OTY1LCJpYXQiOjE3NzA0MjUzNjUsImVtYWlsIjoiYWRtaW5AcHJpc21hODg4LmNvbSIsInBob25lIjoiIiwiYXBwX21ldGFkYXRhIjp7InByb3ZpZGVyIjoiZW1haWwiLCJwcm92aWRlcnMiOlsiZW1haWwiXX0sInVzZXJfbWV0YWRhdGEiOnsiZW1haWxfdmVyaWZpZWQiOnRydWUsImZ1bGxfbmFtZSI6IkFkbWluIFByaXNtYSIsInJvbGUiOiJhZG1pbiJ9LCJyb2xlIjoiYXV0aGVudGljYXRlZCIsImFhbCI6ImFhbDEiLCJhbXIiOlt7Im1ldGhvZCI6InBhc3N3b3JkIiwidGltZXN0YW1wIjoxNzcwNDI1MzY1fV0sInNlc3Npb25faWQiOiIzYmZlYjhiMS02YTBiLTQyOTktYjFkNS04NDBjZmE4Nzc5ODAiLCJpc19hbm9ueW1vdXMiOmZhbHNlfQ.KoSStaRMdThnAcEX9XbCLdu2d-o7pg1p8HM8mwFhJ5A","token_type":"bearer","expires_in":3600,"expires_at":1770428965,"refresh_token":"mhx2z4owutls","user":{"id":"7476a854-ff79-4db6-b058-7dec03ad80d9","aud":"authenticated","role":"authenticated","email":"admin@prisma888.com","email_confirmed_at":"2026-02-07T00:48:28.157945Z","phone":"","confirmed_at":"2026-02-07T00:48:28.157945Z","last_sign_in_at":"2026-02-07T00:49:25.280543898Z","app_metadata":{"provider":"email","providers":["email"]},"user_metadata":{"email_verified":true,"full_name":"Admin Prisma","role":"admin"},"identities":[{"identity_id":"a54bd387-4b31-4b44-be55-ebd8ca537ae3","id":"7476a854-ff79-4db6-b058-7dec03ad80d9","user_id":"7476a854-ff79-4db6-b058-7dec03ad80d9","identity_data":{"email":"admin@prisma888.com","email_verified":false,"phone_verified":false,"sub":"7476a854-ff79-4db6-b058-7dec03ad80d9"},"provider":"email","last_sign_in_at":"2026-02-07T00:48:28.150024Z","created_at":"2026-02-07T00:48:28.150086Z","updated_at":"2026-02-07T00:48:28.150086Z","email":"admin@prisma888.com"}],"created_at":"2026-02-07T00:48:28.128179Z","updated_at":"2026-02-07T00:49:25.285084Z","is_anonymous":false},"weak_password":null}
