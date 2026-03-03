@@ -45,6 +45,7 @@ export interface AgentDefinition {
     backstory: string;
     icon: string;
     color: string;
+    agent_id?: string; // Enterprise Link: ID for Inheritance
 }
 
 // Templates de equipe pré-definidos
