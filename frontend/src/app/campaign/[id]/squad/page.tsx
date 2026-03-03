@@ -3,7 +3,8 @@
 import React from "react";
 import TasksContent from "../tasks/TasksContent";
 
-export default function SquadPortalPage({ params }: { params: { id: string } }) {
+export default function SquadPortalPage({ params }: { params: Promise<{ id: string }> }) {
+    const { id } = React.use(params);
     // No Portal SQUAD, o componente TasksContent deve operar em modo isolado.
     // O backend e o frontend usarão o contexto do usuário logado para filtrar apenas suas tarefas.
     return (
@@ -16,7 +17,7 @@ export default function SquadPortalPage({ params }: { params: { id: string } }) 
             </div>
 
             <div className="flex-1 px-4 sm:px-8 pb-8">
-                <TasksContent campaignId={params.id} simpleMode={true} />
+                <TasksContent campaignId={id} simpleMode={true} />
             </div>
         </div>
     );
