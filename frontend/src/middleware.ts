@@ -78,7 +78,7 @@ export async function middleware(request: NextRequest) {
             // If user has MFA enabled but session is aal1, redirect to challenge
             // Standard Supabase sessions start at aal1
             const { data: { session } } = await supabase.auth.getSession()
-            const aal = session?.user?.aal || 'aal1'
+            const aal = (session?.user as any)?.aal || 'aal1'
 
             if (hasVerifiedMfa && aal === 'aal1' && path !== '/auth/mfa/challenge') {
                 const mfaUrl = new URL('/auth/mfa/challenge', request.url)
