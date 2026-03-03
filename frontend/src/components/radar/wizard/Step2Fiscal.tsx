@@ -27,7 +27,7 @@ export function Step2Fiscal({ onNext, campaignId, politicoId }: Step2Props) {
             // Trigger Backend Matching
             const res = await triggerRadarRefresh(campaignId, politicoId);
             if (res.status === 'completed' || res.status === 'ok') {
-                const matches = res.data?.matches_found || 127;
+                const matches = (res as any).data?.matches_found || 127;
                 setStats(s => ({ ...s, matches }));
             } else {
                 setStats(s => ({ ...s, matches: 127 })); // fallback
