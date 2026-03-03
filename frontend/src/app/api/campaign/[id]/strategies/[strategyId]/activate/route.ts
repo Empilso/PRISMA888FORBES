@@ -22,6 +22,7 @@ export async function POST(
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
+                'ngrok-skip-browser-warning': 'true',
             },
         });
 
@@ -58,7 +59,9 @@ export async function GET(
         const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
         const endpoint = `${backendUrl}/api/campaign/${campaignId}/strategies/${strategyId}/status`;
 
-        const response = await fetch(endpoint);
+        const response = await fetch(endpoint, {
+            headers: { 'ngrok-skip-browser-warning': 'true' },
+        });
 
         if (!response.ok) {
             const error = await response.json();

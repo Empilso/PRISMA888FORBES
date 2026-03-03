@@ -20,6 +20,7 @@ export async function PUT(
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/json',
+                'ngrok-skip-browser-warning': 'true',
             },
             body: JSON.stringify(body),
         });
@@ -55,6 +56,9 @@ export async function DELETE(
 
         const response = await fetch(endpoint, {
             method: 'DELETE',
+            headers: {
+                'ngrok-skip-browser-warning': 'true',
+            },
         });
 
         if (!response.ok) {
