@@ -1,4 +1,4 @@
-
+import sys
 import os
 import psycopg2
 from dotenv import load_dotenv
@@ -10,7 +10,11 @@ if not db_url:
     print("❌ DATABASE_URL not found")
     exit(1)
 
-MIGRATION_FILE = "migrations/2026-02-06_add_cpf_to_profiles.sql"
+if len(sys.argv) < 2:
+    print("Usage: python3 scripts/apply_migration.py <migration_file>")
+    exit(1)
+
+MIGRATION_FILE = sys.argv[1]
 
 try:
     print(f"Applying migration: {MIGRATION_FILE}")

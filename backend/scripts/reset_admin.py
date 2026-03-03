@@ -19,7 +19,7 @@ if not SUPABASE_URL or not SUPABASE_KEY:
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 ADMIN_EMAIL = "admin@prisma888.com"
-NEW_PASSWORD = "Password123!" # Senha forte padrão
+NEW_PASSWORD = "admin123" # Senha padrão solicitada pelo usuário
 
 def reset_admin():
     print(f"🔄 Tentando resetar/criar admin: {ADMIN_EMAIL}")

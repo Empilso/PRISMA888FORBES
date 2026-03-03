@@ -176,6 +176,84 @@ class CampaignVectorSearchTool(BaseTool):
 
 
 # ============================================================
+# FERRAMENTA 1.1: BUSCA NA BASE DE CONHECIMENTO REAL (ENTERPRISE)
+# ============================================================
+
+class KnowledgeSearchInput(BaseModel):
+    """Schema de input para busca na Base de Conhecimento"""
+    query: str = Field(
+        ..., 
+        description="Termo ou frase para buscar na base de conhecimento. Ex: 'proposta educação infantil'"
+    )
+    category: Optional[str] = Field(
+        None,
+        description="Categoria para filtrar (ex: 'plano_governo', 'dossie', 'geral')."
+    )
+    city_id: Optional[str] = Field(
+        None,
+        description="UUID da cidade para filtrar resultados específicos."
+    )
+
+class KnowledgeBaseTool(BaseTool):
+    name: str = "Search Knowledge Base"
+    description: str = """
+    Busca semântica avançada em documentos oficiais da campanha, dossiês e planos de governo.
+    Use esta ferramenta para validar se uma promessa está documentada ou buscar contexto histórico.
+    
+    Parâmetros:
+    - query: O que buscar
+    - category: Opcional (plano_governo, dossie, geral)
+    - city_id: Opcional (ID da cidade)
+    """
+    args_schema: type[BaseModel] = KnowledgeSearchInput
+    
+    def _run(self, query: str, category: str = None, city_id: str = None) -> str:
+        """Executa busca vetorial na tabela 'knowledge_vectors'."""
+        try:
+            supabase = get_supabase_client()
+            embeddings = get_embeddings_model()
+            
+            # 1. Gerar embedding
+            query_embedding = embeddings.embed_query(query)
+            
+            # 2. Construir filtros
+            metadata_filter = {}
+            if category:
+                metadata_filter["category"] = category
+            if city_id:
+                metadata_filter["city_id"] = city_id
+                
+            # 3. Chamar RPC match_knowledge
+            rpc_result = supabase.rpc(
+                "match_knowledge",
+                {
+                    "query_embedding": query_embedding,
+                    "match_count": 3,
+                    "filter": metadata_filter
+                }
+            ).execute()
+            
+            results = rpc_result.data if rpc_result.data else []
+            
+            if not results:
+                return "Nenhuma informação relevante encontrada na base de conhecimento para esta consulta."
+            
+            # 4. Formatar retorno
+            formatted = []
+            for i, doc in enumerate(results, 1):
+                content = doc.get('content', '')
+                cat = doc.get('metadata', {}).get('category', 'geral')
+                formatted.append(f"[Fonte {i} - Categoria: {cat}]\n{content}")
+            
+            return "\n\n---\n\n".join(formatted)
+            
+        except Exception as e:
+            print(f"[KnowledgeTool] Erro: {e}")
+            return f"Erro ao acessar base de conhecimento: {str(e)}"
+
+
+
+# ============================================================
 # FERRAMENTA 2: ESTATÍSTICAS DA CAMPANHA (CSV/LOCAIS)
 # ============================================================
 
@@ -406,6 +484,7 @@ class LocationCompetitorAnalysisTool(BaseTool):
 
 # Ferramentas Estratégicas (Genesis Crew)
 campaign_vector_search = CampaignVectorSearchTool()
+knowledge_base_tool = KnowledgeBaseTool()
 campaign_stats = CampaignStatsTool()
 
 # Ferramentas Táticas (Micro-Targeting)
@@ -465,27 +544,38 @@ class MunicipalSpendInput(BaseModel):
         ..., 
         description="Pergunta em linguagem natural sobre gastos. Ex: 'Quanto gastou com educação em 2024?' ou 'Gastos com fornecedor X'"
     )
+    city_slug: Optional[str] = Field(
+        None,
+        description="Slug da cidade para filtrar (ex: 'votorantim'). Se não informado, tenta usar contexto global."
+    )
+    orgao: Optional[str] = Field(
+        None,
+        description="Nome da Secretaria ou Órgão para filtrar (ex: 'SECRETARIA DE SAUDE')."
+    )
 
 class MunicipalSpendTool(BaseTool):
     name: str = "Search Municipal Expenses"
     description: str = """
     Pesquisa gastos públicos municipais (TCESP).
-    Útil para encontrar valores pagos a fornecedores, gastos por categoria (educação, saúde, obras) e datas.
+    Útil para encontrar valores pagos a fornecedores, gastos por Secretaria/Órgão e categorias.
     
-    A ferramenta tenta extrair o ano e categoria da sua pergunta.
-    Exemplo: "Quanto a prefeitura pagou de asfalto em 2024?"
+    Pode retornar listas detalhadas ou resumos agregados se solicitado.
     """
     args_schema: type[BaseModel] = MunicipalSpendInput
 
-    def _run(self, query: str) -> str:
+    def _run(self, query: str, city_slug: str = None, orgao: str = None) -> str:
         """Executa busca de gastos no Supabase."""
         try:
-            print(f"🔎 Municipal Tool analyzing: {query}")
+            if not city_slug:
+                 city_slug = os.getenv("CURRENT_CITY_SLUG")
             
-            # Initialize Supabase (reusing helper from this file)
+            if not city_slug:
+                raise ValueError("city_slug is required but was not provided and CURRENT_CITY_SLUG is not set.")
+            
+            print(f"🔎 Enterprise Spend Query: {query} (City: {city_slug}, Orgao: {orgao})")
             supabase = get_supabase_client()
 
-            # Default to current year or look for year in query
+            # Year Detection
             current_year = datetime.datetime.now().year
             target_year = current_year
             for y in range(2020, current_year + 2):
@@ -493,44 +583,68 @@ class MunicipalSpendTool(BaseTool):
                     target_year = y
                     break
             
-            # Simple keyword search
+            # Base Query
             db_query = supabase.table("municipal_expenses") \
-                .select("funcao, forn_nome_razao_social, valor, historico, data_emissao") \
-                .order("valor", desc=True) \
-                .limit(15)
+                .select("orgao, nm_fornecedor, vl_despesa, dt_emissao_despesa, evento") \
+                .eq("municipio_slug", city_slug) \
+                .eq("ano", target_year)
             
-            # Text Search
-            # remove year from query to avoid noise
-            search_term = query.replace(str(target_year), "").strip()
+            if orgao:
+                db_query = db_query.ilike("orgao", f"%{orgao}%")
             
-            # Remove common stop words for better search
-            for stop in ["quanto", "gastou", "com", "em", "de", "prefeitura", "municipio"]:
-                search_term = search_term.replace(stop, "").strip()
-                
-            if search_term:
-                 db_query = db_query.ilike("historico", f"%{search_term}%")
+            # Text Search cleaning
+            search_term = query.lower()
+            for skip in [str(target_year), "quanto", "gastou", "com", "em", "de", "prefeitura", "municipio", "cidade"]:
+                search_term = search_term.replace(skip, "").strip()
+            
+            if search_term and len(search_term) > 2:
+                # Search in nm_fornecedor or orgao if not already filtering by orgao
+                if not orgao:
+                    # We'll use a simple filter for now as Supabase doesn't do OR well in separate ilikes easily without filter()
+                    db_query = db_query.ilike("nm_fornecedor", f"%{search_term}%")
+                else:
+                    # If we have orgao, we might want to search specifically for items within it
+                    pass
 
+            # Ordering
+            db_query = db_query.order("vl_despesa", desc=True).limit(50)
+            
             results = db_query.execute()
             
             if not results.data:
-                return f"Nenhum gasto encontrado para '{search_term}' em {target_year}."
+                return f"Nenhum gasto encontrado para '{search_term}' em {target_year} (Órgão: {orgao or 'Todos'})."
 
-            # Format Response
-            summary = f"💰 Gastos Municipais identificados para '{search_term}' ({target_year}):\n"
-            total = 0
-            for item in results.data:
-                val = float(item.get('valor', 0))
-                total += val
-                forn = item.get('forn_nome_razao_social') or "Fornecedor Desconhecido"
-                func = item.get('funcao') or "Geral"
-                hist = item.get('historico', '')[:50] + "..."
-                summary += f"- R$ {val:,.2f}: {forn} ({func}) [{hist}]\n"
+            # Aggregation logic (Secretariat Summary)
+            secretariats = {}
+            total_general = 0
             
-            summary += f"\nTotal listado (Top 15): R$ {total:,.2f}"
+            for item in results.data:
+                val = float(item.get('vl_despesa', 0))
+                org = item.get('orgao', 'Outros')
+                total_general += val
+                secretariats[org] = secretariats.get(org, 0) + val
+            
+            # Format Response
+            summary = f"📊 [ENTERPRISE AUDIT] Gastos identificados em {city_slug} ({target_year}):\n"
+            summary += f"Total Geral (Amostra): R$ {total_general:,.2f}\n\n"
+            
+            if len(secretariats) > 1:
+                summary += "🏛️ Resumo por Órgão/Secretaria:\n"
+                for s, v in sorted(secretariats.items(), key=lambda x: x[1], reverse=True)[:5]:
+                    summary += f"- {s}: R$ {v:,.2f}\n"
+                summary += "\n"
+
+            summary += "📜 Detalhes dos Maiores Empenhos:\n"
+            for item in results.data[:10]:
+                val = float(item.get('vl_despesa', 0))
+                forn = item.get('nm_fornecedor') or "Fornecedor Desconhecido"
+                org = item.get('orgao') or "Geral"
+                summary += f"- R$ {val:,.2f} | {forn} | Setor: {org}\n"
+            
             return summary
 
         except Exception as e:
-            return f"Erro ao buscar gastos: {str(e)}"
+            return f"Erro na consulta enterprise: {str(e)}"
 
 # Instância exportada
 municipal_spend_tool = MunicipalSpendTool()

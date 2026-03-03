@@ -90,7 +90,7 @@ export function ConsoleMaster({ runId, campaignId }: Props) {
                     <div>
                         <h3 className="text-slate-100 font-bold text-sm">Console Master</h3>
                         <p className="text-xs text-slate-500 flex items-center gap-1">
-                            RUN ID: <span className="font-mono text-slate-400">{runId.substring(0, 8)}...</span>
+                            RUN ID: <span className="font-mono text-slate-400">{runId ? `${runId.substring(0, 8)}...` : 'N/A'}</span>
                         </p>
                     </div>
                 </div>
@@ -188,4 +188,29 @@ export function ConsoleMaster({ runId, campaignId }: Props) {
             </div>
         </div>
     );
+}
+
+function getRowColor(type: string) {
+    switch (type) {
+        case 'error': return 'bg-red-950/20 hover:bg-red-900/40 border-red-900/50';
+        case 'ai_thought': return 'bg-purple-950/20 hover:bg-purple-900/40 border-purple-900/30';
+        case 'task_start':
+        case 'task_end': return 'bg-blue-950/20 hover:bg-blue-900/40 border-blue-900/30';
+        case 'tool_start':
+        case 'tool_end': return 'bg-yellow-950/10 hover:bg-yellow-900/20 border-yellow-900/20';
+        default: return 'hover:bg-slate-800/50';
+    }
+}
+
+function getIcon(type: string) {
+    switch (type) {
+        case 'system': return <Terminal className="h-4 w-4 text-slate-500" />;
+        case 'task_start': return <Play className="h-4 w-4 text-blue-400" />;
+        case 'task_end': return <CheckCircle2 className="h-4 w-4 text-emerald-400" />;
+        case 'tool_start': return <Wrench className="h-4 w-4 text-yellow-500" />;
+        case 'tool_end': return <Package className="h-4 w-4 text-amber-500" />;
+        case 'ai_thought': return <Brain className="h-4 w-4 text-purple-400" />;
+        case 'error': return <XCircle className="h-4 w-4 text-red-500" />;
+        default: return <Terminal className="h-4 w-4 text-slate-600" />;
+    }
 }

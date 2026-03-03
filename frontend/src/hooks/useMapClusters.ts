@@ -66,6 +66,7 @@ export function useMapClusters({
 }: UseMapClustersOptions): UseMapClustersResult {
     // Converte locations para GeoJSON FeatureCollection
     const points = useMemo(() => {
+        if (!locations || !Array.isArray(locations)) return [];
         return locations.map((loc): GeoJSON.Feature<GeoJSON.Point, ClusterProperties> => ({
             type: "Feature",
             properties: {

@@ -1,17 +1,20 @@
 "use client";
 
 import { createClient } from "@/lib/supabase/client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useToast } from "@/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Layers, Filter, MapIcon, Zap, Search, Loader2, StickyNote, Plus, Trash2, Users, Eye, EyeOff } from "lucide-react";
+import { Layers, Filter, MapIcon, Zap, Search, Loader2, StickyNote, Plus, Trash2, Users, Eye, EyeOff, Radar, MessageCircle, Sparkles, Instagram } from "lucide-react";
 import dynamic from "next/dynamic";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from "@/components/ui/sheet";
 import { MapNotesLayer, MapNote } from "@/components/map/MapNotesLayer";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { SocialRadarLayer, SocialMention } from "@/components/map/SocialRadarLayer";
+import { MapNavigationTools } from "@/components/map/MapNavigationTools";
+import { SocialMentionSheet } from "@/components/map/SocialMentionSheet";
 
 // Importação dinâmica do mapa (SSR false)
 const MapComponent = dynamic(() => import("@/components/dashboard/map-component"), {
@@ -40,10 +43,11 @@ interface LocationResult {
 }
 
 interface ElectoralMapFullProps {
-    campaignId: string;
+    campaignId?: string;
+    campaigns?: any[]; // Prop para agregação Multi-tenant (Modo Partido)
 }
 
-export function ElectoralMapFull({ campaignId }: ElectoralMapFullProps) {
+export function ElectoralMapFull({ campaignId, campaigns }: ElectoralMapFullProps) {
     const supabase = createClient();
     const { toast } = useToast();
 
@@ -80,6 +84,76 @@ export function ElectoralMapFull({ campaignId }: ElectoralMapFullProps) {
     const [competitorLocations, setCompetitorLocations] = useState<Location[]>([]);
     const [loadingCompetitor, setLoadingCompetitor] = useState(false);
 
+    // Social Radar State
+    const [showSocialRadar, setShowSocialRadar] = useState(false);
+    const [socialMentions, setSocialMentions] = useState<SocialMention[]>([]);
+    const [loadingSocial, setLoadingSocial] = useState(false);
+    const [socialStats, setSocialStats] = useState<{ positive: number; negative: number; neutral: number; monitored_targets?: string[] } | null>(null);
+    const [selectedMention, setSelectedMention] = useState<SocialMention | null>(null);
+    const [isMentionSheetOpen, setIsMentionSheetOpen] = useState(false);
+    // REMOVIDO: isThermometerExpanded (movido para o header global)
+
+    // Filters for Social Radar
+    const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(['instagram', 'tiktok']);
+    const [selectedRivals, setSelectedRivals] = useState<string[]>([]);
+
+    // Derived unique rivals: Use backend targets first, fallback to mentions
+    const uniqueRivals = useMemo(() => {
+        const targets = socialStats?.monitored_targets || [];
+        if (targets.length > 0) return targets.map(t => t.startsWith('@') ? t.substring(1) : t);
+
+        // EXTRACTION QI 190: Extract from ALL mentions, regardless of current filter
+        // This ensures the rival list is stable even when toggling platforms
+        return Array.from(new Set(socialMentions.map(m => {
+            const h = m.rival_handle;
+            return h.startsWith('@') ? h.substring(1) : h;
+        }))).sort();
+    }, [socialMentions, socialStats]);
+
+    // Update selected rivals when uniqueRivals change (e.g. initial load)
+    useEffect(() => {
+        if (uniqueRivals.length > 0 && selectedRivals.length === 0) {
+            setSelectedRivals(uniqueRivals);
+        } else if (uniqueRivals.length > 0 && selectedRivals.length > 0) {
+            // Estabilização QI 190: Evitar que re-cálculos de uniqueRivals forcem re-renders inúteis
+            // se o conteúdo for idêntico
+            const isIdentical = uniqueRivals.length === selectedRivals.length &&
+                uniqueRivals.every((v, i) => v === selectedRivals[i]);
+            if (!isIdentical && selectedRivals.length === 0) {
+                setSelectedRivals(uniqueRivals);
+            }
+        }
+    }, [uniqueRivals]); // Removido selectedRivals do array para evitar loop
+
+    // Computed filtered mentions
+    const filteredMentions = useMemo(() => {
+        return socialMentions.filter(m => {
+            const handle = m.rival_handle.startsWith('@') ? m.rival_handle.substring(1) : m.rival_handle;
+            return selectedRivals.includes(handle) &&
+                selectedPlatforms.includes(m.platform.toLowerCase());
+        });
+    }, [socialMentions, selectedRivals, selectedPlatforms]);
+
+    // Otimização QI 190: Memoizar locations para evitar re-calculo caro no Leaflet
+    const memoizedLocations = useMemo(() => locations, [locations]);
+
+    // Filter toggles
+    const togglePlatform = (p: string) => {
+        setSelectedPlatforms(prev => prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p]);
+    };
+
+    const toggleRival = (r: string) => {
+        setSelectedRivals(prev => prev.includes(r) ? prev.filter(x => x !== r) : [...prev, r]);
+    };
+
+    // Micro-Strategy State
+    const [microStrategy, setMicroStrategy] = useState<string>("");
+    const [isGeneratingMicro, setIsGeneratingMicro] = useState(false);
+
+    // Aliases used in JSX (typing effect was simplified)
+    const displayedStrategy = microStrategy;
+    const isTyping = isGeneratingMicro;
+
     // 1. Fetch Campaign Info & Notes
     useEffect(() => {
         const fetchCampaign = async () => {
@@ -90,8 +164,10 @@ export function ElectoralMapFull({ campaignId }: ElectoralMapFullProps) {
                 setBallotName(data.ballot_name || data.name);
             }
         }
-        fetchCampaign();
-        fetchNotes();
+        if (campaignId) {
+            fetchCampaign();
+            fetchNotes();
+        }
     }, [campaignId]);
 
     const fetchNotes = async () => {
@@ -213,14 +289,28 @@ export function ElectoralMapFull({ campaignId }: ElectoralMapFullProps) {
     // 3. Fetch All Locations & Performance
     useEffect(() => {
         const fetchLocationsWithPerformance = async () => {
-            if (!campaignId || !ballotName) return;
+            const hasSingleCampaign = !!campaignId && !!ballotName;
+            const hasMultiCampaigns = !!campaigns && campaigns.length > 0;
+
+            if (!hasSingleCampaign && !hasMultiCampaigns) return;
 
             try {
+                let campaignIds = [];
+                let ballotNames: string[] = [];
+
+                if (hasSingleCampaign) {
+                    campaignIds = [campaignId!];
+                    ballotNames = [ballotName];
+                } else if (hasMultiCampaigns) {
+                    campaignIds = campaigns!.map(c => c.id);
+                    ballotNames = campaigns!.map(c => (c.ballot_name || c.name || "").toLowerCase());
+                }
+
                 // A. Busca Locations
                 const { data: locData, error: locError } = await supabase
                     .from("locations")
                     .select("*")
-                    .eq("campaign_id", campaignId);
+                    .in("campaign_id", campaignIds);
 
                 if (locError) throw locError;
                 if (!locData || locData.length === 0) {
@@ -229,19 +319,30 @@ export function ElectoralMapFull({ campaignId }: ElectoralMapFullProps) {
                     return;
                 }
 
-                // B. Busca Votos (Matches)
+                // Extrair IDs dos locais para buscar os resultados apenas deles
+                const locationIds = locData.map((l: any) => l.id);
+
+                // B. Busca Votos (Matches) para os locais encontrados
                 const { data: myVotesData, error: votesError } = await supabase
                     .from('location_results')
                     .select('location_id, votes, candidate_name')
-                    .ilike('candidate_name', `%${ballotName}%`);
+                    .in('location_id', locationIds);
 
-                if (votesError) console.warn('⚠️ Erro ao buscar votos do candidato:', votesError);
+                if (votesError) console.warn('⚠️ Erro ao buscar votos:', votesError);
 
                 // C. Map Votes
                 const myVotesMap: Record<string, number> = {};
                 if (myVotesData) {
                     myVotesData.forEach((v) => {
-                        myVotesMap[v.location_id] = v.votes;
+                        const cName = v.candidate_name.toLowerCase();
+                        // Verifica se o candidato é um dos nossos
+                        const isOurs = hasSingleCampaign
+                            ? cName.includes(ballotName.toLowerCase())
+                            : ballotNames.some(b => cName.includes(b));
+
+                        if (isOurs) {
+                            myVotesMap[v.location_id] = (myVotesMap[v.location_id] || 0) + (v.votes || 0);
+                        }
                     });
                 }
 
@@ -285,7 +386,7 @@ export function ElectoralMapFull({ campaignId }: ElectoralMapFullProps) {
         };
 
         fetchLocationsWithPerformance();
-    }, [campaignId, ballotName]);
+    }, [campaignId, ballotName, campaigns]);
 
     // Handlers
     const handleLocationClick = (location: any) => {
@@ -333,6 +434,101 @@ export function ElectoralMapFull({ campaignId }: ElectoralMapFullProps) {
             });
         } finally {
             setIsGeneratingAction(false);
+        }
+    };
+
+    // 📡 Social Radar Handlers
+    const fetchSocialData = async () => {
+        setLoadingSocial(true);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 12000); // 12s timeout
+
+        try {
+            const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+            const res = await fetch(`${apiUrl}/api/campaign/${campaignId}/map/tactical`, {
+                signal: controller.signal
+            });
+            clearTimeout(timeoutId);
+
+            if (res.ok) {
+                const data = await res.json();
+                setSocialMentions(data.mentions || []);
+                // Combine stats with monitored_targets from top level
+                setSocialStats({
+                    ...(data.sentiment_breakdown || { positive: 0, negative: 0, neutral: 0 }),
+                    monitored_targets: data.monitored_targets || []
+                });
+
+                if (data.has_mock) {
+                    toast({
+                        title: "⚠️ API Excedida",
+                        description: "Utilizando simulação de dados (Mock Mode)",
+                        duration: 8000,
+                    });
+                } else {
+                    toast({
+                        title: "📡 Radar Social Ativado",
+                        description: `${data.total_mentions} menções carregadas no mapa`,
+                    });
+                }
+            } else {
+                throw new Error("API return error state");
+            }
+        } catch (e: any) {
+            console.error("Failed to fetch social data", e);
+            if (e.name === 'AbortError' || String(e).includes('timeout')) {
+                toast({
+                    title: "⚠️ API Excedida",
+                    description: "Utilizando simulação de dados (Mock Mode - Cache Local).",
+                });
+            } else {
+                toast({ title: "Erro de Conexão", description: "Falha ao consultar Radar Social.", variant: "destructive" });
+            }
+        } finally {
+            clearTimeout(timeoutId);
+            setLoadingSocial(false);
+        }
+    };
+
+    const handleToggleSocialRadar = () => {
+        if (showSocialRadar) {
+            setShowSocialRadar(false);
+            setSocialMentions([]);
+            setSocialStats(null);
+        } else {
+            setShowSocialRadar(true);
+            fetchSocialData();
+        }
+    };
+
+    // ✨ Micro-Strategy IA (Isolada via TypingText)
+    const handleGenerateMicroStrategy = async () => {
+        if (!selectedLocation) return;
+        setIsGeneratingMicro(true);
+        setMicroStrategy("");
+
+        try {
+            const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+            const body = {
+                neighborhood: selectedLocation.name,
+                location_name: selectedLocation.name,
+                location_id: selectedLocation.id,
+            };
+
+            const res = await fetch(`${apiUrl}/api/campaign/${campaignId}/social/micro-strategy`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+
+            if (!res.ok) throw new Error('Falha ao gerar micro-estratégia');
+            const data = await res.json();
+            setMicroStrategy(data.strategy);
+        } catch (error) {
+            console.error(error);
+            toast({ title: "Erro", description: "Falha ao gerar micro-estratégia.", variant: "destructive" });
+        } finally {
+            setIsGeneratingMicro(false);
         }
     };
 
@@ -406,129 +602,215 @@ export function ElectoralMapFull({ campaignId }: ElectoralMapFullProps) {
     };
 
     return (
-        <div className="relative h-[calc(100vh-4rem)] w-full overflow-hidden flex flex-col bg-slate-50 border rounded-2xl shadow-sm">
+        <div className="relative h-full w-full overflow-hidden flex flex-col bg-slate-50">
+            {/* REMOVIDO: Cabeçalho Tático & Termômetro Social (unificado no Header Global) */}
 
-            {/* Toolbar e Top Left */}
+            {/* Tool Palette (Photoshop Style) — Componentizado QI 190 */}
+            <MapNavigationTools
+                showControls={showControls}
+                setShowControls={setShowControls}
+                isNoteMode={isNoteMode}
+                setIsNoteMode={setIsNoteMode}
+                showSocialRadar={showSocialRadar}
+                onToggleSocialRadar={handleToggleSocialRadar}
+                loadingSocial={loadingSocial}
+            />
 
-            // ... (inside component)
+            {/* Float Social Stats e Filtros se o Radar estiver Activo */}
+            {showSocialRadar && (
+                <div className="absolute top-1/2 -translate-y-1/2 left-24 z-[1000] bg-white/95 backdrop-blur-xl dark:bg-slate-950/95 p-5 w-72 rounded-3xl shadow-2xl border border-slate-200/50 animate-in fade-in slide-in-from-left-4 max-h-[80vh] flex flex-col gap-4 overflow-hidden">
 
-            // ... (Toolbar section)
-            <div className="absolute top-4 left-4 z-[100] flex flex-col gap-2">
-                <div className="bg-white dark:bg-slate-950 p-1 rounded-md shadow-md border flex flex-col gap-1">
-                    <Button
-                        variant={showControls ? "secondary" : "ghost"}
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => setShowControls(!showControls)}
-                        title="Configurações e Camadas"
-                    >
-                        <Layers className="h-4 w-4" />
-                    </Button>
-
-                    <Button
-                        variant={isNoteMode ? "default" : "ghost"}
-                        size="icon"
-                        className={`h-8 w-8 ${isNoteMode ? "bg-amber-500 text-white hover:bg-amber-600" : ""}`}
-                        onClick={() => {
-                            setIsNoteMode(!isNoteMode);
-                            if (!isNoteMode) {
-                                toast({ title: "Modo Nota Ativo", description: "Clique no mapa para adicionar uma nota." });
-                            }
-                        }}
-                        title="Adicionar Nota / Alerta"
-                    >
-                        <StickyNote className="h-4 w-4" />
-                    </Button>
-
-                    <Button variant="ghost" size="icon" className="h-8 w-8"><Filter className="h-4 w-4" /></Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8"><MapIcon className="h-4 w-4" /></Button>
-                </div>
-
-                {showControls && (
-                    <div className="bg-white dark:bg-slate-950 p-4 rounded-md shadow-lg border w-72 space-y-6 animate-in slide-in-from-left-2">
-                        <div className="space-y-3">
-                            <h4 className="text-xs font-bold uppercase text-muted-foreground flex items-center gap-2">
-                                <MapIcon className="h-3 w-3" /> Estilo do Mapa
-                            </h4>
-                            <select
-                                className="w-full text-sm p-2 rounded border bg-background hover:bg-slate-50 transition-colors"
-                                value={mapStyle}
-                                onChange={(e) => setMapStyle(e.target.value)}
-                            >
-                                <option value="osm">OpenStreetMap</option>
-                                <option value="osm-bright">OSM Bright (Clean)</option>
-                                <option value="osm-hot">OSM Hot</option>
-                                <option value="satellite">Satélite</option>
-                                <option value="carto-dark">Carto Dark</option>
-                            </select>
+                    <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+                        <div className="bg-purple-100 p-2 rounded-xl text-purple-600">
+                            <Radar className="h-5 w-5" />
                         </div>
-
-                        <div className="space-y-3 pt-4 border-t border-slate-100">
-                            <h4 className="text-xs font-bold uppercase text-muted-foreground flex items-center gap-2">
-                                <Users className="h-3 w-3" /> Radar de Concorrentes
-                            </h4>
-
-                            {competitors.length === 0 ? (
-                                <p className="text-xs text-muted-foreground">Nenhum concorrente cadastrado.</p>
-                            ) : (
-                                <div className="space-y-3">
-                                    <div className="flex items-center justify-between">
-                                        <Label htmlFor="competitor-mode" className="text-sm font-medium text-slate-700">
-                                            Exibir Camada
-                                        </Label>
-                                        <Switch
-                                            id="competitor-mode"
-                                            checked={showCompetitorOverlay}
-                                            onCheckedChange={handleToggleCompetitor}
-                                            disabled={loadingCompetitor}
-                                        />
-                                    </div>
-
-                                    {showCompetitorOverlay && (
-                                        <div className="animate-in fade-in slide-in-from-top-1">
-                                            <select
-                                                className="w-full text-sm p-2 rounded border bg-background hover:bg-slate-50 transition-colors"
-                                                value={selectedCompetitorId || ''}
-                                                onChange={(e) => handleCompetitorChange(e.target.value)}
-                                                disabled={loadingCompetitor}
-                                            >
-                                                <option value="" disabled>Selecione um alvo...</option>
-                                                {competitors.map(c => (
-                                                    <option key={c.id} value={c.id}>🔴 {c.name}</option>
-                                                ))}
-                                            </select>
-                                            {loadingCompetitor && <p className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Carregando pontos...</p>}
-                                        </div>
-                                    )}
-                                </div>
-                            )}
+                        <div>
+                            <h3 className="font-bold text-slate-900 leading-none">Radar Social</h3>
+                            <span className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">{filteredMentions.length} Menções Ativas</span>
                         </div>
                     </div>
-                )}
-            </div>
 
-            {/* Search Bar */}
+                    {/* Stats */}
+                    {socialStats && (
+                        <div className="flex flex-row justify-between gap-2 text-center">
+                            <div className="flex-1 bg-gradient-to-br from-green-50 to-emerald-50/50 rounded-2xl p-2 shadow-sm border border-green-100/50">
+                                <div className="text-xl font-black text-green-600 leading-none">{socialStats.positive}</div>
+                                <div className="text-[9px] text-green-600 uppercase font-bold tracking-wider mt-1">Elogios</div>
+                            </div>
+                            <div className="flex-1 bg-gradient-to-br from-amber-50 to-yellow-50/50 rounded-2xl p-2 shadow-sm border border-amber-100/50">
+                                <div className="text-xl font-black text-amber-600 leading-none">{socialStats.neutral}</div>
+                                <div className="text-[9px] text-amber-600 uppercase font-bold tracking-wider mt-1">Neutro</div>
+                            </div>
+                            <div className="flex-1 bg-gradient-to-br from-red-50 to-rose-50/50 rounded-2xl p-2 shadow-sm border border-red-100/50">
+                                <div className="text-xl font-black text-red-600 leading-none">{socialStats.negative}</div>
+                                <div className="text-[9px] text-red-600 uppercase font-bold tracking-wider mt-1">Críticas</div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Filters Container */}
+                    <div className="flex-1 overflow-y-auto pr-1 space-y-5 custom-scrollbar">
+                        {/* Redes Sociais */}
+                        <div className="space-y-2">
+                            <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Plataformas</span>
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={() => togglePlatform('instagram')}
+                                    className={`flex-1 py-2 px-3 flex justify-center items-center gap-2 rounded-xl border text-sm transition-all ${selectedPlatforms.includes('instagram') ? 'bg-pink-50 border-pink-200 text-pink-700 shadow-sm' : 'bg-slate-50 border-slate-200 text-slate-400 hover:bg-slate-100'}`}
+                                >
+                                    <Instagram className="h-4 w-4" /> IG
+                                </button>
+                                <button
+                                    onClick={() => togglePlatform('tiktok')}
+                                    className={`flex-1 py-2 px-3 flex justify-center items-center gap-2 rounded-xl border text-sm transition-all ${selectedPlatforms.includes('tiktok') ? 'bg-slate-900 border-slate-900 text-white shadow-sm' : 'bg-slate-50 border-slate-200 text-slate-400 hover:bg-slate-100'}`}
+                                >
+                                    🎵 TK
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Candidatos/Rivais */}
+                        <div className="space-y-2">
+                            <span className="text-xs font-bold text-slate-400 uppercase tracking-widest flex justify-between">
+                                Alvos Monitorados
+                            </span>
+                            {uniqueRivals.length === 0 && !loadingSocial && (
+                                <p className="text-xs text-slate-400 italic">Nenhum rival detectado.</p>
+                            )}
+                            {loadingSocial && (
+                                <div className="flex items-center gap-2 text-xs text-purple-600">
+                                    <Loader2 className="h-4 w-4 animate-spin" /> Varrendo redes...
+                                </div>
+                            )}
+                            <div className="flex flex-col gap-2">
+                                {uniqueRivals.map(rival => {
+                                    const isSelected = selectedRivals.includes(rival);
+                                    // Generate the same color hash for consistency
+                                    const hash = rival.split('').reduce((acc, char) => char.charCodeAt(0) + ((acc << 5) - acc), 0);
+                                    const h = Math.abs(hash) % 360;
+                                    const colorAccent = `hsl(${h}, 70%, 50%)`;
+
+                                    return (
+                                        <button
+                                            key={rival}
+                                            onClick={() => toggleRival(rival)}
+                                            className={`flex items-center justify-between p-2 rounded-xl border transition-all ${isSelected ? 'bg-white shadow-sm border-slate-200' : 'bg-slate-50 border-transparent opacity-60 hover:opacity-100'
+                                                }`}
+                                        >
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-6 h-6 rounded-md flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: isSelected ? colorAccent : '#cbd5e1' }}>
+                                                    {rival.charAt(0).toUpperCase()}
+                                                </div>
+                                                <span className={`text-sm font-medium ${isSelected ? 'text-slate-700' : 'text-slate-400'}`}>@{rival}</span>
+                                            </div>
+                                            <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${isSelected ? 'border-purple-500 bg-purple-500 text-white' : 'border-slate-300'}`}>
+                                                {isSelected && <svg viewBox="0 0 24 24" fill="none" className="w-3 h-3 stroke-current stroke-[3]"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
+                                            </div>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Toolbar Controles Dropdown (agora posicionado ao lado da Tool Palette) */}
+
+            {showControls && (
+                <div className="absolute top-1/2 -translate-y-1/2 left-24 z-[1000] bg-white/95 backdrop-blur-xl dark:bg-slate-950/95 p-5 rounded-2xl shadow-2xl border border-slate-200/50 w-80 space-y-6 animate-in fade-in slide-in-from-left-4">
+                    <div className="space-y-3">
+                        <h4 className="text-xs font-bold uppercase text-muted-foreground flex items-center gap-2">
+                            <MapIcon className="h-3 w-3" /> Estilo do Mapa
+                        </h4>
+                        <select
+                            className="w-full text-sm p-2 rounded border bg-background hover:bg-slate-50 transition-colors"
+                            value={mapStyle}
+                            onChange={(e) => setMapStyle(e.target.value)}
+                        >
+                            <option value="osm">OpenStreetMap</option>
+                            <option value="osm-bright">OSM Bright (Clean)</option>
+                            <option value="osm-hot">OSM Hot</option>
+                            <option value="satellite">Satélite</option>
+                            <option value="carto-dark">Carto Dark</option>
+                        </select>
+                    </div>
+
+                    <div className="space-y-3 pt-4 border-t border-slate-100">
+                        <h4 className="text-xs font-bold uppercase text-muted-foreground flex items-center gap-2">
+                            <Users className="h-3 w-3" /> Radar de Concorrentes
+                        </h4>
+
+                        {competitors.length === 0 ? (
+                            <p className="text-xs text-muted-foreground">Nenhum concorrente cadastrado.</p>
+                        ) : (
+                            <div className="space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <Label htmlFor="competitor-mode" className="text-sm font-medium text-slate-700">
+                                        Exibir Camada
+                                    </Label>
+                                    <Switch
+                                        id="competitor-mode"
+                                        checked={showCompetitorOverlay}
+                                        onCheckedChange={handleToggleCompetitor}
+                                        disabled={loadingCompetitor}
+                                    />
+                                </div>
+
+                                {showCompetitorOverlay && (
+                                    <div className="animate-in fade-in slide-in-from-top-1">
+                                        <select
+                                            className="w-full text-sm p-2 rounded border bg-background hover:bg-slate-50 transition-colors"
+                                            value={selectedCompetitorId || ''}
+                                            onChange={(e) => handleCompetitorChange(e.target.value)}
+                                            disabled={loadingCompetitor}
+                                        >
+                                            <option value="" disabled>Selecione um alvo...</option>
+                                            {competitors.map(c => (
+                                                <option key={c.id} value={c.id}>🔴 {c.name}</option>
+                                            ))}
+                                        </select>
+                                        {loadingCompetitor && <p className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Carregando pontos...</p>}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+
+
+
+                </div>
+            )}
+
+            {/* Search Bar - Otimizada QI 190 */}
             <div className="absolute top-4 right-4 z-[100] w-80 flex gap-2">
                 <div className="relative flex-1">
                     <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input
                         placeholder="Buscar cidade, endereço..."
                         className="pl-8 bg-white dark:bg-slate-950 shadow-md border-0"
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                        defaultValue={searchQuery}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                                setSearchQuery(e.currentTarget.value);
+                                handleSearch();
+                            }
+                        }}
+                        onBlur={(e) => setSearchQuery(e.currentTarget.value)}
                     />
                 </div>
                 <Button onClick={handleSearch} className="shadow-md">Buscar</Button>
             </div>
 
             {/* Hint Mode */}
-            {isNoteMode && (
-                <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[100] bg-amber-500 text-white px-4 py-2 rounded-full shadow-lg text-sm font-bold animate-in fade-in flex items-center gap-2">
-                    <StickyNote className="h-4 w-4" />
-                    Modo Criação de Notas Ativo
-                </div>
-            )}
+            {
+                isNoteMode && (
+                    <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[100] bg-amber-500 text-white px-4 py-2 rounded-full shadow-lg text-sm font-bold animate-in fade-in flex items-center gap-2">
+                        <StickyNote className="h-4 w-4" />
+                        Modo Criação de Notas Ativo
+                    </div>
+                )
+            }
 
             {/* Mapa */}
             <div className={`flex-1 w-full h-full relative ${isNoteMode ? 'cursor-crosshair' : ''}`}>
@@ -553,6 +835,15 @@ export function ElectoralMapFull({ campaignId }: ElectoralMapFullProps) {
                         onMapClick={handleMapClick}
                         onNoteClick={handleNoteClick}
                     />
+                    {showSocialRadar && (
+                        <SocialRadarLayer
+                            mentions={filteredMentions}
+                            onMentionClick={(mention) => {
+                                setSelectedMention(mention);
+                                setIsMentionSheetOpen(true);
+                            }}
+                        />
+                    )}
                 </MapComponent>
             </div>
 
@@ -597,16 +888,53 @@ export function ElectoralMapFull({ campaignId }: ElectoralMapFullProps) {
                                 <div className="space-y-4">
                                     <div className="flex justify-between items-center">
                                         <h3 className="font-bold text-slate-800">Ranking da Urna</h3>
-                                        <Button
-                                            size="sm"
-                                            className="bg-purple-600 hover:bg-purple-700 text-white"
-                                            onClick={handleGenerateGuerrillaAction}
-                                            disabled={isGeneratingAction}
-                                        >
-                                            {isGeneratingAction ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Zap className="h-4 w-4 mr-2" />}
-                                            Gerar Estratégia
-                                        </Button>
+                                        <div className="flex gap-2">
+                                            <Button
+                                                size="sm"
+                                                className="bg-purple-600 hover:bg-purple-700 text-white"
+                                                onClick={handleGenerateGuerrillaAction}
+                                                disabled={isGeneratingAction}
+                                            >
+                                                {isGeneratingAction ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Zap className="h-4 w-4 mr-2" />}
+                                                Guerrilha
+                                            </Button>
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                className="border-cyan-300 text-cyan-700 hover:bg-cyan-50"
+                                                onClick={handleGenerateMicroStrategy}
+                                                disabled={isGeneratingMicro}
+                                            >
+                                                {isGeneratingMicro ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Sparkles className="h-4 w-4 mr-2" />}
+                                                ✨ Micro-Estratégia
+                                            </Button>
+                                        </div>
                                     </div>
+
+                                    {/* ✨ Micro-Strategy Output with Typing Effect */}
+                                    {(displayedStrategy || isGeneratingMicro) && (
+                                        <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-xl p-4 mt-3 shadow-lg border border-slate-700">
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <Sparkles className="h-4 w-4 text-cyan-400" />
+                                                <span className="text-xs font-bold text-cyan-400 uppercase tracking-wider">Micro-Estratégia Tática</span>
+                                                {isTyping && (
+                                                    <span className="text-cyan-400 animate-pulse text-xs">gerando...</span>
+                                                )}
+                                            </div>
+                                            <div className="text-sm text-slate-200 whitespace-pre-wrap leading-relaxed font-mono">
+                                                {displayedStrategy}
+                                                {isTyping && (
+                                                    <span className="inline-block w-2 h-4 bg-cyan-400 ml-0.5 animate-pulse" />
+                                                )}
+                                            </div>
+                                            {!isTyping && displayedStrategy && (
+                                                <div className="flex items-center gap-2 mt-3 pt-2 border-t border-slate-700">
+                                                    <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                                                    <span className="text-[10px] text-slate-400">Estratégia gerada por IA • PRISMA 888</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
 
                                     {loadingResults ? (
                                         <div className="flex justify-center p-4"><Loader2 className="animate-spin text-slate-400" /></div>
@@ -767,6 +1095,16 @@ export function ElectoralMapFull({ campaignId }: ElectoralMapFullProps) {
                     </SheetFooter>
                 </SheetContent>
             </Sheet>
+
+            {/* Sheet de Detalhes da Menção Social */}
+            <SocialMentionSheet
+                isOpen={isMentionSheetOpen}
+                onOpenChange={setIsMentionSheetOpen}
+                mention={selectedMention}
+                onGenerateStrategy={() => { }}
+                isGenerating={isGeneratingMicro}
+                fullStrategy={microStrategy}
+            />
         </div>
     );
 }

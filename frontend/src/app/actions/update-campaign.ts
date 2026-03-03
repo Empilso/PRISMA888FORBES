@@ -1,7 +1,6 @@
 "use server";
 
 import { createClient } from "@supabase/supabase-js";
-import { createClient as createSSRClient } from "@/lib/supabase/server";
 
 const supabaseAdmin = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -16,9 +15,7 @@ const supabaseAdmin = createClient(
 
 export async function updateCampaign(campaignId: string, formData: FormData) {
     try {
-        const supabase = await createSSRClient();
-
-        // Extrair dados
+        // Extrair dados do FormData (todos podem vir vazios/null)
         const nome = formData.get("nome") as string;
         const nomeUrna = formData.get("nomeUrna") as string;
         const cpf = formData.get("cpf") as string;
@@ -29,16 +26,31 @@ export async function updateCampaign(campaignId: string, formData: FormData) {
         const partido = formData.get("partido") as string;
         const cidade = formData.get("cidade") as string;
         const electionDate = formData.get("electionDate") as string;
+        const socialLinksRaw = formData.get("socialLinks") as string;
 
         const csvFile = formData.get("csvFile") as File;
         const pdfFile = formData.get("pdfFile") as File;
 
-        console.log("🚀 Atualizando campanha:", campaignId);
+        console.log("🚀 [UPDATE] Atualizando campanha:", campaignId);
+        console.log("🚀 [UPDATE] Campos recebidos:", { nome, nomeUrna, cargo, numero, partido, cidade, electionDate, hasSocialLinks: !!socialLinksRaw });
 
-        // 1. Upload de novos arquivos (se houver)
-        let csvUrl = null;
-        let pdfUrl = null;
+        // ===================================================================
+        // 1. FETCH DADOS ATUAIS (para não sobrescrever com vazio)
+        // ===================================================================
+        const { data: currentCampaign, error: fetchError } = await supabaseAdmin
+            .from("campaigns")
+            .select("*")
+            .eq("id", campaignId)
+            .single();
 
+        if (fetchError || !currentCampaign) {
+            console.error("❌ Campanha não encontrada:", fetchError);
+            return { success: false, error: "Campanha não encontrada." };
+        }
+
+        // ===================================================================
+        // 2. UPLOADS (se houver novos arquivos)
+        // ===================================================================
         if (csvFile && csvFile.size > 0) {
             const csvPath = `campaigns/${Date.now()}_${csvFile.name}`;
             const { error: csvError } = await supabaseAdmin.storage
@@ -47,16 +59,14 @@ export async function updateCampaign(campaignId: string, formData: FormData) {
 
             if (!csvError) {
                 const { data: publicUrl } = supabaseAdmin.storage.from("campaign-files").getPublicUrl(csvPath);
-                csvUrl = publicUrl.publicUrl;
-
-                // Salvar na tabela documents
                 await supabaseAdmin.from("documents").insert({
                     campaign_id: campaignId,
                     filename: csvFile.name,
-                    file_url: csvUrl,
+                    file_url: publicUrl.publicUrl,
                     file_type: "csv",
                     category: "electoral_data"
                 });
+                console.log("✅ CSV atualizado");
             }
         }
 
@@ -68,61 +78,92 @@ export async function updateCampaign(campaignId: string, formData: FormData) {
 
             if (!pdfError) {
                 const { data: publicUrl } = supabaseAdmin.storage.from("campaign-files").getPublicUrl(pdfPath);
-                pdfUrl = publicUrl.publicUrl;
-
-                // Salvar na tabela documents
                 await supabaseAdmin.from("documents").insert({
                     campaign_id: campaignId,
                     filename: pdfFile.name,
-                    file_url: pdfUrl,
+                    file_url: publicUrl.publicUrl,
                     file_type: "pdf",
                     category: "government_plan"
                 });
+                console.log("✅ PDF atualizado");
             }
         }
 
-        // 2. Atualizar Campanha
+        // ===================================================================
+        // 3. MERGE DEFENSIVO: só atualiza o que mudou, mantém o resto
+        // ===================================================================
+        const safeInt = (val: string | null | undefined): number | undefined => {
+            if (!val || val.trim() === "") return undefined;
+            const parsed = parseInt(val, 10);
+            return isNaN(parsed) ? undefined : parsed;
+        };
+
+        // Construir objeto de update com merge: campo novo OU valor existente
+        const campaignUpdate: Record<string, any> = {
+            candidate_name: nome?.trim() || currentCampaign.candidate_name,
+            ballot_name: nomeUrna?.trim() || currentCampaign.ballot_name,
+            role: cargo?.trim() || currentCampaign.role,
+            city: cidade?.trim() || currentCampaign.city,
+            party: partido?.trim() || currentCampaign.party,
+            number: safeInt(numero) ?? currentCampaign.number,
+            election_date: electionDate?.trim() || currentCampaign.election_date,
+        };
+
+        // Social Links: merge inteligente
+        if (socialLinksRaw) {
+            try {
+                const parsed = JSON.parse(socialLinksRaw);
+                const hasIg = parsed.instagram?.some((h: string) => h.trim());
+                const hasTk = parsed.tiktok?.some((h: string) => h.trim());
+                if (hasIg || hasTk) {
+                    campaignUpdate.social_links = parsed;
+                }
+            } catch (e) {
+                console.warn("⚠️ social_links parse error, mantendo existente");
+            }
+        }
+
+        console.log("📝 [UPDATE] Dados a persistir:", campaignUpdate);
+
         const { error: campaignError } = await supabaseAdmin
             .from("campaigns")
-            .update({
-                candidate_name: nome,
-                ballot_name: nomeUrna,
-                role: cargo,
-                city: cidade,
-                party: partido,
-                number: parseInt(numero),
-                election_date: electionDate || undefined // Só atualiza se veio valor
-            })
+            .update(campaignUpdate)
             .eq("id", campaignId);
 
         if (campaignError) {
-            console.error("Erro ao atualizar campanha:", campaignError);
-            return { success: false, error: "Erro ao atualizar dados da campanha." };
+            console.error("❌ Erro ao atualizar campanha:", campaignError);
+            return { success: false, error: `Erro ao atualizar: ${campaignError.message}` };
         }
 
-        // 3. Atualizar Profile (se necessário)
-        // Precisamos achar o profile vinculado a esta campanha
-        // Se houver múltiplos (staff), talvez devêssemos atualizar apenas o candidato?
-        // Por simplificação, vamos assumir que o profile do candidato é o que tem role='candidate'
+        console.log("✅ Campanha atualizada com sucesso");
 
-        const { error: profileError } = await supabaseAdmin
-            .from("profiles")
-            .update({
-                full_name: nome,
-                email: email
-                // cpf: cpf, phone: telefone (se existissem no banco)
-            })
-            .eq("campaign_id", campaignId)
-            .eq("role", "candidate");
+        // ===================================================================
+        // 4. PROFILE: atualizar apenas se tem dados novos
+        // ===================================================================
+        const profileUpdate: Record<string, any> = {};
+        if (nome?.trim()) profileUpdate.full_name = nome.trim();
+        if (email?.trim()) profileUpdate.email = email.trim();
+        if (cpf?.trim()) profileUpdate.cpf = cpf.trim();
+        if (telefone?.trim()) profileUpdate.phone = telefone.trim();
 
-        if (profileError) {
-            console.warn("Erro ao atualizar profile (não crítico):", profileError);
+        if (Object.keys(profileUpdate).length > 0) {
+            const { error: profileError } = await supabaseAdmin
+                .from("profiles")
+                .update(profileUpdate)
+                .eq("campaign_id", campaignId)
+                .eq("role", "candidate");
+
+            if (profileError) {
+                console.warn("⚠️ Profile update (não crítico):", profileError.message);
+            } else {
+                console.log("✅ Profile atualizado:", Object.keys(profileUpdate));
+            }
         }
 
         return { success: true };
 
     } catch (error: any) {
-        console.error("Erro na atualização:", error);
-        return { success: false, error: error.message };
+        console.error("❌ Erro fatal na atualização:", error);
+        return { success: false, error: error.message || "Erro desconhecido" };
     }
 }

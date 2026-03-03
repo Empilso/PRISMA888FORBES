@@ -38,8 +38,7 @@ export default function LoginPage() {
                 return;
             }
 
-            // Redirect logic check
-            const redirectTo = searchParams.get('redirectedFrom') || "/admin/dashboard";
+            const redirectTo = searchParams.get('redirectedFrom') || "/admin/candidatos";
 
             // Force hard refresh/navigation to ensure new session cookies are picked up
             window.location.href = redirectTo;

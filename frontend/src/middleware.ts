@@ -60,7 +60,7 @@ export async function middleware(request: NextRequest) {
 
     // Route Protection Logic
     const path = request.nextUrl.pathname
-    const isProtectedRoute = path.startsWith('/campaign') || path.startsWith('/admin') || path.startsWith('/auth')
+    const isProtectedRoute = path.startsWith('/campaign') || path.startsWith('/admin') || path.startsWith('/auth') || path.startsWith('/organization')
 
     if (isProtectedRoute && !user && path !== '/login') {
         const loginUrl = new URL('/login', request.url)
@@ -102,6 +102,7 @@ export const config = {
          */
         '/campaign/:path*',
         '/admin/:path*',
+        '/organization/:path*',
         '/auth/:path*',
     ],
 }

@@ -60,10 +60,10 @@ interface Task {
     status: "pending" | "in_progress" | "review" | "completed";
     priority: "low" | "medium" | "high" | "urgent";
     tags: string[];
-    due_date?: string;
+    assignee_id?: string | null;
     assignee?: {
-        name: string;
-        avatar: string;
+        full_name: string;
+        avatar_url: string;
     };
     ai_suggestion?: string;
     created_at?: string;
@@ -117,9 +117,25 @@ export default function TasksContent({ campaignId, simpleMode = false }: { campa
     const fetchTasks = async () => {
         setLoading(true);
         try {
+            const supabase = createClient();
+            const { data: { user } } = await supabase.auth.getUser();
+
+            // Busca o perfil para saber a ROLE
+            const { data: profile } = await supabase
+                .from('profiles')
+                .select('role')
+                .eq('id', user?.id)
+                .single();
+
             const res = await fetch(`/api/campaign/${campaignId}/tasks`, { cache: 'no-store' });
             if (!res.ok) throw new Error("Falha ao buscar tarefas");
-            const data = await res.json();
+            let data = await res.json();
+
+            // Lógica Enterprise: Staff só vê as suas tarefas se simpleMode estiver ativo (Portal SQUAD)
+            if (simpleMode && profile?.role === 'staff' && user) {
+                data = data.filter((t: any) => t.assignee_id === user.id);
+            }
+
             setTasks(data || []);
         } catch (error) {
             console.error("Erro ao buscar tarefas:", error);
@@ -140,16 +156,29 @@ export default function TasksContent({ campaignId, simpleMode = false }: { campa
         setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, status: newStatus } : t)));
 
         try {
+            const supabase = createClient();
+            const { data: { user } } = await supabase.auth.getUser();
+
             const res = await fetch(`/api/campaign/${campaignId}/tasks/${taskId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ status: newStatus })
+                body: JSON.stringify({
+                    status: newStatus,
+                    last_modified_by: user?.id
+                })
             });
 
-            if (!res.ok) throw new Error("Falha ao atualizar status");
-        } catch (error) {
-            console.error("Erro ao atualizar status:", error);
-            toast({ title: "Erro", description: "Não foi possível atualizar o status.", variant: "destructive" });
+            if (!res.ok) {
+                const errorText = await res.text();
+                throw new Error(`Falha ao atualizar status: ${res.status} - ${errorText}`);
+            }
+        } catch (error: any) {
+            console.error("[TasksContent] Erro crítico na atualização:", error);
+            toast({
+                title: "Erro de Sincronização",
+                description: `O servidor respondeu: ${error.message || "Erro desconhecido"}`,
+                variant: "destructive"
+            });
             fetchTasks(); // Rollback
         }
     };
@@ -222,7 +251,7 @@ export default function TasksContent({ campaignId, simpleMode = false }: { campa
     }
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 px-4 sm:px-8">
             {!simpleMode && (
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div>
@@ -249,10 +278,12 @@ export default function TasksContent({ campaignId, simpleMode = false }: { campa
                             <LayoutGrid className="h-4 w-4" />
                             Kanban
                         </TabsTrigger>
-                        <TabsTrigger value="console" className="gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm">
-                            <Terminal className="h-4 w-4" />
-                            Console IA
-                        </TabsTrigger>
+                        {!simpleMode && (
+                            <TabsTrigger value="console" className="gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                                <Terminal className="h-4 w-4" />
+                                Console IA
+                            </TabsTrigger>
+                        )}
                     </TabsList>
                 </Tabs>
 
@@ -446,9 +477,9 @@ export default function TasksContent({ campaignId, simpleMode = false }: { campa
                                         <div className="pt-4 border-t border-slate-50 flex items-center justify-between">
                                             <div className="flex items-center gap-2">
                                                 <Avatar className="h-7 w-7 border border-slate-200">
-                                                    <AvatarImage src={task.assignee?.avatar} />
+                                                    <AvatarImage src={task.assignee?.avatar_url} />
                                                     <AvatarFallback className="text-[10px] bg-slate-100 text-slate-600 font-bold">
-                                                        {task.assignee?.name?.substring(0, 2) || <User className="h-3 w-3" />}
+                                                        {task.assignee?.full_name?.substring(0, 2) || <User className="h-3 w-3" />}
                                                     </AvatarFallback>
                                                 </Avatar>
                                                 {task.due_date && (
@@ -640,9 +671,9 @@ function KanbanCardContent({ task, onMoveTask }: { task: Task; onMoveTask?: (id:
             <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-50">
                 <div className="flex items-center gap-1">
                     <Avatar className="h-6 w-6 border-2 border-white">
-                        <AvatarImage src={task.assignee?.avatar} />
+                        <AvatarImage src={task.assignee?.avatar_url} />
                         <AvatarFallback className="text-[9px] bg-indigo-50 text-indigo-700 font-bold">
-                            {task.assignee?.name?.substring(0, 2) || "IA"}
+                            {task.assignee?.full_name?.substring(0, 2) || "IA"}
                         </AvatarFallback>
                     </Avatar>
                     {task.due_date && (

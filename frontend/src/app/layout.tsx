@@ -28,7 +28,7 @@ export default function RootLayout({
                     crossOrigin=""
                 />
             </head>
-            <body className={inter.className}>
+            <body className={inter.className} suppressHydrationWarning>
                 <Providers>
                     {children}
                     <Toaster />

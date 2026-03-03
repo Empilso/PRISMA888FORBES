@@ -10,6 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { useToast } from "@/components/ui/use-toast";
 import {
     Calendar,
     User,
@@ -24,7 +26,9 @@ import {
     X,
     ChevronDown
 } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
 import { ExamplesRenderer } from "@/components/tasks/ExamplesRenderer";
+
 import {
     Popover,
     PopoverContent,
@@ -47,6 +51,8 @@ export interface Task {
     createdAt: string;
     tags: string[];
     examples?: string[];
+    campaign_id?: string;
+    assignee_id?: string | null;
 }
 
 interface TaskDetailsDialogProps {
@@ -60,6 +66,7 @@ export function TaskDetailsDialog({
     open,
     onOpenChange,
 }: TaskDetailsDialogProps) {
+    const { toast } = useToast();
     const [comment, setComment] = React.useState("");
     const [status, setStatus] = React.useState<TaskStatus>(
         task?.status || "pending"
@@ -68,14 +75,90 @@ export function TaskDetailsDialog({
         task?.priority || "medium"
     );
     const [description, setDescription] = React.useState(task?.description || "");
+    const [comments, setComments] = React.useState<any[]>([]);
+    const [history, setHistory] = React.useState<any[]>([]);
+    const [members, setMembers] = React.useState<any[]>([]);
+    const [loadingComments, setLoadingComments] = React.useState(false);
+    const [assigneeId, setAssigneeId] = React.useState<string | null>(task?.assignee_id || null);
 
     React.useEffect(() => {
         if (task) {
             setStatus(task.status);
             setPriority(task.priority);
             setDescription(task.description);
+            setAssigneeId(task.assignee_id || null);
         }
     }, [task]);
+
+    const fetchTaskDetails = async () => {
+        if (!task?.id) return;
+        setLoadingComments(true);
+        try {
+            const supabase = createClient();
+            const commentsRes = await fetch(`/api/campaign/${task.campaign_id || 'default'}/tasks/${task.id}/comments`);
+            if (commentsRes.ok) {
+                const commentsData = await commentsRes.json();
+                setComments(commentsData);
+            }
+
+            const historyRes = await fetch(`/api/campaign/${task.campaign_id || 'default'}/tasks/${task.id}/history`);
+            if (historyRes.ok) {
+                const historyData = await historyRes.json();
+                setHistory(historyData);
+            }
+
+            const { data: membersData } = await supabase
+                .from("profiles")
+                .select("id, full_name, email, avatar_url, role")
+                .eq("campaign_id", task.campaign_id)
+                .in("role", ["staff", "candidate", "super_admin"]);
+
+            if (membersData) setMembers(membersData);
+        } catch (error) {
+            console.error("Erro ao carregar detalhes da tarefa:", error);
+        } finally {
+            setLoadingComments(false);
+        }
+    };
+
+    const handleSendComment = async () => {
+        if (!comment.trim() || !task?.id) return;
+
+        try {
+            const supabase = createClient();
+            const { data: { user } } = await supabase.auth.getUser();
+
+            if (!user) return;
+
+            const res = await fetch(`/api/campaign/${task.campaign_id || 'default'}/tasks/${task.id}/comments`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    profile_id: user.id,
+                    content: comment
+                })
+            });
+
+            if (res.ok) {
+                setComment("");
+                fetchTaskDetails();
+            } else {
+                toast({
+                    title: "Erro ao comentar",
+                    description: "Não foi possível enviar seu comentário.",
+                    variant: "destructive"
+                });
+            }
+        } catch (error) {
+            console.error("Erro ao enviar comentário:", error);
+        }
+    };
+
+    React.useEffect(() => {
+        if (open && task?.id) {
+            fetchTaskDetails();
+        }
+    }, [open, task?.id]);
 
     if (!task) return null;
 
@@ -93,22 +176,6 @@ export function TaskDetailsDialog({
         { value: "urgent", label: "Urgente", color: "bg-red-500/10 text-red-600" },
     ];
 
-    const handleSendComment = () => {
-        if (comment.trim()) {
-            console.log("Comentário:", comment);
-            setComment("");
-        }
-    };
-
-    const comments = [
-        { id: "1", author: "João Silva", content: "Iniciamos o mapeamento da zona oeste conforme sugestão da IA", timestamp: "Há 2 horas" },
-        { id: "2", author: "Maria Costa", content: "Identificamos 3 áreas críticas que precisam de atenção", timestamp: "Há 5 horas" },
-    ];
-
-    const history = [
-        { id: "1", action: "Status alterado", from: "Pendente", to: "Em Progresso", user: "João Silva", timestamp: "Há 3 horas" },
-        { id: "2", action: "Prioridade alterada", from: "Média", to: "Alta", user: "Gerente", timestamp: "Há 1 dia" },
-    ];
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -178,14 +245,44 @@ export function TaskDetailsDialog({
                                     <button className="flex items-center gap-2 group outline-none">
                                         <User className="h-4 w-4 opacity-40 group-hover:opacity-100" />
                                         <span className="text-sm font-semibold text-slate-600 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-slate-200 transition-colors">
-                                            {task.assignee?.name || "Atribuir"}
+                                            {members.find(m => m.id === assigneeId)?.full_name || task.assignee?.name || "Atribuir"}
                                         </span>
                                     </button>
                                 </PopoverTrigger>
-                                <PopoverContent className="p-4 bg-white dark:bg-slate-900">
-                                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Responsável</p>
-                                    <div className="text-sm text-slate-600 dark:text-slate-300">
-                                        Selecione um membro da equipe...
+                                <PopoverContent className="p-1 w-64 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
+                                    <p className="p-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 dark:border-slate-800 mb-1">Responsável</p>
+                                    <div className="flex flex-col gap-1 max-h-60 overflow-y-auto custom-scrollbar">
+                                        <button
+                                            onClick={() => setAssigneeId(null)}
+                                            className={cn(
+                                                "flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors hover:bg-slate-50 dark:hover:bg-slate-800",
+                                                !assigneeId ? "text-primary bg-primary/5 font-bold" : "text-slate-600 dark:text-slate-400"
+                                            )}
+                                        >
+                                            <div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center">
+                                                <X className="h-3 w-3" />
+                                            </div>
+                                            Ninguém
+                                        </button>
+                                        {members.map((member) => (
+                                            <button
+                                                key={member.id}
+                                                onClick={() => setAssigneeId(member.id)}
+                                                className={cn(
+                                                    "flex items-center justify-between px-3 py-2 rounded-md text-sm transition-colors hover:bg-slate-50 dark:hover:bg-slate-800",
+                                                    assigneeId === member.id ? "text-primary bg-primary/5 font-bold" : "text-slate-600 dark:text-slate-400"
+                                                )}
+                                            >
+                                                <div className="flex items-center gap-2">
+                                                    <Avatar className="h-6 w-6">
+                                                        <AvatarImage src={member.avatar_url} />
+                                                        <AvatarFallback className="text-[10px]">{member.full_name?.slice(0, 2).toUpperCase()}</AvatarFallback>
+                                                    </Avatar>
+                                                    <span className="truncate max-w-[120px] text-left">{member.full_name || member.email}</span>
+                                                </div>
+                                                <Badge variant="outline" className="text-[8px] h-4 opacity-50">{member.role}</Badge>
+                                            </button>
+                                        ))}
                                     </div>
                                 </PopoverContent>
                             </Popover>
@@ -306,17 +403,25 @@ export function TaskDetailsDialog({
 
                             <TabsContent value="comments" className="pt-10 space-y-10">
                                 <div className="space-y-8 max-h-[500px] overflow-y-auto pr-4 custom-scrollbar">
+                                    {comments.length === 0 && !loadingComments && (
+                                        <div className="py-12 text-center opacity-30 italic text-sm">Nenhuma contribuição ainda. Seja o primeiro a comentar.</div>
+                                    )}
                                     {comments.map((c) => (
                                         <div key={c.id} className="flex gap-4">
-                                            <div className="h-10 w-10 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-xs font-bold text-slate-400 shrink-0">
-                                                {c.author.slice(0, 1)}
-                                            </div>
+                                            <Avatar className="h-10 w-10 shrink-0">
+                                                <AvatarImage src={c.profiles?.avatar_url} />
+                                                <AvatarFallback className="bg-slate-100 text-slate-400 font-bold text-xs uppercase">
+                                                    {c.profiles?.full_name?.slice(0, 2)}
+                                                </AvatarFallback>
+                                            </Avatar>
                                             <div className="space-y-2">
                                                 <div className="flex items-center gap-3">
-                                                    <span className="text-sm font-bold text-slate-900 dark:text-slate-100">{c.author}</span>
-                                                    <span className="text-[10px] text-slate-400 font-medium uppercase tracking-tighter opacity-50">{c.timestamp}</span>
+                                                    <span className="text-sm font-bold text-slate-900 dark:text-slate-100">{c.profiles?.full_name}</span>
+                                                    <span className="text-[10px] text-slate-400 font-medium uppercase tracking-tighter opacity-50">
+                                                        {new Date(c.created_at).toLocaleString("pt-BR", { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' })}
+                                                    </span>
                                                 </div>
-                                                <p className="text-base text-slate-500 dark:text-slate-400 leading-relaxed max-w-2xl">
+                                                <p className="text-base text-slate-600 dark:text-slate-400 leading-relaxed max-w-2xl whitespace-pre-wrap">
                                                     {c.content}
                                                 </p>
                                             </div>
@@ -343,19 +448,22 @@ export function TaskDetailsDialog({
 
                             <TabsContent value="history" className="pt-10">
                                 <div className="space-y-8">
+                                    {history.length === 0 && (
+                                        <div className="py-12 text-center opacity-30 italic text-sm">Nenhum evento registrado.</div>
+                                    )}
                                     {history.map((h, i) => (
                                         <div key={h.id} className="flex gap-6 items-start">
                                             <div className="h-2 w-2 rounded-full bg-slate-200 dark:bg-slate-800 mt-[7px] shadow-[0_0_0_4px_rgba(var(--primary),0.05)]" />
                                             <div className="space-y-1">
                                                 <p className="text-sm font-bold text-slate-900 dark:text-slate-100">{h.action}</p>
-                                                {h.from && h.to && (
+                                                {h.from_value && h.to_value && (
                                                     <p className="text-xs text-slate-500">
-                                                        de <span className="font-mono text-[10px] text-slate-400">{h.from}</span> para{" "}
-                                                        <span className="font-mono text-[10px] text-primary">{h.to}</span>
+                                                        de <span className="font-mono text-[10px] text-slate-400 uppercase">{h.from_value}</span> para{" "}
+                                                        <span className="font-mono text-[10px] text-primary uppercase">{h.to_value}</span>
                                                     </p>
                                                 )}
                                                 <p className="text-[10px] text-slate-400 uppercase font-bold tracking-widest opacity-40">
-                                                    {h.user} • {h.timestamp}
+                                                    {new Date(h.created_at).toLocaleString("pt-BR")}
                                                 </p>
                                             </div>
                                         </div>
@@ -369,9 +477,32 @@ export function TaskDetailsDialog({
                             <Button
                                 variant="default"
                                 className="flex-1 h-14 text-lg font-bold gap-3 rounded-[20px] shadow-2xl shadow-primary/10 hover:scale-[1.01] active:scale-[0.99] transition-all"
-                                onClick={() => {
-                                    console.log({ id: task.id, status, priority, description });
-                                    toast?.({ title: "Tarefa Atualizada", description: "As alterações foram salvas com sucesso." });
+                                onClick={async () => {
+                                    try {
+                                        const supabase = createClient();
+                                        const { data: { user } } = await supabase.auth.getUser();
+
+                                        const res = await fetch(`/api/campaign/${task.campaign_id || 'default'}/tasks/${task.id}`, {
+                                            method: 'PUT',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({
+                                                status,
+                                                priority,
+                                                description,
+                                                assignee_id: assigneeId,
+                                                last_modified_by: user?.id
+                                            })
+                                        });
+
+                                        if (res.ok) {
+                                            toast?.({ title: "Sincronizado", description: "As alterações foram salvas e registradas no histórico." });
+                                            fetchTaskDetails();
+                                        } else {
+                                            throw new Error("Falha na sincronização");
+                                        }
+                                    } catch (err) {
+                                        toast?.({ variant: "destructive", title: "Erro", description: "Não foi possível salvar as alterações." });
+                                    }
                                 }}
                             >
                                 <CheckCircle2 className="h-5 w-5" />

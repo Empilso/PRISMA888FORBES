@@ -12,6 +12,9 @@ from datetime import datetime
 from dataclasses import dataclass
 from supabase import create_client, Client
 
+# IMPORT RADAR CREW FOR 3D AUDIT
+from src.crew.radar_crew import RadarCrew
+
 # Category to search keywords mapping
 CATEGORY_KEYWORDS = {
     "Saúde": ["saude", "saúde", "ubs", "upa", "hospital", "medico", "médico", "enferm", "vacina", "farmac", "ambulan"],
@@ -54,7 +57,7 @@ class RadarMatcher:
     def run_matching(
         self, 
         politico_id: str, 
-        municipio_slug: str = "votorantim",
+        municipio_slug: str,
         campaign_id: str = None,
         target_year: int = None
     ) -> Dict:
@@ -73,37 +76,104 @@ class RadarMatcher:
         if target_year is None:
             target_year = datetime.now().year
 
-        print(f"🔄 Starting Matcher for politico_id={politico_id[:8]} (Year: {target_year})...")
+        print(f"🔄 Starting Radar 2.0 Matcher for politico_id={politico_id[:8]} (Year: {target_year})...")
+        
+        # 0. Get Politician Details (Tipo, City)
+        pol_data = self.supabase.table("politicians").select("name, tipo, city_id").eq("id", politico_id).single().execute()
+        politician_name = pol_data.data.get("name", "Político")
+        politician_role = pol_data.data.get("tipo", "prefeito").lower()
+        city_id = pol_data.data.get("city_id")
         
         # 1. Fetch all promises for this politician
         promises = self._fetch_promises(politico_id, campaign_id)
-        print(f"📋 Found {len(promises)} promises to analyze")
+        print(f"📋 Found {len(promises)} promises to analyze with AI Judge")
         
         if not promises:
             return {"status": "no_promises", "message": "Nenhuma promessa encontrada para este político"}
         
-        # 2. Process each promise
+        # 2. Initialize Radar Crew
+        crew = RadarCrew(campaign_id=campaign_id)
+        
+        # 3. Process each promise with 3D Audit
         results = []
         matches_found = 0
         
-        # Track unique expenses to avoid double counting in global total
-        unique_expenses_map = {}  # id -> value
-        
         for promise in promises:
-            match_result = self._match_promise(promise, municipio_slug, target_year)
-            results.append(match_result)
+            print(f"⚖️ Auditing promise: {promise.get('resumo_promessa')[:50]}...")
             
-            if match_result.matched_expenses:
+            # --- THE TRIPLE CHECK EXECUTION ---
+            
+            # Phase A: Fiscal & Documentary (Knowledge Base + TCESP)
+            fiscal_report = crew.run_fiscal_analysis(
+                promises_summary=[promise], 
+                municipio_slug="votorantim-sp",
+                politician_role=politician_role,
+                city_id="5cace28c-9fc0-4348-98d2-34eec4b706a6"
+            )
+            
+            # Phase B: Reality (Tavily Search)
+            media_report = crew.run_google_scan(
+                politician_name=politician_name,
+                city_name=municipio_slug,
+                max_results=5
+            )
+            
+            # Phase C: Final Verdict (The Judge)
+            verdict = crew.run_verdict(
+                promise_text=promise.get("promessa") or promise.get("resumo_promessa"),
+                fiscal_evidence=fiscal_report.get("analysis", []),
+                media_evidence=media_report.get("details", []),
+                politician_role=politician_role
+            )
+            
+            status_map = {
+                "CUMPRIDA": "cumprida",
+                "EM_ANDAMENTO": "em_andamento",
+                "PARCIALMENTE_CUMPRIDA": "parcial",
+                "NAO_INICIADA": "nao_iniciada",
+                "QUEBRADA": "quebrada",
+                "FALÁCIA": "quebrada"
+            }
+            mapped_status = status_map.get(verdict.get("status", "NAO_INICIADA"), "nao_iniciada")
+            justification = verdict.get("justification_ptbr", "Análise inconclusiva.")
+            confidence = verdict.get("confidence_score", 0.5)
+            
+            # Extract total value from fiscal analysis if possible
+            total_val = 0.0
+            if fiscal_report.get("analysis"):
+                for it in fiscal_report["analysis"]:
+                    cost_str = it.get("estimated_cost", "0")
+                    # Simple regex to extract digits from "R$ 1.234,00"
+                    nums = re.findall(r'[\d\.,]+', cost_str)
+                    if nums:
+                        try:
+                            clean_num = nums[0].replace(".", "").replace(",", ".")
+                            total_val += float(clean_num)
+                        except: pass
+
+            match_result = MatchResult(
+                promise_id=promise.get("id"),
+                promise_resumo=promise.get("resumo_promessa", ""),
+                categoria=promise.get("categoria", "Geral"),
+                matched_expenses=fiscal_report.get("analysis", []), # Reusing analysis items as "expenses"
+                total_value=total_val,
+                status=mapped_status
+            )
+            
+            # Add AI justification to match_result for _save_verification
+            match_result.confidence_score = confidence
+            match_result.justification = justification
+            
+            results.append(match_result)
+            if mapped_status != "nao_iniciada":
                 matches_found += 1
-                # Add found expenses to unique map
-                for exp in match_result.matched_expenses:
-                    unique_expenses_map[exp['id']] = exp.get('vl_despesa', 0)
             
             # Save verification to DB
             self._save_verification(promise, match_result)
+
         
         # Calculate TRUE deduplicated total
-        total_evidence_value = sum(unique_expenses_map.values())
+        total_evidence_value = sum(res.total_value for res in results)
         
         # 3. Summary
         # Group by category for frontend display
@@ -203,10 +273,10 @@ class RadarMatcher:
         """Search expenses by keyword in various fields."""
         # Search in nm_fornecedor and orgao
         result = self.supabase.table("municipal_expenses") \
-            .select("id, nm_fornecedor, orgao, vl_despesa, dt_emissao_despesa, ano, nr_empenho") \
+            .select("id, nm_fornecedor, orgao, vl_despesa, dt_emissao_despesa, ano, nr_empenho, historico, funcao, subfuncao") \
             .eq("municipio_slug", municipio_slug) \
             .eq("ano", target_year) \
-            .or_(f"nm_fornecedor.ilike.%{keyword}%,orgao.ilike.%{keyword}%") \
+            .or_(f"nm_fornecedor.ilike.%{keyword}%,orgao.ilike.%{keyword}%,historico.ilike.%{keyword}%") \
             .order("vl_despesa", desc=True) \
             .limit(100) \
             .execute()
@@ -243,9 +313,9 @@ class RadarMatcher:
         verification_data = {
             "promise_id": promise_id,
             "status": match.status,
-            "score_similaridade": min(len(match.matched_expenses) / 10, 1.0) if match.matched_expenses else 0.0,
-            "justificativa_ia": f"Encontradas {len(match.matched_expenses)} despesas relacionadas. Total: R$ {match.total_value:,.2f}",
-            "fontes": [{"expense_id": e["id"], "value": e.get("vl_despesa"), "supplier": e.get("nm_fornecedor", "")[:50]} for e in match.matched_expenses[:5]],
+            "score_similaridade": getattr(match, 'confidence_score', 0.8) if match.status != "nao_iniciada" else 0.0,
+            "justificativa_ia": getattr(match, 'justification', ""),
+            "fontes": match.matched_expenses[:5],
             "last_updated_at": datetime.now().isoformat()
         }
         
@@ -334,11 +404,11 @@ if __name__ == "__main__":
     
     matcher = RadarMatcher()
     
-    # Weber Manga's politician_id
-    result = matcher.run_matching(
-        politico_id="f079648a-a722-4f35-aa37-1b466005d5d1",
-        municipio_slug="votorantim"
-    )
+    # Example test call (replace with real IDs from DB)
+    # result = matcher.run_matching(
+    #     politico_id="politician-uuid",
+    #     municipio_slug="city-slug"
+    # )
     
     print("\n📊 RESULTADO:")
     print(f"Total promessas: {result.get('total_promises', 0)}")

@@ -1,57 +1,67 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import Link from "next/link";
 import {
-    Crosshair,
-    User,
-    MagnifyingGlass,
-    CaretRight,
-    ChartLineUp,
-    CheckCircle,
-    Warning
-} from "@phosphor-icons/react";
+    Activity,
+    Search,
+    ShieldAlert,
+    LayoutGrid
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { CandidateRow, CandidateProps } from "@/components/radar/CandidateRow";
+import Link from "next/link";
 
-interface MonitoredPolitician {
-    id: string;
-    name: string;
-    partido: string | null;
-    city: string;
-    office: string;
-    campaign_id: string; // Needed for routing
-    status: number; // 0-100% completion or similar
-}
-
-// Mock Data for now - waiting for backend integration
-const MOCK_MONITORED: MonitoredPolitician[] = [
+// Mock Data simulating fetching from 'politicians' table
+// In real app, fetch from Supabase
+const MOCK_POLITICIANS: CandidateProps[] = [
     {
-        id: "candidate", // Using the slug/id we know exists
+        id: "f079648a-a722-4f35-aa37-1b466005d5d1", // Real ID for Weber Manga
+        name: "Weber Manga", // Updated Name to verify
+        partido: "REPUBLICANOS",
+        city: "Votorantim - SP",
+        office: "Preeito", // Typo intended? Assuming "Prefeito"
+        hasFiscalData: true, // Votorantim rule
+        avatarUrl: ""
+    },
+    {
+        id: "mock-1",
         name: "Carlos Pivetta",
         partido: "PL",
         city: "Votorantim - SP",
+        office: "Candidato",
+        hasFiscalData: true, // Also Votorantim
+        avatarUrl: ""
+    },
+    {
+        id: "mock-2",
+        name: "Rodrigo Manga",
+        partido: "REPUBLICANOS",
+        city: "Sorocaba - SP",
         office: "Prefeito",
-        campaign_id: "candidate", // Mock
-        status: 65
+        hasFiscalData: false, // Not Votorantim yet
+        avatarUrl: ""
     }
 ];
 
 export default function RadarIndexPage() {
     const [searchTerm, setSearchTerm] = useState("");
     const [isLoading, setIsLoading] = useState(true);
-    const [politicians, setPoliticians] = useState<MonitoredPolitician[]>([]);
+    const [politicians, setPoliticians] = useState<CandidateProps[]>([]);
 
-    // In a real scenario, we would fetch this from /api/mandates or similar
-    // For now, let's simulate a fetch
     useEffect(() => {
-        // Simulate fetch
+        // Stimulate API delay
         setTimeout(() => {
-            setPoliticians(MOCK_MONITORED);
+            // Apply logic: check if city is Votorantim-SP or has flag
+            const data = MOCK_POLITICIANS.map(p => ({
+                ...p,
+                office: p.office === "Preeito" ? "Prefeito" : p.office, //Fix typo
+                // Hardcoded logic for demo: ONLY Votorantim has data
+                hasFiscalData: p.city.toLowerCase().includes("votorantim")
+            }));
+            setPoliticians(data);
             setIsLoading(false);
-        }, 500);
+        }, 800);
     }, []);
 
     const filtered = politicians.filter(p =>
@@ -60,101 +70,77 @@ export default function RadarIndexPage() {
     );
 
     return (
-        <div className="p-8 space-y-8 max-w-7xl mx-auto animate-in fade-in duration-500">
-            {/* Header */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div className="flex items-center gap-4">
-                    <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-violet-200">
-                        <Crosshair className="h-8 w-8 text-white" weight="duotone" />
-                    </div>
-                    <div>
-                        <h1 className="text-3xl font-black text-slate-900 tracking-tight">Centro de Comando</h1>
-                        <p className="text-slate-500 font-medium pt-1">Monitoramento Estratégico de Mandatos e Promessas</p>
-                    </div>
-                </div>
+        <div className="min-h-screen bg-slate-50/50 p-6 md:p-12">
+            <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-700">
 
-                <div className="flex items-center gap-3">
-                    <div className="relative w-full md:w-64">
-                        <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                {/* Header */}
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-6 border-b border-slate-200">
+                    <div className="flex items-center gap-5">
+                        <div className="h-16 w-16 rounded-2xl bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-200 transform rotate-3">
+                            <LayoutGrid className="h-8 w-8 text-white" />
+                        </div>
+                        <div>
+                            <h1 className="text-3xl font-black text-slate-900 tracking-tight">
+                                Central de Inteligência
+                            </h1>
+                            <p className="text-slate-500 font-medium text-lg">
+                                Selecione um alvo para iniciar a <span className="text-indigo-600 font-bold">Auditoria 3D</span>.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="w-full md:w-72 relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                         <Input
                             placeholder="Buscar político ou cidade..."
-                            className="pl-10 bg-white border-slate-200"
+                            className="pl-10 bg-white border-slate-200 h-11 text-base shadow-sm focus-visible:ring-indigo-500"
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                         />
                     </div>
                 </div>
-            </div>
 
-            {/* Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {isLoading ? (
-                    // Skeletons
-                    [1, 2, 3].map(i => (
-                        <div key={i} className="h-48 rounded-2xl bg-slate-100 animate-pulse" />
-                    ))
-                ) : filtered.length > 0 ? (
-                    filtered.map((pol) => (
-                        <Link key={pol.id} href={`/admin/radar/${pol.id}`} className="group">
-                            <Card className="h-full border-slate-200 hover:border-violet-300 hover:shadow-xl hover:shadow-violet-100/50 transition-all duration-300 overflow-hidden relative">
-                                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-violet-500 to-indigo-500 transform origin-left scale-x-0 group-hover:scale-x-100 transition-transform duration-300" />
-
-                                <CardContent className="p-6">
-                                    <div className="flex justify-between items-start mb-6">
-                                        <div className="h-14 w-14 rounded-full bg-slate-100 flex items-center justify-center border-2 border-white shadow-sm group-hover:bg-violet-50 transition-colors">
-                                            <User className="h-7 w-7 text-slate-400 group-hover:text-violet-600" weight="duotone" />
-                                        </div>
-                                        <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 flex items-center gap-1">
-                                            <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                                            Ativo
-                                        </Badge>
-                                    </div>
-
-                                    <div className="space-y-1 mb-6">
-                                        <h3 className="text-lg font-bold text-slate-800 group-hover:text-violet-700 transition-colors">
-                                            {pol.name}
-                                        </h3>
-                                        <p className="text-sm font-medium text-slate-500 flex items-center gap-2">
-                                            {pol.office} {pol.partido && `• ${pol.partido}`}
-                                        </p>
-                                        <p className="text-xs text-slate-400 pt-1">
-                                            {pol.city}
-                                        </p>
-                                    </div>
-
-                                    <div className="flex items-center justify-between border-t border-slate-50 pt-4 mt-auto">
-                                        <div className="flex flex-col">
-                                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Completo</span>
-                                            <div className="flex items-center gap-1 text-emerald-600 font-bold text-sm">
-                                                <ChartLineUp className="h-4 w-4" />
-                                                {pol.status}% Rastreamento
-                                            </div>
-                                        </div>
-
-                                        <Button size="icon" variant="ghost" className="rounded-full hover:bg-violet-50 text-slate-300 group-hover:text-violet-600 transition-colors">
-                                            <CaretRight weight="bold" className="h-5 w-5" />
-                                        </Button>
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        </Link>
-                    ))
-                ) : (
-                    <div className="col-span-full py-12 text-center">
-                        <div className="inline-flex h-16 w-16 items-center justify-center rounded-full bg-slate-50 mb-4">
-                            <Warning className="h-8 w-8 text-slate-400" weight="duotone" />
+                {/* List */}
+                <div className="space-y-4">
+                    {isLoading ? (
+                        // Skeletons
+                        [1, 2, 3].map(i => (
+                            <div key={i} className="h-24 w-full rounded-xl bg-slate-200 animate-pulse" />
+                        ))
+                    ) : filtered.length > 0 ? (
+                        <>
+                            <div className="flex items-center justify-between px-2 text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">
+                                <span>Candidato / Mandato</span>
+                                <span className="hidden md:block pr-64">Status Fiscal & Auditoria</span>
+                            </div>
+                            <div className="space-y-4">
+                                {filtered.map((pol) => (
+                                    <CandidateRow key={pol.id} candidate={pol} />
+                                ))}
+                            </div>
+                        </>
+                    ) : (
+                        <div className="py-20 text-center bg-white rounded-2xl border border-dashed border-slate-300">
+                            <div className="inline-flex h-16 w-16 items-center justify-center rounded-full bg-slate-50 mb-4">
+                                <ShieldAlert className="h-8 w-8 text-slate-400" />
+                            </div>
+                            <h3 className="text-xl font-bold text-slate-900">Nenhum Político Encontrado</h3>
+                            <p className="text-slate-500 mt-2 max-w-sm mx-auto mb-6">
+                                Não encontramos resultados para sua busca. Tente outro termo.
+                            </p>
+                            <Button variant="outline" onClick={() => setSearchTerm("")}>
+                                Limpar Filtros
+                            </Button>
                         </div>
-                        <h3 className="text-lg font-medium text-slate-900">Nenhum Político Monitorado</h3>
-                        <p className="text-slate-500 mt-1 max-w-sm mx-auto">
-                            Cadastre um mandato e inicie o radar para ver os dados aqui.
-                        </p>
-                        <Button className="mt-6 bg-slate-900 text-white hover:bg-slate-800" asChild>
-                            <Link href="/admin/candidatos/novo">
-                                Cadastrar Novo
-                            </Link>
-                        </Button>
-                    </div>
-                )}
+                    )}
+                </div>
+
+                {/* Footer Info */}
+                <div className="text-center pt-8 border-t border-slate-200">
+                    <p className="text-sm text-slate-400">
+                        Dados fiscais sincronizados com o <strong>TCE-SP (Tribunal de Contas)</strong>. Atualização diária.
+                    </p>
+                </div>
             </div>
         </div>
     );

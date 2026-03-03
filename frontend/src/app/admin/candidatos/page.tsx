@@ -24,6 +24,16 @@ import {
     TooltipProvider,
     TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface Campaign {
     id: string;
@@ -35,11 +45,18 @@ interface Campaign {
     number: number;
     created_at: string;
     slug: string;
+    organization_id?: string;
     metrics?: {
         ia_count: number;
         approved_count: number;
         has_plan: boolean;
     };
+}
+
+interface Organization {
+    id: string;
+    name: string;
+    slug: string;
 }
 
 import { deleteCampaign } from "@/app/actions/delete-campaign";
@@ -50,14 +67,51 @@ import Link from "next/link";
 export default function CandidatosPage() {
     const [searchQuery, setSearchQuery] = useState("");
     const [candidates, setCandidates] = useState<Campaign[]>([]);
+    const [organizations, setOrganizations] = useState<Organization[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+    const [selectedCampaignToAssign, setSelectedCampaignToAssign] = useState<Campaign | null>(null);
+    const [selectedOrgId, setSelectedOrgId] = useState<string>("none");
+    const [isAssigning, setIsAssigning] = useState(false);
+
     const supabase = createClient();
     const { toast } = useToast();
     const router = useRouter();
 
     useEffect(() => {
         fetchCandidates();
+        fetchOrganizations();
     }, []);
+
+    const fetchOrganizations = async () => {
+        try {
+            const { data: session } = await supabase.auth.getSession();
+            const token = session.session?.access_token;
+
+            const res = await fetch('/api/organizations', {
+                headers: {
+                    "Authorization": `Bearer ${token}`
+                }
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                const sortedData = (data || []).sort((a: Organization, b: Organization) =>
+                    a.name.localeCompare(b.name)
+                );
+                setOrganizations(sortedData);
+            } else {
+                throw new Error("Falha ao carregar API");
+            }
+        } catch (error) {
+            console.error("Erro ao buscar organizações:", error);
+            toast({
+                title: "Erro",
+                description: "Não foi possível carregar a lista de partidos.",
+                variant: "destructive",
+            });
+        }
+    };
 
     const fetchCandidates = async () => {
         try {
@@ -162,6 +216,44 @@ export default function CandidatosPage() {
                 description: error.message || "Ocorreu um erro inesperado.",
                 variant: "destructive",
             });
+        }
+    };
+
+    const handleOpenAssignModal = (campaign: Campaign) => {
+        setSelectedCampaignToAssign(campaign);
+        setSelectedOrgId(campaign.organization_id || "none");
+        setIsAssignModalOpen(true);
+    };
+
+    const handleAssignSubmit = async () => {
+        if (!selectedCampaignToAssign) return;
+        setIsAssigning(true);
+        try {
+            const payload = {
+                organization_id: selectedOrgId === "none" ? null : selectedOrgId
+            };
+            const response = await fetch(`/api/campaign/${selectedCampaignToAssign.id}/organization`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                const errData = await response.json();
+                throw new Error(errData.detail || "Erro ao atribuir partido.");
+            }
+
+            toast({ title: "Sucesso", description: "Organização atribuída com sucesso." });
+            setIsAssignModalOpen(false);
+            fetchCandidates(); // Refresh list to get updated organization_id
+        } catch (error: any) {
+            toast({
+                title: "Erro na atribuição",
+                description: error.message || "Ocorreu um erro inesperado.",
+                variant: "destructive",
+            });
+        } finally {
+            setIsAssigning(false);
         }
     };
 
@@ -363,6 +455,15 @@ export default function CandidatosPage() {
 
                                                 <Button
                                                     size="sm"
+                                                    variant="outline"
+                                                    className="h-8 border-slate-300 text-slate-700 hover:bg-slate-100 text-xs px-3"
+                                                    onClick={() => handleOpenAssignModal(candidato)}
+                                                >
+                                                    Atribuir Partido
+                                                </Button>
+
+                                                <Button
+                                                    size="sm"
                                                     variant="ghost"
                                                     className="h-8 w-8 p-0 text-gray-400 hover:text-blue-600"
                                                     onClick={() => router.push(`/admin/candidatos/novo?id=${candidato.id}`)}
@@ -404,6 +505,45 @@ export default function CandidatosPage() {
                     </div>
                 </div>
             </div>
+
+            {/* Modal de Atribuição de Partido */}
+            <Dialog open={isAssignModalOpen} onOpenChange={setIsAssignModalOpen}>
+                <DialogContent className="sm:max-w-[425px]">
+                    <DialogHeader>
+                        <DialogTitle>Atribuir a Partido (Tenant)</DialogTitle>
+                        <DialogDescription>
+                            Selecione a organização (partido) à qual a campanha "{selectedCampaignToAssign?.candidate_name}" pertencerá.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                        <div className="flex flex-col gap-2">
+                            <Label htmlFor="org-select" className="text-sm font-semibold text-slate-700">Organização Destino</Label>
+                            <Select value={selectedOrgId} onValueChange={setSelectedOrgId}>
+                                <SelectTrigger className="col-span-3">
+                                    <SelectValue placeholder="Sem Vínculo (Global)" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="none">Nenhum Vínculo (Admin Global)</SelectItem>
+                                    {organizations.map((org) => (
+                                        <SelectItem key={org.id} value={org.id}>
+                                            {org.name} ({org.slug.toUpperCase()})
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsAssignModalOpen(false)} disabled={isAssigning}>
+                            Cancelar
+                        </Button>
+                        <Button onClick={handleAssignSubmit} disabled={isAssigning} className="bg-blue-600 text-white hover:bg-blue-700 gap-2">
+                            {isAssigning && <Loader2 className="h-4 w-4 animate-spin" />}
+                            Salvar Atribuição
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

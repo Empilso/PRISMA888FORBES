@@ -97,7 +97,7 @@ def fetch_and_store_municipal_expenses(
     Fetch expenses from TCESP API and store in municipal_expenses_raw table.
     
     Args:
-        municipio_slug: Municipality identifier (e.g., "votorantim")
+        municipio_slug: Municipality identifier (e.g., "municipio-slug")
         ano: Year (e.g., 2024)
         mes: Month (1-12)
         
@@ -178,7 +178,7 @@ def normalize_municipal_expenses(
     Read raw payload from municipal_expenses_raw and normalize into municipal_expenses table.
     
     Args:
-        municipio_slug: Municipality identifier (e.g., "votorantim")
+        municipio_slug: Municipality identifier (e.g., "municipio-slug")
         ano: Year (e.g., 2024)
         mes: Month (1-12)
         

@@ -128,22 +128,24 @@ except Exception as e:
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from src.api.ingestion import router as ingestion_router
-from src.api.genesis import router as genesis_router
-from src.api.personas import router as personas_router
-from src.api.strategies import router as strategies_router
-from src.api.campaign import router as campaign_router
-from src.api.tasks import router as tasks_router
-from src.api.agents import router as agents_router
-from src.api.crew_logs import router as crew_logs_router
-from src.api.map_notes import router as map_notes_router
-from src.api.radar_promises import router as radar_promises_router
-from src.api.tcesp_debug import router as tcesp_debug_router
-from src.api.cities_politicians import router as cities_politicians_router
-from src.api.radar_premium import router as radar_premium_router
-from src.api.tse import router as tse_router
-from src.api.competitors import router as competitors_router
-from src.api.knowledge import router as knowledge_router
+from src.api.core.ingestion import router as ingestion_router
+from src.api.core.genesis import router as genesis_router
+from src.api.core.personas import router as personas_router
+from src.api.core.strategies import router as strategies_router
+from src.api.core.campaign import router as campaign_router
+from src.api.core.tasks import router as tasks_router
+from src.api.core.agents import router as agents_router
+from src.api.core.crew_logs import router as crew_logs_router
+from src.api.core.map_notes import router as map_notes_router
+from src.api.social.radar_promises import router as radar_promises_router
+from src.api.financial.tcesp_debug import router as tcesp_debug_router
+from src.api.core.cities_politicians import router as cities_politicians_router
+from src.api.social.radar_premium import router as radar_premium_router
+from src.api.financial.tse import router as tse_router
+from src.api.core.competitors import router as competitors_router
+from src.api.core.knowledge import router as knowledge_router
+from src.api.core.organizations import router as organizations_router
+from src.api.social.social_radar import router as social_radar_router
 
 app = FastAPI()
 
@@ -173,6 +175,10 @@ app.include_router(cities_politicians_router)
 app.include_router(radar_premium_router)
 app.include_router(tse_router)
 app.include_router(competitors_router)
+app.include_router(organizations_router)
+app.include_router(social_radar_router)
+from src.api.core.admin import router as admin_router
+app.include_router(admin_router)
 
 @app.get("/")
 async def root():

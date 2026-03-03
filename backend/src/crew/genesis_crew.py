@@ -597,7 +597,8 @@ class GenesisCrew:
                 verbose=True,
                 process=Process.hierarchical if self.process_type == "hierarchical" else Process.sequential,
                 manager_llm=self._create_llm(self.manager_model, 0.3) if self.process_type == "hierarchical" else None,
-                task_callback=self._log_task_finish
+                task_callback=self._log_task_finish,
+                max_execution_time=300
             )
             
             result = crew.kickoff()
@@ -730,7 +731,8 @@ class GenesisCrew:
                 tasks=[adversarial_task],
                 verbose=True,
                 process=Process.sequential,
-                task_callback=self._log_task_finish
+                task_callback=self._log_task_finish,
+                max_execution_time=300
             )
             
             result = crew.kickoff()

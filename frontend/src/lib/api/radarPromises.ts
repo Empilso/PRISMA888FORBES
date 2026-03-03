@@ -32,10 +32,21 @@ export interface PromiseData {
     score_similaridade: number | null;
     justificativa_ia: string | null;
     fontes: Array<{
-        tipo: string;
+        // Common fields
+        tipo?: string;
         url?: string;
         descricao?: string;
-        valor_pago?: number;
+        // Fiscal/Expense fields (from TCESP)
+        id?: string;
+        nm_fornecedor?: string;
+        orgao?: string;
+        vl_despesa?: number;
+        dt_emissao_despesa?: string;
+        nr_empenho?: string;
+        ano?: number;
+        historico?: string;
+        funcao?: string;
+        subfuncao?: string;
     }>;
     data_primeira_emenda: string | null;
     data_licitacao: string | null;

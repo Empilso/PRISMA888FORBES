@@ -1,21 +1,16 @@
+"use client";
+
 import React, { useState } from "react";
 import {
     Dialog,
     DialogContent,
-    DialogHeader,
     DialogTitle,
     DialogDescription,
-    DialogFooter,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Rocket, Target, Users, Zap, Loader2, X, AlertTriangle, Calendar as CalendarIcon, User, Tag, Clock } from "lucide-react";
-
-import { TraceLogViewer } from "@/components/console/TraceLogViewer";
+import { Rocket, Target, Users, Zap, Loader2, X } from "lucide-react";
+import { ExamplesRenderer } from "@/components/tasks/ExamplesRenderer";
 
 interface Strategy {
     id: string;
@@ -24,6 +19,9 @@ interface Strategy {
     pillar: string;
     phase: string;
     status: "suggested" | "approved" | "published" | "executed";
+    examples?: string[];
+    impact?: string;
+    effort?: string;
 }
 
 interface StrategyDetailModalProps {
@@ -32,36 +30,37 @@ interface StrategyDetailModalProps {
     onClose: () => void;
     onActivate: (strategyId: string, strategyTitle: string) => Promise<void>;
     onReject: (strategyId: string, strategyTitle: string) => Promise<void>;
-    personaId?: string; // Enterprise Feature
+    personaId?: string;
 }
 
 // Mapeamento de fases
 const PHASE_CONFIG = {
-    pre_campaign: { label: "Diagnóstico", icon: Target, color: "bg-blue-100 text-blue-800" },
-    campaign: { label: "Campanha", icon: Users, color: "bg-green-100 text-green-800" },
-    final_sprint: { label: "Reta Final", icon: Zap, color: "bg-orange-100 text-orange-800" },
+    pre_campaign: { label: "Diagnóstico", icon: Target, color: "bg-blue-50 text-blue-700 border-blue-200" },
+    campaign: { label: "Campanha", icon: Users, color: "bg-green-50 text-green-700 border-green-200" },
+    final_sprint: { label: "Reta Final", icon: Zap, color: "bg-orange-50 text-orange-700 border-orange-200" },
 } as const;
 
-// Helper para normalizar fase
 const normalizePhase = (phase: string | null | undefined): string => {
-    if (!phase) return 'unknown';
+    if (!phase) return "pre_campaign";
     const map: Record<string, string> = {
-        'diagnostico': 'pre_campaign',
-        'campanha_rua': 'campaign',
-        'campanha': 'campaign',
-        'reta_final': 'final_sprint',
+        diagnostico: "pre_campaign",
+        campanha_rua: "campaign",
+        campanha: "campaign",
+        reta_final: "final_sprint",
     };
     return map[phase] || map[phase.toLowerCase()] || phase;
 };
 
 export function StrategyDetailModal(props: StrategyDetailModalProps) {
-    const { strategy, isOpen, onClose, onActivate, onReject, personaId } = props;
+    const { strategy, isOpen, onClose, onActivate, onReject } = props;
     const [activating, setActivating] = useState(false);
     const [rejecting, setRejecting] = useState(false);
 
     if (!strategy) return null;
 
-    const phaseConfig = PHASE_CONFIG[normalizePhase(strategy.phase) as keyof typeof PHASE_CONFIG];
+    const phaseKey = normalizePhase(strategy.phase) as keyof typeof PHASE_CONFIG;
+    const phaseConfig = PHASE_CONFIG[phaseKey] ?? PHASE_CONFIG.pre_campaign;
+    const PhaseIcon = phaseConfig.icon;
 
     const handleActivate = async () => {
         setActivating(true);
@@ -74,7 +73,7 @@ export function StrategyDetailModal(props: StrategyDetailModalProps) {
     };
 
     const handleReject = async () => {
-        if (!confirm("Tem certeza que deseja descartar esta ideia?")) return;
+        if (!confirm("Tem certeza que deseja descartar esta sugestão?")) return;
         setRejecting(true);
         try {
             await onReject(strategy.id, strategy.title);
@@ -86,158 +85,153 @@ export function StrategyDetailModal(props: StrategyDetailModalProps) {
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="sm:max-w-4xl max-h-[90vh] h-full flex flex-col p-0 gap-0 bg-slate-50/50 overflow-hidden border-none shadow-2xl">
+            <DialogContent
+                className="
+                    w-full max-w-3xl
+                    max-h-[92dvh]
+                    overflow-hidden
+                    flex flex-col
+                    p-0 gap-0
+                    border-none
+                    bg-white dark:bg-[#0a0a0b]
+                    shadow-2xl
+                    rounded-t-3xl sm:rounded-3xl
+                "
+                style={{
+                    position: 'fixed',
+                    bottom: 0,
+                    left: '50%',
+                    top: 'auto',
+                    transform: 'translateX(-50%)',
+                    minHeight: '82dvh',
+                    width: '100%',
+                    maxWidth: '48rem',
+                }}
+            >
+                {/* ── Close Button ─────────────────────────────────── */}
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={onClose}
+                    className="absolute right-4 top-4 z-50 rounded-full h-8 w-8 text-slate-400 hover:bg-slate-100"
+                >
+                    <X className="h-4 w-4" />
+                </Button>
 
-                {/* Header Compacto */}
-                <DialogHeader className="px-6 py-4 border-b bg-white flex-shrink-0 flex flex-row items-center justify-between space-y-0">
-                    <div className="flex items-center gap-3">
-                        <Badge variant="outline" className="h-6 font-medium border-primary/20 text-primary bg-primary/5 uppercase text-[10px] tracking-wider px-2">
-                            {strategy.pillar}
-                        </Badge>
-                        <div className="h-4 w-px bg-slate-200" />
-                        <span className="text-sm font-medium text-slate-500 flex items-center gap-1.5">
-                            {phaseConfig && <phaseConfig.icon className="w-3.5 h-3.5" />}
-                            {phaseConfig?.label}
-                        </span>
-                    </div>
-                    <Button variant="ghost" size="icon" onClick={onClose} className="h-8 w-8 -mr-2">
-                        <X className="w-4 h-4 text-slate-400" />
-                    </Button>
-                </DialogHeader>
+                {/* ── Scrollable Content Area ───────────────────────── */}
+                <div className="flex-1 overflow-y-auto overscroll-contain">
 
-                {/* Body - Split Layout */}
-                <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
+                    {/* ── Header ───────────────────────────────────── */}
+                    <div className="px-5 sm:px-10 pt-8 sm:pt-12 pb-5 space-y-4">
+                        {/* Mobile drag indicator */}
+                        <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto sm:hidden -mt-2 mb-4" />
 
-                    {/* Main Content (Left) */}
-                    <div className="flex-1 bg-white p-6 overflow-y-auto border-r border-slate-100">
-                        <DialogTitle className="text-2xl font-bold leading-tight text-slate-900 mb-6">
+                        {/* Badges */}
+                        <div className="flex flex-wrap items-center gap-2">
+                            <Badge variant="outline" className={`text-[11px] font-semibold px-3 py-1 ${phaseConfig.color}`}>
+                                <PhaseIcon className="w-3 h-3 mr-1.5" />
+                                {phaseConfig.label}
+                            </Badge>
+                            {strategy.pillar && (
+                                <Badge variant="secondary" className="bg-indigo-50 text-indigo-700 border-indigo-100 text-[11px]">
+                                    {strategy.pillar}
+                                </Badge>
+                            )}
+                            {strategy.impact && (
+                                <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 border-none text-[10px] font-bold ml-auto">
+                                    Impacto {strategy.impact}
+                                </Badge>
+                            )}
+                            <span className="text-[10px] text-slate-300 font-mono hidden sm:inline">
+                                #{strategy.id.slice(0, 8)}
+                            </span>
+                        </div>
+
+                        {/* Title */}
+                        <DialogTitle className="text-xl sm:text-3xl font-black tracking-tight text-slate-900 dark:text-slate-50 leading-snug pr-8">
                             {strategy.title}
                         </DialogTitle>
-                        <DialogDescription className="hidden">
+                        <DialogDescription className="sr-only">
                             Detalhes da estratégia selecionada
                         </DialogDescription>
 
-                        <Tabs defaultValue="details" className="w-full">
-                            <TabsList className="mb-4 bg-slate-100/50">
-                                <TabsTrigger value="details">Detalhes</TabsTrigger>
-                                <TabsTrigger value="history">Histórico</TabsTrigger>
-                            </TabsList>
-                            <TabsContent value="details" className="space-y-4">
-                                <div className="space-y-2">
-                                    <Label className="text-slate-500 text-xs uppercase tracking-wide">Descrição da Estratégia</Label>
-                                    <Textarea
-                                        className="min-h-[300px] text-base leading-relaxed bg-slate-50/30 border-slate-200 resize-none focus-visible:ring-1 focus-visible:ring-primary/20"
-                                        defaultValue={strategy.description}
-                                    />
-
-                                    {/* --- Enterprise Log Viewer --- */}
-                                    <div className="border-t my-6 border-slate-100" />
-                                    <div className="space-y-4">
-                                        <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
-                                            📜 Histórico de Execução (Neural Trace)
-                                        </h3>
-                                        {props.personaId ? (
-                                            <div className="rounded-lg overflow-hidden border border-slate-200 shadow-sm">
-                                                <TraceLogViewer personaId={props.personaId} className="h-[300px]" />
-                                            </div>
-                                        ) : (
-                                            <div className="text-xs text-slate-400 italic">
-                                                ID do Agente não vinculado a esta estratégia.
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            </TabsContent>
-                            <TabsContent value="history" className="py-8 text-center text-slate-400">
-                                <Clock className="w-8 h-8 mx-auto mb-2 opacity-20" />
-                                <p className="text-sm">Nenhum histórico de alterações.</p>
-                            </TabsContent>
-                        </Tabs>
+                        {/* IA tag */}
+                        <div className="flex items-center gap-1.5 text-slate-400">
+                            <Rocket className="w-3.5 h-3.5" />
+                            <span className="text-[11px] font-semibold uppercase tracking-wider">Sugerido pela IA</span>
+                        </div>
                     </div>
 
-                    {/* Sidebar (Right) */}
-                    <div className="w-full md:w-80 bg-slate-50/50 p-6 flex flex-col gap-6 overflow-y-auto">
-                        <div className="space-y-4">
-                            <Label className="text-xs font-semibold text-slate-900 uppercase">Configurações da Tarefa</Label>
+                    {/* ── Divider ──────────────────────────────────── */}
+                    <div className="h-px bg-slate-100 mx-5 sm:mx-10" />
 
-                            {/* Responsável */}
-                            <div className="space-y-1.5">
-                                <span className="text-xs text-slate-500 flex items-center gap-1.5">
-                                    <User className="w-3.5 h-3.5" /> Responsável
-                                </span>
-                                <Select disabled>
-                                    <SelectTrigger className="bg-white border-slate-200 h-9">
-                                        <SelectValue placeholder="Selecionar..." />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="me">Eu (Admin)</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-
-                            {/* Data */}
-                            <div className="space-y-1.5">
-                                <span className="text-xs text-slate-500 flex items-center gap-1.5">
-                                    <CalendarIcon className="w-3.5 h-3.5" /> Data Limite
-                                </span>
-                                <Button variant="outline" disabled className="w-full justify-start text-left font-normal h-9 bg-white border-slate-200 text-slate-500">
-                                    <CalendarIcon className="mr-2 h-4 w-4" />
-                                    Definir data
-                                </Button>
-                            </div>
-
-                            {/* Tags */}
-                            <div className="space-y-1.5">
-                                <span className="text-xs text-slate-500 flex items-center gap-1.5">
-                                    <Tag className="w-3.5 h-3.5" /> Tags
-                                </span>
-                                <div className="flex flex-wrap gap-2">
-                                    <Badge variant="secondary" className="bg-white border text-slate-600 font-normal">
-                                        IA Strategy
-                                    </Badge>
-                                    <Button variant="outline" size="sm" className="h-6 text-[10px] border-dashed text-slate-400">
-                                        + Add
-                                    </Button>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Info Box */}
-                        <div className="mt-auto bg-blue-50/50 border border-blue-100 rounded-lg p-3">
-                            <p className="text-xs text-blue-700 leading-snug">
-                                <strong className="font-semibold block mb-1">Dica da IA:</strong>
-                                Ao transformar em tarefa, o status mudará para "Em Progresso" no seu Kanban.
+                    {/* ── Body ─────────────────────────────────────── */}
+                    <div className="px-5 sm:px-10 py-6 space-y-6">
+                        {/* Description */}
+                        <div className="space-y-2">
+                            <p className="text-[10px] font-bold text-slate-300 uppercase tracking-[0.2em] flex items-center gap-1.5">
+                                <Target className="w-3 h-3" /> Visão Estratégica
+                            </p>
+                            <p className="text-sm sm:text-base leading-relaxed text-slate-700 dark:text-slate-300">
+                                {strategy.description}
                             </p>
                         </div>
+
+                        {/* Examples */}
+                        {strategy.examples && strategy.examples.length > 0 && (
+                            <div className="rounded-2xl border border-slate-100 dark:border-white/5 overflow-hidden bg-slate-50/60 dark:bg-white/[0.02]">
+                                <div className="px-5 py-3 border-b border-slate-100 dark:border-white/5">
+                                    <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">
+                                        💡 Exemplos Práticos
+                                    </h4>
+                                </div>
+                                <div className="p-5">
+                                    <ExamplesRenderer
+                                        examples={strategy.examples}
+                                        mode="workbench"
+                                        maxPreview={4}
+                                    />
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
 
-                {/* Footer Fixed */}
-                <DialogFooter className="px-6 py-4 border-t bg-white flex flex-row justify-between items-center w-full flex-shrink-0 z-10 gap-4">
+                {/* ── Sticky Footer Actions ─────────────────────────── */}
+                <div className="
+                    flex-shrink-0
+                    flex items-center gap-3
+                    px-5 sm:px-10
+                    py-4 sm:py-6
+                    border-t border-slate-100 dark:border-slate-800/50
+                    bg-white/95 dark:bg-[#0a0a0b]/95
+                    backdrop-blur-md
+                    pb-[max(1.5rem,env(safe-area-inset-bottom))]
+                ">
+                    {/* Reject */}
                     <Button
-                        variant="ghost"
-                        className="text-slate-400 hover:text-red-600 hover:bg-red-50 -ml-2"
+                        variant="outline"
+                        className="h-12 px-5 rounded-2xl text-slate-500 border-slate-200 hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition-all"
                         onClick={handleReject}
                         disabled={activating || rejecting}
                     >
-                        {rejecting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <X className="w-4 h-4 mr-2" />}
-                        Descartar
+                        {rejecting ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
+                        <span className="ml-2 hidden sm:inline">Descartar</span>
                     </Button>
 
+                    {/* Approve */}
                     <Button
-                        size="lg"
-                        className="shadow-xl shadow-primary/20 rounded-full h-11 px-8 font-semibold bg-gradient-to-r from-primary to-primary/90 hover:to-primary"
+                        className="flex-1 h-12 text-base font-bold rounded-2xl shadow-lg shadow-primary/20 bg-gradient-to-r from-primary to-primary/90 hover:to-primary active:scale-[0.98] transition-all"
                         onClick={handleActivate}
                         disabled={activating || rejecting}
                     >
                         {activating ? (
-                            <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Processando...</>
+                            <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processando...</>
                         ) : (
-                            <><Rocket className="mr-2 h-5 w-5" /> Aceitar e Transformar em Tarefa</>
+                            <><Rocket className="mr-2 h-4 w-4" /> Aceitar e Publicar no Plano</>
                         )}
                     </Button>
-                </DialogFooter>
-
+                </div>
             </DialogContent>
         </Dialog>
     );

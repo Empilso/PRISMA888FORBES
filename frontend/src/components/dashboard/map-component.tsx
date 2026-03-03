@@ -26,6 +26,23 @@ function MapController({ center }: { center?: [number, number] }) {
     return null;
 }
 
+// Subcomponente para renderizar controles apenas quando o mapa estiver 100% pronto
+function SafeControls() {
+    const map = useMap();
+    const [show, setShow] = useState(false);
+
+    useEffect(() => {
+        if (map) {
+            // Pequeno delay para garantir que o Leaflet inicializou os controlCorners internos
+            const timer = setTimeout(() => setShow(true), 100);
+            return () => clearTimeout(timer);
+        }
+    }, [map]);
+
+    if (!show) return null;
+    return <ZoomControl position="bottomright" />;
+}
+
 // Componente interno que captura bounds e zoom
 interface ClusteredMarkersProps {
     locations: LocationPoint[];
@@ -150,7 +167,11 @@ interface MapComponentProps {
     children?: React.ReactNode;
 }
 
-export default function MapComponent({
+import { memo } from 'react';
+
+// ... (existing code)
+
+const MapComponent = memo(function MapComponent({
     locations,
     competitorLocations = [],
     onLocationClick,
@@ -158,8 +179,11 @@ export default function MapComponent({
     centerPosition,
     children
 }: MapComponentProps) {
+    const [isMapReady, setIsMapReady] = useState(false);
+
     // Fix para o mapa renderizar corretamente (invalidar size ao montar)
     useEffect(() => {
+        setIsMapReady(true);
         setTimeout(() => {
             window.dispatchEvent(new Event('resize'));
         }, 100);
@@ -169,12 +193,13 @@ export default function MapComponent({
 
     return (
         <MapContainer
+            key={`map-${centerPosition?.[0] || 'default'}`} // Força remount se o centro mudar significativamente (opcional) ou use campaignId
             center={[-23.550520, -46.633308]} // Centro de SP (fallback)
             zoom={13}
             style={{ height: '100%', width: '100%', background: '#f8fafc', zIndex: 0 }}
             zoomControl={false}
         >
-            <ZoomControl position="bottomright" />
+            <SafeControls />
             <MapController center={centerPosition} />
 
             <TileLayer
@@ -200,4 +225,6 @@ export default function MapComponent({
             {children}
         </MapContainer>
     );
-}
+});
+
+export default MapComponent;

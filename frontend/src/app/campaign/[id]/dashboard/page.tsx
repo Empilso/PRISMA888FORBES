@@ -72,7 +72,7 @@ export default function DashboardPage() {
     }, [campaignId]);
 
     return (
-        <div className="space-y-8 animate-fade-in p-8 bg-[var(--bg-primary)] min-h-screen">
+        <div className="space-y-8 animate-fade-in px-4 sm:px-8 py-8 bg-[var(--bg-primary)] min-h-screen">
 
             {/* Header with War Room Button */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">

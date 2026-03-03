@@ -228,7 +228,7 @@ export default function FilesPage() {
     }
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 px-4 sm:px-8 py-8">
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
@@ -295,8 +295,8 @@ export default function FilesPage() {
                                         type="button"
                                         onClick={() => setIsRival(false)}
                                         className={`flex-1 py-3 px-4 rounded-lg border-2 transition-all ${!isRival
-                                                ? 'border-green-500 bg-green-50 text-green-700'
-                                                : 'border-border bg-muted/30 text-muted-foreground'
+                                            ? 'border-green-500 bg-green-50 text-green-700'
+                                            : 'border-border bg-muted/30 text-muted-foreground'
                                             }`}
                                     >
                                         <div className="text-lg mb-1">👤</div>
@@ -306,8 +306,8 @@ export default function FilesPage() {
                                         type="button"
                                         onClick={() => setIsRival(true)}
                                         className={`flex-1 py-3 px-4 rounded-lg border-2 transition-all ${isRival
-                                                ? 'border-red-500 bg-red-50 text-red-700'
-                                                : 'border-border bg-muted/30 text-muted-foreground'
+                                            ? 'border-red-500 bg-red-50 text-red-700'
+                                            : 'border-border bg-muted/30 text-muted-foreground'
                                             }`}
                                     >
                                         <div className="text-lg mb-1">🎭</div>

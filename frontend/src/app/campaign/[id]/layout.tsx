@@ -33,22 +33,22 @@ export default async function CampaignLayout({
     });
 
     return (
-        <NuqsAdapter>
-            <TermsGuard>
+        <TermsGuard>
+            <NuqsAdapter>
                 <div className="flex h-screen overflow-hidden bg-background">
                     <DashboardSidebar campaignId={id} />
-                    <div className="flex flex-1 flex-col overflow-hidden">
+                    <div className="flex flex-1 flex-col min-h-0 overflow-hidden">
                         <DashboardHeader
                             candidateName={candidateName}
                             role={role}
                             lastUpdate={lastUpdate}
                         />
-                        <main className="flex-1 overflow-y-auto p-6 bg-muted/30">
+                        <main className="flex-1 overflow-y-auto overscroll-y-contain h-full w-full">
                             {children}
                         </main>
                     </div>
                 </div>
-            </TermsGuard>
-        </NuqsAdapter>
+            </NuqsAdapter>
+        </TermsGuard>
     )
 }

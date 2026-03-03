@@ -26,7 +26,12 @@ import {
     AlertDialogTitle,
     AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import CrewVisualizer from "@/components/admin/CrewVisualizer";
+import dynamic from "next/dynamic";
+const CrewVisualizer = dynamic(() => import("@/components/admin/CrewVisualizer"), {
+    ssr: false,
+    loading: () => <div className="h-full w-full flex items-center justify-center bg-muted/10">Carregando visualizador...</div>
+});
+// import CrewVisualizer from "@/components/admin/CrewVisualizer";
 import { ExecutionConsole } from "@/components/admin/ExecutionConsole";
 import { CreatePersonaDialog, AVAILABLE_AGENTS } from "@/components/admin/CreatePersonaDialog";
 import { Agent } from "@/types/agent";
@@ -471,47 +476,57 @@ export default function AgentesPage() {
     const [isRightPanelOpen, setIsRightPanelOpen] = useState(false); // Controla se o painel direito está aberto
     const [activeExecutionAgent, setActiveExecutionAgent] = useState<string | null>(null); // ⭐ NOVO: Agente ativo na execução
 
-    // Função para processar novos logs e animar o visualizador
+    // Função robusta para processar novos logs e animar o visualizador
     const handleNewLog = (log: any) => {
-        const agentName = log.agent_name || "";
-        let agentId = null;
+        try {
+            if (!log) return;
 
-        if (agentName.includes("Analista")) agentId = "analyst";
-        else if (agentName.includes("Estrategista")) agentId = "strategist";
-        else if (agentName.includes("Planejador")) agentId = "planner";
+            const agentRole = typeof log.agent_role === 'string' ? log.agent_role :
+                (typeof log.agent_name === 'string' ? log.agent_name : "");
+            let agentId = null;
 
-        if (agentId) {
-            setActiveExecutionAgent(agentId);
-            // Remove o destaque após 3 segundos
-            setTimeout(() => setActiveExecutionAgent(null), 3000);
-        }
+            if (agentRole.includes("Analista") || agentRole.includes("analyst")) agentId = "analyst";
+            else if (agentRole.includes("Estrategista") || agentRole.includes("strategist")) agentId = "strategist";
+            else if (agentRole.includes("Planejador") || agentRole.includes("planner")) agentId = "planner";
 
-        // DETECÇÃO DE FIM DE PROCESSO (AUTO-STOP)
-        // Se receber sucesso ou mensagem de finalização, para o loading
-        if (log.status === 'success' || log.message.includes("finalizada com sucesso") || log.message.includes("Resultados salvos")) {
-            setIsSimulating(false);
-
-            // Só dispara o toast se ainda estava simulando (para evitar duplicidade)
-            if (isSimulating) {
-                toast({
-                    title: "Simulação Concluída! 🏁",
-                    description: "O Plano Tático foi gerado com sucesso.",
-                    action: (
-                        <ToastAction
-                            altText="Ver no Setup"
-                            onClick={() => router.push(`/admin/campaign/${selectedCampaignId}/setup`)}
-                        >
-                            Ver no Setup
-                        </ToastAction>
-                    ),
-                    duration: 10000, // Fica mais tempo na tela
-                });
+            if (agentId) {
+                setActiveExecutionAgent(agentId);
+                // Remove o destaque após 3 segundos
+                setTimeout(() => setActiveExecutionAgent(null), 3000);
             }
-        }
 
-        // Se der erro crítico
-        if (log.status === 'error') {
-            setIsSimulating(false);
+            // DETECÇÃO DE FIM DE PROCESSO (AUTO-STOP)
+            const rawOutput = typeof log.raw_output === 'string' ? log.raw_output :
+                (typeof log.message === 'string' ? log.message : "");
+            const isSuccess = log.is_success === true || log.status === 'success';
+
+            if (isSuccess || rawOutput.includes("finalizada com sucesso") || rawOutput.includes("Resultados salvos")) {
+                setIsSimulating(false);
+
+                // Só dispara o toast se ainda estava simulando
+                if (isSimulating) {
+                    toast({
+                        title: "Simulação Concluída! 🏁",
+                        description: "O Plano Tático foi gerado com sucesso.",
+                        action: (
+                            <ToastAction
+                                altText="Ver no Setup"
+                                onClick={() => router.push(`/admin/campaign/${selectedCampaignId}/setup`)}
+                            >
+                                Ver no Setup
+                            </ToastAction>
+                        ),
+                        duration: 10000,
+                    });
+                }
+            }
+
+            // Se der erro crítico
+            if (log.is_success === false || log.status === 'error') {
+                setIsSimulating(false);
+            }
+        } catch (err) {
+            console.error("Erro seguro ignorado no handleNewLog:", err);
         }
     };
 

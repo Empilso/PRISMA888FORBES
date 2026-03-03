@@ -2,7 +2,7 @@ import requests
 import pandas as pd
 from typing import Dict, List, Optional
 
-def fetch_live_totals(year: int, municipio_id: str = "votorantim-2025") -> Dict:
+def fetch_live_totals(year: int, municipio_slug: str) -> Dict:
     """
     Fetches live totals from TCESP API for all months available in the given year.
     Returns aggregated data by Event and Top Suppliers.
@@ -33,7 +33,7 @@ def fetch_live_totals(year: int, municipio_id: str = "votorantim-2025") -> Dict:
         # Let's assume standardized endpoints as per verify_tcesp_live.py logic
         # https://transparencia.tce.sp.gov.br/api/json/despesas/{municipio}/{ano}/{mes}
         
-        url = f"https://transparencia.tce.sp.gov.br/api/json/despesas/votorantim/{year}/{month}"
+        url = f"https://transparencia.tce.sp.gov.br/api/json/despesas/{municipio_slug}/{year}/{month}"
         
         try:
             resp = requests.get(url, headers=headers, timeout=5)

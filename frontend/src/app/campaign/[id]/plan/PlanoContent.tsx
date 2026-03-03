@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { CheckCircle2, Loader2, AlertCircle, Undo2, ArrowUpRight, Sparkles, ChevronDown, ChevronUp } from "lucide-react";
+import { CheckCircle2, Loader2, AlertCircle, Undo2, ArrowUpRight, Sparkles, ChevronDown, ChevronUp, LayoutGrid, Layers } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { AIStrategiesList } from "@/components/campaign/ai-strategies-list";
 import { CampaignManifesto } from "@/components/campaign/CampaignManifesto";
@@ -10,6 +10,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
 import { TaskDetailsDialog } from "@/components/tasks/task-details-dialog";
 import { ExamplesRenderer } from "@/components/tasks/ExamplesRenderer";
+import { StrategySwipeDeck } from "@/components/campaign/StrategySwipeDeck";
 
 interface Task {
     id: string;
@@ -34,6 +35,7 @@ export default function PlanoContent({ campaignId }: { campaignId: string }) {
     const [selectedTask, setSelectedTask] = useState<Task | null>(null);
     const [isSheetOpen, setIsSheetOpen] = useState(false);
     const [isFeedOpen, setIsFeedOpen] = useState(true);
+    const [feedViewMode, setFeedViewMode] = useState<"feed" | "deck">("feed");
 
     const supabase = createClient();
     const { toast } = useToast();
@@ -142,17 +144,20 @@ export default function PlanoContent({ campaignId }: { campaignId: string }) {
     };
 
     return (
-        <div className="space-y-8 pb-20">
+        <div className="space-y-8 pb-20 px-4 sm:px-8">
             {/* Dossiê Estratégico - MANIFESTO */}
             <CampaignManifesto campaignId={campaignId} />
 
             {/* Feed Toggle Section */}
             <div className="bg-white rounded-xl shadow-sm border border-indigo-100 overflow-hidden transition-all duration-300">
                 <div
-                    onClick={() => setIsFeedOpen(!isFeedOpen)}
-                    className="flex items-center justify-between p-4 bg-gradient-to-r from-indigo-50/50 to-purple-50/50 cursor-pointer hover:from-indigo-100/50 hover:to-purple-100/50 transition-colors select-none group"
+                    className="flex items-center justify-between p-4 bg-gradient-to-r from-indigo-50/50 to-purple-50/50 select-none"
                 >
-                    <div className="flex items-center gap-3">
+                    {/* Left: title (clickable to toggle collapse) */}
+                    <div
+                        onClick={() => setIsFeedOpen(!isFeedOpen)}
+                        className="flex items-center gap-3 cursor-pointer group flex-1"
+                    >
                         <div className="bg-white p-1.5 rounded-lg shadow-sm group-hover:scale-110 transition-transform">
                             <Sparkles className="h-4 w-4 text-indigo-600" />
                         </div>
@@ -164,14 +169,54 @@ export default function PlanoContent({ campaignId }: { campaignId: string }) {
                             {!isFeedOpen && <p className="text-[10px] text-indigo-500 font-medium">Clique para ver sugestões estratégicas</p>}
                         </div>
                     </div>
-                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0 rounded-full text-indigo-400 group-hover:text-indigo-600 group-hover:bg-indigo-100/50">
-                        {isFeedOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                    </Button>
+
+                    {/* Right: view mode toggle + collapse */}
+                    <div className="flex items-center gap-2">
+                        {isFeedOpen && (
+                            <div className="flex items-center bg-indigo-50 rounded-full p-1 gap-1">
+                                <button
+                                    onClick={() => setFeedViewMode("feed")}
+                                    title="Modo Feed (Grade)"
+                                    className={`rounded-full p-1.5 transition-all ${feedViewMode === "feed"
+                                        ? "bg-white shadow text-indigo-600"
+                                        : "text-indigo-300 hover:text-indigo-500"
+                                        }`}
+                                >
+                                    <LayoutGrid className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                    onClick={() => setFeedViewMode("deck")}
+                                    title="Modo Deck (Swipe)"
+                                    className={`rounded-full p-1.5 transition-all ${feedViewMode === "deck"
+                                        ? "bg-white shadow text-indigo-600"
+                                        : "text-indigo-300 hover:text-indigo-500"
+                                        }`}
+                                >
+                                    <Layers className="w-3.5 h-3.5" />
+                                </button>
+                            </div>
+                        )}
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0 rounded-full text-indigo-400 hover:text-indigo-600 hover:bg-indigo-100/50"
+                            onClick={() => setIsFeedOpen(!isFeedOpen)}
+                        >
+                            {isFeedOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                        </Button>
+                    </div>
                 </div>
 
-                <div className={`overflow-hidden transition-all duration-500 ease-in-out ${isFeedOpen ? 'max-h-[3000px] opacity-100' : 'max-h-0 opacity-0'}`}>
+                <div className={`overflow-hidden transition-all duration-500 ease-in-out ${isFeedOpen ? 'max-h-[4000px] opacity-100' : 'max-h-0 opacity-0'}`}>
                     <div className="p-4 border-t border-indigo-50 bg-slate-50/30">
-                        <AIStrategiesList campaignId={campaignId} onTaskCreated={() => fetchTasks(false)} />
+                        {feedViewMode === "deck" ? (
+                            <StrategySwipeDeck
+                                campaignId={campaignId}
+                                onTaskCreated={() => fetchTasks(false)}
+                            />
+                        ) : (
+                            <AIStrategiesList campaignId={campaignId} onTaskCreated={() => fetchTasks(false)} />
+                        )}
                     </div>
                 </div>
             </div>

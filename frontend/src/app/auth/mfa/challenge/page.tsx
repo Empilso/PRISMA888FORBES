@@ -32,7 +32,7 @@ export default function MFAChallengePage() {
                 setFactorId(verifiedFactor.id);
             } else {
                 // No MFA factor found, redirect back
-                const next = searchParams.get('next') || "/admin/dashboard";
+                const next = searchParams.get('next') || "/admin/candidatos";
                 router.push(next);
             }
         }
@@ -64,7 +64,7 @@ export default function MFAChallengePage() {
                 setError("Código inválido. Tente novamente.");
             } else {
                 // Success! Redirect to original destination
-                const next = searchParams.get('next') || "/admin/dashboard";
+                const next = searchParams.get('next') || "/admin/candidatos";
                 window.location.href = next;
             }
         } catch (err) {

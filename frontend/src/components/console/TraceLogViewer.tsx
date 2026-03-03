@@ -15,9 +15,10 @@ interface TraceLogViewerProps {
     personaId?: string; // Optional now
     campaignId?: string; // Added for Campaign Level
     className?: string;
+    onNewLog?: (log: AIExecutionLog) => void;
 }
 
-export function TraceLogViewer({ personaId, campaignId, className }: TraceLogViewerProps) {
+export function TraceLogViewer({ personaId, campaignId, className, onNewLog }: TraceLogViewerProps) {
     const [logs, setLogs] = useState<AIExecutionLog[]>([]);
     // Status hook might need update or be skipped if campaignId used. 
     // For now, if campaignId is present, we assume 'running' or just show logs.
@@ -81,6 +82,7 @@ export function TraceLogViewer({ personaId, campaignId, className }: TraceLogVie
                     console.log('New Log received!', payload);
                     const newLog = payload.new as AIExecutionLog;
                     setLogs((prev) => [...prev, newLog]);
+                    if (onNewLog) onNewLog(newLog);
 
                     if (!startTime) {
                         setStartTime(new Date(newLog.created_at).getTime());

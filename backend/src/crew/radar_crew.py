@@ -15,7 +15,8 @@ from src.models.enterprise import (
     PromiseExtractionResult, 
     FiscalAnalysisResult, 
     MediaScanResult,
-    MediaItem # Needed for direct instantiation if dict returned
+    MediaItem,
+    VerdictResult # NEW
 )
 
 load_dotenv()
@@ -49,7 +50,7 @@ class RadarCrew:
         self.campaign_id = campaign_id
         self.run_id = run_id
         self.supabase = get_supabase_client()
-        self.llm = self._create_llm("deepseek/deepseek-chat") # Default, can be overridden by persona config
+        self.llm = self._create_llm("gpt-4o-mini") # Forçando OpenAI para depuração de fluxo
     
         # GLOBAL DEEPSEEK ALIGNMENT
         self.log(f"Inicializando RadarCrew LLM: {self.llm.model_name}", "System")
@@ -182,7 +183,7 @@ class RadarCrew:
             goal="Extrair promessas de documentos",
             backstory="Especialista em análise textual política.",
             llm=self._create_llm(agent_data.get("llm_model"), 0.3),
-            max_iter=10,
+            max_iter=5,
             verbose=True,
             allow_delegation=False,
             tools=kb_tools # Inject KB Tools
@@ -208,7 +209,8 @@ class RadarCrew:
             agents=[agent],
             tasks=[task],
             verbose=True,
-            step_callback=self._log_step
+            step_callback=self._log_step,
+            max_execution_time=300
         )
         
         self.log(f"Iniciando extração com {agent_name} (Mode: Pydantic)", "System")
@@ -234,29 +236,77 @@ class RadarCrew:
             return {"error": str(e), "promises": []}
 
     # --- FASE 2: ANÁLISE FISCAL (REFATORADA) ---
-    def run_fiscal_analysis(self, promises_summary: List[Dict], expenses_summary: Dict) -> Dict:
+    # --- FASE 2: ANÁLISE FISCAL (REFATORADA - AGENTIC) ---
+    def run_fiscal_analysis(self, promises_summary: List[Dict], municipio_slug: str = None, politician_role: str = "prefeito", city_id: str = None) -> Dict:
+        """
+        Fase 2: Auditor Fiscal (Refatorada - Protocolo de Desengasgo)
+        Pré-processa dados via Python e entrega contexto pronto para o Agente.
+        """
         agent_name = "radar-fiscal-verbas"
         agent_data = self._get_agent_config(agent_name)
         
-        kb_tools = self._get_knowledge_tools(agent_data)
+        # 1. TOOL EXECUTION (PYTHON SIDE - DETERMINISTIC)
+        self.log(f"🔎 Iniciando varredura fiscal determinística para {len(promises_summary)} promessas...", "System")
+        from src.crew.tools import municipal_spend_tool, knowledge_base_tool
+        
+        fiscal_context = []
+        for p in promises_summary:
+            promessa_txt = p.get('promessa') or p.get('resumo_promessa')
+            
+            # A. Busca Fiscal (Direct Execution)
+            gastos = municipal_spend_tool._run(query=promessa_txt, city_slug=municipio_slug)
+            
+            # B. Busca Documental (Direct Execution)
+            docs = knowledge_base_tool._run(query=promessa_txt, city_id=city_id, category='plano_governo')
+            
+            fiscal_context.append({
+                "promessa_id": p.get('id'),
+                "promessa_texto": promessa_txt,
+                "categoria": p.get('categoria', 'Geral'),
+                "EVIDENCIA_TCESP_GASTOS": gastos,
+                "EVIDENCIA_PLANO_GOVERNO": docs
+            })
 
+        # 2. AGENT SETUP (PURE REASONING - NO TOOLS)
         agent = Agent(
-            role=agent_data.get("role", "Auditor"),
-            goal="Cruzar promessas com execução orçamentária",
-            backstory="Auditor rigoroso de contas públicas.",
-            llm=self._create_llm(agent_data.get("llm_model"), 0.3),
-            max_iter=10,
+            role="Auditor Fiscal & Documental",
+            goal="Analisar as evidências fiscais pré-coletadas e gerar relatório técnico de viabilidade",
+            backstory="""Especialista em Triangulação de Dados. 
+            Você recebe um dossiê pronto contendo a promessa, os gastos públicos encontrados (TCESP) e os trechos do plano de governo.
+            Sua função NÃO é buscar dados, mas sim ANALISAR os dados fornecidos e concluir se houve investimento.""",
+            llm=self._create_llm(agent_data.get("llm_model"), 0.2), # Low temp for analysis
+            max_iter=3, # Reduced output loop
             verbose=True,
             allow_delegation=False,
-            tools=kb_tools # Inject KB Tools
+            # tools=[] # NO TOOLS FOR AGENT
         )
 
-        sys_msg = agent_data.get("system_prompt", "")
-        input_data = {"promessas": promises_summary, "despesas_agrupadas": expenses_summary}
-        input_json = json.dumps(input_data, ensure_ascii=False, indent=2)
+        sys_msg = agent_data.get("system_prompt", "Você é um auditor rigoroso.")
+        
+        # 3. CONTEXT INJECTION
+        task_description = f"""
+        {sys_msg}
+        
+        CONTEXTO DO CANDIDATO:
+        - CARGO: {politician_role.upper()}
+        - CIDADE ALVO (SLUG): {municipio_slug.upper() if municipio_slug else 'NÃO INFORMADA'}
+        
+        DOSSIÊ DE EVIDÊNCIAS (DADOS BRUTOS JÁ COLETADOS):
+        {json.dumps(fiscal_context, indent=2, ensure_ascii=False)}
+        
+        SUA MISSÃO (AUDITORIA ANALÍTICA):
+        Para CADA item no dossiê acima:
+        1. Analise os 'EVIDENCIA_TCESP_GASTOS': Existem valores compatíveis? Os fornecedores fazem sentido para a promessa?
+        2. Analise os 'EVIDENCIA_PLANO_GOVERNO': A promessa consta oficialmente?
+        3. Determine o status fiscal e riscos.
+        
+        IMPORTANTE: 
+        - Se 'EVIDENCIA_TCESP_GASTOS' disser 'Nenhum gasto encontrado', assuma que NÃO houve execução financeira direta identificada.
+        - Gere um relatório técnico estruturado.
+        """
 
         task = Task(
-            description=f"{sys_msg}\nINPUT DATA (JSON):\n{input_json}",
+            description=task_description,
             agent=agent,
             expected_output="Structured JSON with fiscal analysis.",
             output_pydantic=FiscalAnalysisResult # ENTERPRISE STANDARD
@@ -266,10 +316,11 @@ class RadarCrew:
             agents=[agent],
             tasks=[task],
             verbose=True,
-            step_callback=self._log_step
+            step_callback=self._log_step,
+            max_execution_time=300
         )
         
-        self.log(f"Iniciando análise fiscal com {agent_name} (Mode: Pydantic)", "System")
+        self.log(f"Iniciando Análise Fiscal Agêntica para {len(promises_summary)} promessas em {municipio_slug}", "System")
         
         try:
             result = crew.kickoff()
@@ -352,7 +403,8 @@ class RadarCrew:
             agents=[agent],
             tasks=[task],
             verbose=True,
-            step_callback=self._log_step
+            step_callback=self._log_step,
+            max_execution_time=300
         )
         
         self.log(f"Iniciando Varredura Real (Tavily) com Pydantic para {politician_name}", "System")
@@ -389,3 +441,90 @@ class RadarCrew:
                 "message": f"Falha na varredura: {str(e)}",
                 "details": []
             }
+
+    # --- FASE 4: VEREDITO (TRIANGULAÇÃO) ---
+    def run_verdict(self, promise_text: str, fiscal_evidence: List[Dict], media_evidence: List[Dict], politician_role: str = "prefeito") -> Dict:
+        """
+        Fase 4: Juíz Final (Triangulação)
+        Analisa Promessa + Gastos + Mídia -> Veredito
+        """
+        agent_name = "radar-judge"
+        agent_data = self._get_agent_config(agent_name)
+        
+        # Agente Juiz
+        agent = Agent(
+            role=agent_data.get("role", "Juiz Eleitoral IA"),
+            goal=agent_data.get("goal", "Emitir veredito imparcial sobre cumprimento de promessas"),
+            backstory=agent_data.get("description", "Você analisa evidências de múltiplas fontes para determinar a verdade."),
+            llm=self._create_llm(agent_data.get("llm_model"), 0.2), # Baixa temperatura para precisão
+            max_iter=5,
+            verbose=True,
+            allow_delegation=False
+        )
+
+        sys_msg = agent_data.get("system_prompt", "Você é um auditor imparcial.")
+        
+        # Prepare Context
+        context_str = f"""
+        CONTEXTO: Candidato ao cargo de {politician_role.upper()}
+        PROMESSA: "{promise_text}"
+        
+        EVIDÊNCIA FISCAL (GASTOS OFICIAIS):
+        {json.dumps(fiscal_evidence, indent=2, ensure_ascii=False)}
+        
+        EVIDÊNCIA DE MÍDIA (NOTÍCIAS/WEB):
+        {json.dumps(media_evidence, indent=2, ensure_ascii=False)}
+        """
+
+        task = Task(
+            description=f"""
+            {sys_msg}
+            
+            TRIANGULAÇÃO DE DADOS (THE TRIPLE CHECK):
+            {context_str}
+            
+            SUA MISSÃO COMO JUIZ IA DO RADAR:
+            Emita um veredito final baseado na triangulação das 3 dimensões:
+            1. DOCUMENTAL: Está no plano de governo? (Evidência da Base de Conhecimento)
+            2. FISCAL: Houve dinheiro investido? (Evidência do TCE-SP)
+            3. REALIDADE: O que os fatos/notícias dizem? (Evidência da Web/Tavily)
+            
+            ESTADOS POSSÍVEIS:
+            - CUMPRIDA: Evidência fiscal sólida + Notícias positivas de entrega.
+            - EM_ANDAMENTO: Gastos identificados e notícias de obras/início.
+            - PARCIALMENTE_CUMPRIDA: Entregou apenas parte do prometido ou gastos insuficientes.
+            - NAO_INICIADA: Nenhum gasto e nenhuma notícia de início.
+            - QUEBRADA/FALÁCIA: Não há gastos, não está no plano ou notícias negativas de cancelamento.
+               
+            REQUISITO PREMIUM:
+            A justificativa deve ser em Português (pt-BR), estilo 'Perplexity', citando valores em R$ encontrados e fontes de notícias com URLs se disponíveis. Seja rigoroso.
+            """,
+            agent=agent,
+            output_pydantic=VerdictResult,
+            expected_output="Veredito Final Estruturado em JSON via Pydantic."
+        )
+
+        crew = Crew(
+            agents=[agent],
+            tasks=[task],
+            verbose=True,
+            step_callback=self._log_step,
+            max_execution_time=300
+        )
+        
+        self.log(f"Iniciando Veredito Final para promessa...", "System")
+        
+        try:
+            result = crew.kickoff()
+            
+            output_data = {}
+            if hasattr(result, 'pydantic') and result.pydantic:
+                output_data = result.pydantic.model_dump()
+            elif hasattr(result, 'to_dict'):
+                output_data = result.to_dict()
+                
+            return output_data
+
+        except Exception as e:
+            self.log(f"Erro no Veredito: {e}", "System", "error")
+            return {"error": str(e), "status": "UNKNOWN"}

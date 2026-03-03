@@ -18,6 +18,14 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/use-toast";
 import { cn } from "@/lib/utils";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 
 // --- Types ---
 interface KnowledgeFile {
@@ -35,33 +43,65 @@ export default function KnowledgePage() {
     const [files, setFiles] = useState<KnowledgeFile[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
+    const [selectedCategory, setSelectedCategory] = useState("geral");
+    const [selectedCity, setSelectedCity] = useState<string | null>(null);
+    const [selectedProvider, setSelectedProvider] = useState("openai");
+    const [cities, setCities] = useState<any[]>([]);
     const { toast } = useToast();
 
-    // --- Mock Data Loader (Replace with API Call) ---
     const fetchFiles = async () => {
         setIsLoading(true);
         try {
-            // TODO: Replace with actual GET /api/knowledge/list when ready
-            // const res = await fetch(`${API_URL}/api/knowledge/list`);
-            // const data = await res.json();
+            const res = await fetch(`${API_URL}/api/knowledge/list`);
+            const data = await res.json();
 
-            // Simulating API response for UI dev
-            setTimeout(() => {
-                setFiles([
-                    { id: '1', filename: 'Plano_Governo_2026.pdf', size: 1024 * 1024 * 2.5, type: 'application/pdf', status: 'indexed', uploaded_at: new Date().toISOString() },
-                    { id: '2', filename: 'Notas_Estrategicas.txt', size: 1024 * 15, type: 'text/plain', status: 'processing', uploaded_at: new Date().toISOString() },
-                    { id: '3', filename: 'Analise_Concorrente_A.pdf', size: 1024 * 500, type: 'application/pdf', status: 'error', uploaded_at: new Date().toISOString() },
-                ]);
-                setIsLoading(false);
-            }, 800);
+            // Map keys if necessary, API returns { id, filename, status, created_at, size, file_path }
+            // UI expects { id, filename, size, type, status, uploaded_at }
+            if (Array.isArray(data)) {
+                const mapped = data.map((f: any) => ({
+                    id: f.id,
+                    filename: f.filename,
+                    size: f.file_size || 0,
+                    type: f.file_type || 'unknown',
+                    status: f.status,
+                    uploaded_at: f.created_at
+                }));
+                setFiles(mapped);
+            } else {
+                console.error("fetchFiles did not return an array:", data);
+                setFiles([]);
+            }
+            setIsLoading(false);
         } catch (error) {
             console.error("Failed to fetch files:", error);
             setIsLoading(false);
+            toast({
+                title: "Erro ao carregar arquivos",
+                description: "Verifique a conexão com o servidor.",
+                variant: "destructive",
+            });
+        }
+    };
+
+    const fetchCities = async () => {
+        try {
+            const res = await fetch(`${API_URL}/api/cities`);
+            const data = await res.json();
+            if (Array.isArray(data)) {
+                setCities(data);
+            } else {
+                console.error("fetchCities did not return an array:", data);
+                setCities([]);
+            }
+        } catch (error) {
+            console.error("Failed to fetch cities:", error);
+            setCities([]);
         }
     };
 
     useEffect(() => {
         fetchFiles();
+        fetchCities();
     }, []);
 
     // --- File Upload Logic ---
@@ -71,33 +111,30 @@ export default function KnowledgePage() {
         for (const file of acceptedFiles) {
             const formData = new FormData();
             formData.append('file', file);
+            formData.append('category', selectedCategory);
+            formData.append('provider', selectedProvider);
+            if (selectedCity) formData.append('city_id', selectedCity);
             // Default campaign ID for now - should come from context
             formData.append('campaign_id', 'default-campaign');
 
             try {
                 // Determine API endpoint based on file type
-                const endpoint = file.type === 'application/pdf' ? '/api/ingest/pdf' : '/api/knowledge/upload';
+                // Unified endpoint now: /api/knowledge/upload
+                const endpoint = '/api/knowledge/upload';
 
-                // Real upload simulation
-                // const res = await fetch(`${API_URL}${endpoint}`, { method: 'POST', body: formData });
+                const res = await fetch(`${API_URL}${endpoint}`, { method: 'POST', body: formData });
 
-                await new Promise(resolve => setTimeout(resolve, 1500)); // Fake upload delay
+                if (!res.ok) throw new Error("Upload failed");
+                const savedFile = await res.json();
 
                 toast({
                     title: "Arquivo enviado com sucesso",
-                    description: `${file.name} foi adicionado à fila de processamento.`,
-                    variant: "default", // or success if available
+                    description: `${file.name} foi adicionado à fila de processamento (${selectedProvider.toUpperCase()}).`,
+                    variant: "default",
                 });
 
-                // Optimistic update
-                setFiles(prev => [{
-                    id: Math.random().toString(36).substr(2, 9),
-                    filename: file.name,
-                    size: file.size,
-                    type: file.type,
-                    status: 'processing',
-                    uploaded_at: new Date().toISOString()
-                }, ...prev]);
+                // Optimistic update or refetch
+                fetchFiles();
 
             } catch (error) {
                 toast({
@@ -108,7 +145,7 @@ export default function KnowledgePage() {
             }
         }
         setIsUploading(false);
-    }, [toast]);
+    }, [toast, selectedCategory, selectedProvider]);
 
     const { getRootProps, getInputProps, isDragActive } = useDropzone({
         onDrop,
@@ -164,7 +201,52 @@ export default function KnowledgePage() {
                 </Button>
             </div>
 
-            {/* Upload Area */}
+            {/* Upload Area Controls */}
+            <div className="flex flex-wrap justify-end items-center gap-6 mb-2 bg-slate-50 dark:bg-slate-900/40 p-4 rounded-xl border border-slate-100 dark:border-slate-800">
+                <div className="flex items-center gap-3">
+                    <Label className="text-slate-600 dark:text-slate-400 font-medium">Embedding:</Label>
+                    <Select value={selectedProvider} onValueChange={setSelectedProvider}>
+                        <SelectTrigger className="w-[140px] bg-white dark:bg-slate-950 shadow-sm border-slate-200 dark:border-slate-800">
+                            <SelectValue placeholder="Provider" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="openai">OpenAI (3-Small)</SelectItem>
+                            <SelectItem value="deepseek">DeepSeek (V3)</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+
+                <div className="flex items-center gap-3">
+                    <Label className="text-slate-600 dark:text-slate-400 font-medium">Categoria:</Label>
+                    <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                        <SelectTrigger className="w-[180px] bg-white dark:bg-slate-950 shadow-sm border-slate-200 dark:border-slate-800">
+                            <SelectValue placeholder="Selecione..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="geral">Geral / Outros</SelectItem>
+                            <SelectItem value="plano_governo">Plano de Governo</SelectItem>
+                            <SelectItem value="dossie">Dossiê / Investigação</SelectItem>
+                            <SelectItem value="noticia_verificacao">Notícia (Verificação)</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+
+                <div className="flex items-center gap-3">
+                    <Label className="text-slate-600 dark:text-slate-400 font-medium">Cidade:</Label>
+                    <Select value={selectedCity || "null"} onValueChange={(val) => setSelectedCity(val === "null" ? null : val)}>
+                        <SelectTrigger className="w-[180px] bg-white dark:bg-slate-950 shadow-sm border-slate-200 dark:border-slate-800">
+                            <SelectValue placeholder="Selecione a cidade" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="null">Nenhuma / Global</SelectItem>
+                            {cities.map((city) => (
+                                <SelectItem key={city.id} value={city.id}>{city.nome}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+            </div>
+
             <Card className="border-2 border-dashed border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 transition-colors hover:bg-slate-100/50 dark:hover:bg-slate-800/50 group cursor-pointer relative overflow-hidden">
                 {isUploading && (
                     <div className="absolute inset-0 bg-white/80 dark:bg-slate-950/80 z-10 flex items-center justify-center backdrop-blur-sm">

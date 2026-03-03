@@ -9,7 +9,7 @@ export default function CompetitorsPage({ params }: { params: Promise<{ id: stri
     const { id } = use(params);
 
     return (
-        <div className="space-y-8 p-8 max-w-7xl mx-auto pb-20">
+        <div className="space-y-8 px-4 sm:px-8 py-8 max-w-7xl mx-auto pb-20">
             {/* Cabeçalho de Impacto */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div className="flex items-center gap-4">

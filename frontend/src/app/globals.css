@@ -4,6 +4,19 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Compact Content Containers */
+.content-max-width {
+  @apply mx-auto w-full max-w-[1440px] px-[var(--gutter-x)];
+}
+
+.section-padding {
+  @apply py-[var(--gutter-y)] md:py-[var(--section-gap)];
+}
+
+.card-padding {
+  @apply p-5 md:p-6;
+}
+
 @layer base {
   * {
     @apply border-[var(--border-default)];
@@ -15,51 +28,55 @@
 }
 
 :root {
-  /* Color System - Google Material Inspired (Soft & Tech) */
-  /* Primary: Google Blue (Vibrant yet accessible) */
-  --primary: 221 83% 53%;
+  /* Apple-Inspired Design System (Premium & Minimalist) */
+
+  /* Color System - Refined Neutrals */
+  --background: 0 0% 98%;
+  /* F9F9F9 - Soft Off-White */
+  --foreground: 220 10% 10%;
+  /* Dark Navy/Grey for text */
+
+  /* Primary: Vibrant Blue (Apple-like) */
+  --primary: 212 100% 48%;
   --primary-foreground: 0 0% 100%;
 
-  /* Secondary: Soft Purple/Indigo */
-  --secondary: 262 83% 58%;
+  /* Secondary: Soft Indigo */
+  --secondary: 245 40% 45%;
   --secondary-foreground: 0 0% 100%;
 
-  /* Accent: Teal/Mint for refresh/success vibes */
-  --accent: 170 70% 40%;
+  /* Accent: Mint/Emerald for success */
+  --accent: 155 45% 45%;
   --accent-foreground: 0 0% 100%;
 
-  /* Card: Pure White for maximum contrast against soft background */
+  /* Card Styles: Clean & Subtle shadow */
   --card: 0 0% 100%;
-  --card-foreground: 222 47% 11%;
+  --card-foreground: 220 10% 10%;
 
-  /* Background: Ice Blue / Off-White (Not Stark White) */
-  --background: 210 40% 98%;
-  --foreground: 222 47% 11%;
-  /* Navy dark grey for text */
+  /* Muted elements */
+  --muted: 215 15% 95%;
+  --muted-foreground: 215 10% 45%;
 
-  /* Muted: Soft greys for secondary text/backgrounds */
-  --muted: 215 25% 95%;
-  --muted-foreground: 215 20% 45%;
+  /* Borders: Ultra-thin & subtle */
+  --border: 210 10% 92%;
+  --input: 210 10% 92%;
+  --ring: 212 100% 48%;
 
-  /* Borders: Very subtle, almost invisible */
-  --border: 220 13% 91%;
-  --input: 220 13% 91%;
+  /* Radius: Soft but modern */
+  --radius: 0.875rem;
+  /* 14px */
 
-  --ring: 221 83% 53%;
-
-  --destructive: 0 84% 60%;
-  --destructive-foreground: 0 0% 100%;
-
-  /* Radius: BIG curves (Material You style) */
-  --radius: 1rem;
-  /* 16px */
+  /* Spacing System - Compact Apple Aesthetics (Reduced by additional 60%) */
+  --gutter-x: 4vw;
+  --gutter-y: 2.5rem;
+  --section-gap: 3.5rem;
+  --stack-gap: 1.25rem;
 
   /* Chart Colors */
-  --chart-1: 221 83% 53%;
-  --chart-2: 170 70% 40%;
-  --chart-3: 262 83% 58%;
-  --chart-4: 43 74% 66%;
-  --chart-5: 27 87% 67%;
+  --chart-1: 212 100% 48%;
+  --chart-2: 155 45% 45%;
+  --chart-3: 245 40% 45%;
+  --chart-4: 35 90% 60%;
+  --chart-5: 10 80% 60%;
 }
 
 .dark {
@@ -207,18 +224,25 @@
       transform: rotate(-1deg);
     }
   }
+
   /* Gradiente rainbow fluido (estático) */
   .rainbow-gradient {
-    background: linear-gradient(
-      90deg,
-      #FF0000 0%,     /* Vermelho */
-      #FF7F00 16.67%, /* Laranja */
-      #FFFF00 33.33%, /* Amarelo */
-      #00FF00 50%,    /* Verde */
-      #0000FF 66.67%, /* Azul */
-      #4B0082 83.33%, /* Índigo */
-      #9400D3 100%    /* Violeta */
-    );
+    background: linear-gradient(90deg,
+        #FF0000 0%,
+        /* Vermelho */
+        #FF7F00 16.67%,
+        /* Laranja */
+        #FFFF00 33.33%,
+        /* Amarelo */
+        #00FF00 50%,
+        /* Verde */
+        #0000FF 66.67%,
+        /* Azul */
+        #4B0082 83.33%,
+        /* Índigo */
+        #9400D3 100%
+        /* Violeta */
+      );
     background-size: 200% 100%;
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
@@ -228,17 +252,17 @@
 
   /* Gradiente animado (se move) */
   .rainbow-gradient-animated {
-    background: linear-gradient(
-      90deg,
-      #FF0000 0%,
-      #FF7F00 14.28%,
-      #FFFF00 28.56%,
-      #00FF00 42.84%,
-      #0000FF 57.12%,
-      #4B0082 71.40%,
-      #9400D3 85.68%,
-      #FF0000 100%    /* Volta pro vermelho pra loop suave */
-    );
+    background: linear-gradient(90deg,
+        #FF0000 0%,
+        #FF7F00 14.28%,
+        #FFFF00 28.56%,
+        #00FF00 42.84%,
+        #0000FF 57.12%,
+        #4B0082 71.40%,
+        #9400D3 85.68%,
+        #FF0000 100%
+        /* Volta pro vermelho pra loop suave */
+      );
     background-size: 200% 100%;
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
@@ -250,6 +274,7 @@
     0% {
       background-position: 0% 50%;
     }
+
     100% {
       background-position: 200% 50%;
     }
@@ -257,16 +282,14 @@
 
   /* Gradiente vertical (efeito diferente) */
   .rainbow-gradient-vertical {
-    background: linear-gradient(
-      180deg,
-      #FF0000 0%,
-      #FF7F00 16.67%,
-      #FFFF00 33.33%,
-      #00FF00 50%,
-      #0000FF 66.67%,
-      #4B0082 83.33%,
-      #9400D3 100%
-    );
+    background: linear-gradient(180deg,
+        #FF0000 0%,
+        #FF7F00 16.67%,
+        #FFFF00 33.33%,
+        #00FF00 50%,
+        #0000FF 66.67%,
+        #4B0082 83.33%,
+        #9400D3 100%);
     background-size: 100% 200%;
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
@@ -278,6 +301,7 @@
     0% {
       background-position: 50% 0%;
     }
+
     100% {
       background-position: 50% 200%;
     }

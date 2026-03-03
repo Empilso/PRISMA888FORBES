@@ -10,9 +10,10 @@ interface ExecutionConsoleProps {
     campaignId?: string;
     isOpen?: boolean;
     onToggle?: () => void;
+    onNewLog?: (log: any) => void;
 }
 
-export function ExecutionConsole({ runId, campaignId, isOpen, onToggle }: ExecutionConsoleProps) {
+export function ExecutionConsole({ runId, campaignId, isOpen, onToggle, onNewLog }: ExecutionConsoleProps) {
     const isRunning = !!runId; // Simplification: if runId exists, we consider it "active" context
 
     const handleStop = async (e: React.MouseEvent) => {
@@ -91,6 +92,7 @@ export function ExecutionConsole({ runId, campaignId, isOpen, onToggle }: Execut
                 <div className="flex-1 overflow-hidden relative bg-black/50">
                     <TraceLogViewer
                         campaignId={campaignId}
+                        onNewLog={onNewLog}
                         className="h-full border-none shadow-none bg-transparent"
                     />
                 </div>
@@ -103,6 +105,7 @@ export function ExecutionConsole({ runId, campaignId, isOpen, onToggle }: Execut
         <div className="h-[400px] w-full border border-slate-800 rounded-lg overflow-hidden">
             <TraceLogViewer
                 campaignId={campaignId}
+                onNewLog={onNewLog}
                 className="h-full border-none shadow-none"
             />
         </div>

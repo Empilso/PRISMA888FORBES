@@ -39,6 +39,13 @@ export function AdminSidebar() {
     const pathname = usePathname();
     const [isCollapsed, setIsCollapsed] = useState(false);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+    const [isMounted, setIsMounted] = useState(false);
+
+    React.useEffect(() => {
+        setIsMounted(true);
+    }, []);
+
+    if (!isMounted) return null;
 
     const menuGroups: MenuGroup[] = [
         {
@@ -57,21 +64,21 @@ export function AdminSidebar() {
             ]
         },
         {
+            title: "Super Admin",
+            items: [
+                {
+                    name: "Gestão de Partidos",
+                    href: "/admin/organizations",
+                    icon: Buildings
+                }
+            ]
+        },
+        {
             title: "Radar de Promessas",
             items: [
                 {
-                    name: "Painel de Monitoramento",
-                    href: "/admin/radar",
-                    icon: Crosshair
-                },
-                {
-                    name: "Políticos (Base)",
-                    href: "/admin/politicos",
-                    icon: User
-                },
-                {
-                    name: "Cidades",
-                    href: "/admin/cidades",
+                    name: "Gestão Municipal",
+                    href: "/admin/territorios",
                     icon: Buildings
                 }
             ]
@@ -94,29 +101,33 @@ export function AdminSidebar() {
                     href: "/admin/knowledge",
                     icon: Database
                 },
-                {
-                    name: "Editor de Fluxos",
-                    href: "/admin/flows",
-                    icon: TreeStructure
-                }
+                // Removed "Editor de Fluxos" (Legacy)
             ]
         }
     ];
 
     return (
         <>
-            {/* Mobile Header */}
-            <div className="md:hidden fixed top-0 left-0 right-0 h-16 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between px-4 z-50 shadow-sm">
-                <PrismaLogo href="/admin" size="sm" showSubtitle subtitle="Admin Panel" />
-                <Button variant="ghost" size="icon" onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}>
-                    {isMobileMenuOpen ? <X className="h-6 w-6 text-slate-600 dark:text-slate-300" weight="duotone" /> : <List className="h-6 w-6 text-slate-600 dark:text-slate-300" weight="duotone" />}
-                </Button>
+            {/* Mobile Header - Ultra Minimalist Gold */}
+            <div className="md:hidden fixed top-0 left-0 right-0 h-16 bg-white/70 dark:bg-slate-900/70 backdrop-blur-md border-b border-slate-100/50 dark:border-slate-800/50 flex items-center justify-between px-6 z-50">
+                <PrismaLogo href="/admin" size="sm" showSubtitle={false} />
+                <div className="flex items-center gap-3">
+                    <ThemeToggle />
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                        className="rounded-full bg-slate-50 dark:bg-slate-800"
+                    >
+                        {isMobileMenuOpen ? <X className="h-5 w-5" /> : <List className="h-5 w-5" />}
+                    </Button>
+                </div>
             </div>
 
             {/* Sidebar Overlay (Mobile) */}
             {isMobileMenuOpen && (
                 <div
-                    className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm z-40 md:hidden"
+                    className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 md:hidden"
                     onClick={() => setIsMobileMenuOpen(false)}
                 />
             )}
@@ -187,12 +198,13 @@ export function AdminSidebar() {
                 </div>
 
                 {/* Footer Section */}
-                <div className="p-4 border-t border-slate-50 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 mt-auto">
-                    <div className="flex flex-col gap-1">
+                <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 mt-auto">
+                    <div className="flex flex-col gap-2">
+                        {/* Settings Link */}
                         <Link
                             href="/admin/settings"
                             className={cn(
-                                "flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-slate-500 hover:bg-white dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100 hover:shadow-sm transition-all border border-transparent hover:border-slate-100 dark:hover:border-slate-700",
+                                "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-500 hover:bg-white dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100 hover:shadow-sm transition-all border border-transparent hover:border-slate-100 dark:hover:border-slate-700",
                                 isCollapsed ? "justify-center px-0" : ""
                             )}
                             title="Configurações"
@@ -201,14 +213,19 @@ export function AdminSidebar() {
                             {!isCollapsed && <span>Configurações</span>}
                         </Link>
 
-                        <div className="flex items-center gap-2 mt-1">
+                        {/* Theme & Collapse Controls */}
+                        <div className={cn("flex items-center gap-2", isCollapsed ? "flex-col" : "justify-between px-1")}>
                             <ThemeToggle />
+
+                            {!isCollapsed && <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mr-auto ml-1">Tema</span>}
+
                             {/* Collapse Button */}
                             <Button
                                 variant="ghost"
                                 size="icon"
-                                className={cn("hidden md:flex h-8 w-8 text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] hover:shadow-sm", !isCollapsed && "ml-auto")}
+                                className="h-8 w-8 text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-white dark:hover:bg-slate-800"
                                 onClick={() => setIsCollapsed(!isCollapsed)}
+                                title={isCollapsed ? "Expandir" : "Recolher"}
                             >
                                 {isCollapsed ? <CaretRight weight="bold" /> : <CaretLeft weight="bold" />}
                             </Button>

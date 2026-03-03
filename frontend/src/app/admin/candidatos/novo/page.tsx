@@ -15,7 +15,11 @@ import {
     Calendar,
     X,
     Loader2,
-    Search
+    Search,
+    Radar,
+    Plus,
+    Trash2,
+    Instagram
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -84,50 +88,46 @@ function CandidateForm() {
         }
     }, [cargoAtual, setValue, isEditing]);
 
-    // Fetch data if editing
+    // Pre-fill City from URL if provided (New Logic)
+    useEffect(() => {
+        const cityParam = searchParams.get("city");
+        if (cityParam && !isEditing) {
+            // Capitalize first letter logic or raw
+            // Assuming the param is the Name (e.g. "Sorocaba")
+            setValue("cidade", cityParam);
+        }
+    }, [searchParams, isEditing, setValue]);
+
+    // Fetch data if editing (via Server Action com admin client)
     useEffect(() => {
         if (isEditing) {
             const fetchData = async () => {
                 setIsFetching(true);
-                const supabase = createClient();
-
                 try {
-                    // 1. Fetch Campaign
-                    const { data: campaign, error: campError } = await supabase
-                        .from("campaigns")
-                        .select("*")
-                        .eq("id", campaignId)
-                        .single();
+                    const { fetchCampaignForEdit } = await import("@/app/actions/fetch-campaign");
+                    const result = await fetchCampaignForEdit(campaignId!);
 
-                    if (campError) throw campError;
-
-                    // 2. Fetch Profile (Candidate)
-                    const { data: profile, error: profError } = await supabase
-                        .from("profiles")
-                        .select("*")
-                        .eq("campaign_id", campaignId)
-                        .eq("role", "candidate")
-                        .single();
-
-                    // Populate Form
-                    setValue("nome", campaign.candidate_name || "");
-                    setValue("nomeUrna", campaign.ballot_name || "");
-                    setValue("cidade", campaign.city || "");
-                    setValue("cargo", campaign.role || "");
-                    setValue("partido", campaign.party || "");
-                    setValue("numero", campaign.number?.toString() || "");
-                    setValue("electionDate", campaign.election_date || "2026-10-04");
-
-                    if (profile) {
-                        setValue("email", profile.email || "");
-                        // CPF e Telefone não estão no banco ainda, mas se estivessem:
-                        // setValue("cpf", profile.cpf);
-                        // setValue("telefone", profile.phone);
+                    if (!result.success) {
+                        throw new Error(result.error);
                     }
 
-                    // Login/Senha não recuperamos por segurança (e hash)
-                    setValue("login", "********");
-                    setValue("password", "********");
+                    const { campaign, profile } = result;
+
+                    // Populate Form — Dados da Campanha
+                    setValue("nome", campaign!.candidate_name);
+                    setValue("nomeUrna", campaign!.ballot_name);
+                    setValue("cidade", campaign!.city);
+                    setValue("cargo", campaign!.role);
+                    setValue("partido", campaign!.party);
+                    setValue("numero", campaign!.number);
+                    setValue("electionDate", campaign!.election_date);
+
+                    // Profile (email, cpf, telefone)
+                    if (profile) {
+                        if (profile.email) setValue("email", profile.email);
+                        if (profile.cpf) setValue("cpf", profile.cpf);
+                        if (profile.phone) setValue("telefone", profile.phone);
+                    }
 
                 } catch (error) {
                     console.error("Erro ao carregar dados:", error);
@@ -149,8 +149,10 @@ function CandidateForm() {
         try {
             const formData = new FormData();
 
-            // Adicionar campos de texto
+            // BUG 1 FIX: No modo edição, NÃO incluir login/password
+            const excludeOnEdit = ['login', 'password'];
             Object.keys(data).forEach(key => {
+                if (isEditing && excludeOnEdit.includes(key)) return;
                 formData.append(key, data[key]);
             });
 
@@ -232,7 +234,7 @@ function CandidateForm() {
             {/* HEADER */}
             <div className="mb-6">
                 <h1 className="text-2xl font-semibold text-[var(--text-primary)]">
-                    {isEditing ? "Editar Candidato" : "Adicionar Candidato"}
+                    {isEditing ? `✏️ Editando: ${watch("nomeUrna") || watch("nome") || "Candidato"}` : "Adicionar Candidato"}
                 </h1>
                 <p className="text-sm text-[var(--text-secondary)] mt-1">
                     {isEditing ? "Atualize os dados da campanha e do candidato" : "Complete o cadastro e carregue os dados eleitorais"}
@@ -359,7 +361,7 @@ function CandidateForm() {
                                     type="email"
                                     placeholder="email@example.com"
                                     className="h-10 border-gray-300"
-                                    {...register("email", { required: true })}
+                                    {...register("email", { required: !isEditing })}
                                 />
                             </div>
                             <div className="space-y-1.5">

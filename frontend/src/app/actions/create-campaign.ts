@@ -33,6 +33,7 @@ export async function createCampaign(formData: FormData) {
         const partido = formData.get("partido") as string;
         const cidade = formData.get("cidade") as string;
         const electionDate = formData.get("electionDate") as string;
+        const socialLinksRaw = formData.get("socialLinks") as string;
 
         const csvFile = formData.get("csvFile") as File;
         const pdfFile = formData.get("pdfFile") as File;
@@ -102,7 +103,8 @@ export async function createCampaign(formData: FormData) {
                 party: partido,
                 number: parseInt(numero),
                 ballot_name: nomeUrna,
-                election_date: electionDate || '2024-10-06' // Data da eleição
+                election_date: electionDate || '2024-10-06', // Data da eleição
+                social_links: socialLinksRaw ? JSON.parse(socialLinksRaw) : {}
             })
             .select()
             .single();

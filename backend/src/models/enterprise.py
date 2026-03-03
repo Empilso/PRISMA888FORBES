@@ -161,3 +161,21 @@ class MediaItem(BaseModel):
 class MediaScanResult(BaseModel):
     items: List[MediaItem] = Field(description="List of media items found during the scan")
     overview: str = Field(description="General overview or conclusion of the media landscape")
+
+# Phase 4: Final Verdict (Triangulation)
+class VerdictResult(BaseModel):
+    """Output estruturado para a Fase 4: Veredito Final"""
+    promise_id: str = Field(..., description="ID da promessa analisada")
+    status: Literal['CUMPRIDA', 'NAO_INICIADA', 'EM_ANDAMENTO', 'QUEBRADA', 'PARCIALMENTE_CUMPRIDA'] = Field(..., description="Status final da promessa após triangulação")
+    justification_ptbr: str = Field(..., description="Justificativa detalhada do veredito em Português, citando evidências.")
+    evidence_sources: List[str] = Field(default=[], description="Fontes utilizadas para a conclusão (Gastos, Notícias, etc.)")
+    confidence_score: float = Field(..., description="Nível de confiança da conclusão (0.0 a 1.0)")
+
+# Phase 4: Final Verdict (Triangulation)
+class VerdictResult(BaseModel):
+    """Output estruturado para a Fase 4: Veredito Final"""
+    promise_id: str = Field(..., description="ID da promessa analisada")
+    status: Literal['CUMPRIDA', 'NAO_INICIADA', 'EM_ANDAMENTO', 'QUEBRADA', 'PARCIALMENTE_CUMPRIDA'] = Field(..., description="Status final da promessa após triangulação")
+    justification_ptbr: str = Field(..., description="Justificativa detalhada do veredito em Português, citando evidências.")
+    evidence_sources: List[str] = Field(default=[], description="Fontes utilizadas para a conclusão (Gastos, Notícias, etc.)")
+    confidence_score: float = Field(..., description="Nível de confiança da conclusão (0.0 a 1.0)")

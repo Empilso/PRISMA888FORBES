@@ -6,13 +6,15 @@ interface PrismaLogoProps {
     size?: "sm" | "md" | "lg";
     showSubtitle?: boolean;
     subtitle?: string;
+    className?: string;
 }
 
 export function PrismaLogo({
     href = "/",
     size = "md",
     showSubtitle = false,
-    subtitle = "Intelligence Platform"
+    subtitle = "Intelligence Platform",
+    className
 }: PrismaLogoProps) {
     // Sizes based on reference image proportions (width:height ≈ 1.15:1)
     const sizes = {
@@ -24,7 +26,7 @@ export function PrismaLogo({
     const config = sizes[size];
 
     const content = (
-        <div className="flex items-center gap-3 group cursor-pointer">
+        <div className={`flex items-center gap-3 group cursor-pointer ${className || ""}`}>
             <div className="relative transition-transform group-hover:scale-105 animate-float">
                 <Image
                     src="/prisma-icon.png"
