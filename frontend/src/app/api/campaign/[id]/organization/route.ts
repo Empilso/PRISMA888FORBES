@@ -4,10 +4,10 @@ const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export async function PUT(
     request: NextRequest,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
-        const campaignId = params.id;
+        const { id: campaignId } = await params;
         const authHeader = request.headers.get("Authorization");
         const body = await request.json();
 
