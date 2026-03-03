@@ -1,4 +1,6 @@
 
+export const dynamic = 'force-dynamic';
+
 import React from "react";
 import { AdminSidebar } from "@/components/admin/AdminSidebar";
 import { AdminBottomNav } from "@/components/admin/AdminBottomNav";
