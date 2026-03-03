@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Label } from "@/components/ui/label";
 import { Loader2, ShieldCheck, QrCode, Copy, CheckCircle2, AlertCircle } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { toast } from "sonner"; // Assuming toast is available or use a fallback
+
 
 export default function SecuritySettingsPage() {
     const [mfaStatus, setMfaStatus] = useState<'disabled' | 'enrolling' | 'enabled'>('disabled');
@@ -228,7 +228,7 @@ export default function SecuritySettingsPage() {
                             </Alert>
 
                             <div className="pt-6 border-t border-slate-100 dark:border-slate-800">
-                                <Button variant="destructive" ghost onClick={unenrollMfa} disabled={loading}>
+                                <Button variant="destructive" onClick={unenrollMfa} disabled={loading}>
                                     {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Desativar MFA"}
                                 </Button>
                             </div>
