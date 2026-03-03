@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Loader2, ShieldCheck, AlertCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
-export default function MFAChallengePage() {
+function MFAChallengeContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const [code, setCode] = useState("");
@@ -125,5 +125,17 @@ export default function MFAChallengePage() {
                 </CardFooter>
             </Card>
         </div>
+    );
+}
+
+export default function MFAChallengePage() {
+    return (
+        <Suspense fallback={
+            <div className="flex items-center justify-center min-h-screen">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+        }>
+            <MFAChallengeContent />
+        </Suspense>
     );
 }
