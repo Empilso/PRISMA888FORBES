@@ -56,7 +56,8 @@ export default function CommanderCockpit() {
                 const token = session?.access_token;
 
                 // Headers comuns para auth
-                const headers = token ? { "Authorization": `Bearer ${token}` } : {};
+                const headers: Record<string, string> = {};
+                if (token) headers["Authorization"] = `Bearer ${token}`;
 
                 const [analyticsRes, campaignsRes] = await Promise.all([
                     fetch(`/api/organizations/${slug}/analytics`, { headers }),
@@ -136,27 +137,26 @@ export default function CommanderCockpit() {
                     title="Candidatos Ativos"
                     value={analytics?.total_campaigns || 0}
                     icon={Users}
-                    trend="Gestão Global"
-                    description="Total de campanhas na base"
+                    subtitle="Total de campanhas na base"
                 />
                 <StatsCard
                     title="Meta de Votos"
                     value={(analytics?.total_estimated_votes || 0).toLocaleString()}
                     icon={Trophy}
-                    trend="Estimativa IA"
+                    subtitle="Estimativa IA"
                     variant="primary"
                 />
                 <StatsCard
                     title="Insights Gerados"
                     value={analytics?.total_strategies || 0}
                     icon={Target}
-                    description="Estratégias otimizadas"
+                    subtitle="Estratégias otimizadas"
                 />
                 <StatsCard
                     title="Performance"
                     value={`${analytics?.total_tasks ? Math.round((analytics.completed_tasks / analytics.total_tasks) * 100) : 0}%`}
                     icon={ChartLineUp}
-                    trend="Eficiência operacional"
+                    subtitle="Eficiência operacional"
                 />
             </div>
 
@@ -173,7 +173,7 @@ export default function CommanderCockpit() {
                         </div>
                     </CardHeader>
                     <div className="h-[500px] w-full rounded-[2rem] overflow-hidden">
-                        <ElectoralMapFull campaigns={campaigns} />
+                        <ElectoralMapFull locations={[]} onLocationClick={() => { }} />
                     </div>
                 </Card>
 
