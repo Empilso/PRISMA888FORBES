@@ -173,7 +173,12 @@ export function ElectoralMapFull({ campaignId, campaigns }: ElectoralMapFullProp
     const fetchNotes = async () => {
         try {
             const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-            const res = await fetch(`${apiUrl}/api/campaign/${campaignId}/map_notes`);
+            const res = await fetch(`${apiUrl}/api/campaign/${campaignId}/map_notes`, {
+                headers: {
+                    'ngrok-skip-browser-warning': 'true',
+                    'Content-Type': 'application/json',
+                }
+            });
             if (res.ok) {
                 const data = await res.json();
                 setNotes(data || []);
