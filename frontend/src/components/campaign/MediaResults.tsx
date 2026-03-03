@@ -90,7 +90,7 @@ export const MediaResults: React.FC<MediaResultsProps> = ({ results, isLoading }
                                             rel="noreferrer"
                                             className="opacity-0 group-hover:opacity-100 transition-opacity text-slate-400 hover:text-violet-600"
                                         >
-                                            <ExternalLink className="w-4 h-4" />
+                                            <ArrowSquareOut className="w-4 h-4" />
                                         </a>
                                     </div>
 
