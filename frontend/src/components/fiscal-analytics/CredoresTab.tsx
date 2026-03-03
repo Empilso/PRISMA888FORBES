@@ -170,7 +170,7 @@ export function CredoresTab({ citySlug }: CredoresTabProps) {
                         </CardHeader>
                         <CardContent className="px-6 pb-6">
                             <p className="text-3xl font-black text-red-600 tracking-tighter">
-                                {creditorsData[0]?.percentage > 15 ? "ALTO" : "MÉDIO"}
+                                {(creditorsData[0]?.percentage ?? 0) > 15 ? "ALTO" : "MÉDIO"}
                             </p>
                             <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-2">Análise de Dominância</p>
                         </CardContent>
@@ -235,8 +235,8 @@ export function CredoresTab({ citySlug }: CredoresTabProps) {
                             </TableHeader>
                             <TableBody>
                                 {creditorsData.map((creditor, index) => {
-                                    const isCritical = creditor.dependencyScore > 7;
-                                    const isWarning = creditor.dependencyScore > 4 && !isCritical;
+                                    const isCritical = (creditor.dependencyScore ?? 0) > 7;
+                                    const isWarning = (creditor.dependencyScore ?? 0) > 4 && !isCritical;
 
                                     return (
                                         <TableRow
