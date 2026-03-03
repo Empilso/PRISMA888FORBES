@@ -356,7 +356,6 @@ export default function CityDetailPage() {
                     setIsImportModalOpen(false);
                 }}
                 cities={[city]}
-                defaultCityId={city.id}
             />
         </div>
     );
