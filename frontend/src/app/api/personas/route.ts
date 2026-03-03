@@ -8,7 +8,8 @@ export async function GET(request: NextRequest) {
         const activeOnly = searchParams.get("active_only") !== "false";
 
         const response = await fetch(
-            `${BACKEND_URL}/api/personas?active_only=${activeOnly}`
+            `${BACKEND_URL}/api/personas?active_only=${activeOnly}`,
+            { headers: { "ngrok-skip-browser-warning": "true" } }
         );
 
         const data = await response.json();
@@ -28,7 +29,10 @@ export async function POST(request: NextRequest) {
 
         const response = await fetch(`${BACKEND_URL}/api/personas`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+                "Content-Type": "application/json",
+                "ngrok-skip-browser-warning": "true"
+            },
             body: JSON.stringify(body),
         });
 

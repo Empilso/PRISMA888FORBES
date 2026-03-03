@@ -9,7 +9,9 @@ export async function GET(
     try {
         const { id } = await params;
 
-        const response = await fetch(`${BACKEND_URL}/api/personas/${id}`);
+        const response = await fetch(`${BACKEND_URL}/api/personas/${id}`, {
+            headers: { "ngrok-skip-browser-warning": "true" }
+        });
         const data = await response.json();
 
         return NextResponse.json(data, { status: response.status });
@@ -32,7 +34,10 @@ export async function PUT(
 
         const response = await fetch(`${BACKEND_URL}/api/personas/${id}`, {
             method: "PUT",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+                "Content-Type": "application/json",
+                "ngrok-skip-browser-warning": "true"
+            },
             body: JSON.stringify(body),
         });
 
@@ -56,6 +61,7 @@ export async function DELETE(
 
         const response = await fetch(`${BACKEND_URL}/api/personas/${id}`, {
             method: "DELETE",
+            headers: { "ngrok-skip-browser-warning": "true" }
         });
 
         const data = await response.json();

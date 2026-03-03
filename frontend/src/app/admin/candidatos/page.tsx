@@ -229,12 +229,16 @@ export default function CandidatosPage() {
         if (!selectedCampaignToAssign) return;
         setIsAssigning(true);
         try {
-            const payload = {
-                organization_id: selectedOrgId === "none" ? null : selectedOrgId
-            };
+            const { data: session } = await supabase.auth.getSession();
+            const token = session.session?.access_token;
+
             const response = await fetch(`/api/campaign/${selectedCampaignToAssign.id}/organization`, {
                 method: "PUT",
-                headers: { "Content-Type": "application/json" },
+                headers: {
+                    "Content-Type": "application/json",
+                    "ngrok-skip-browser-warning": "true",
+                    ...(token ? { "Authorization": `Bearer ${token}` } : {})
+                },
                 body: JSON.stringify(payload)
             });
 

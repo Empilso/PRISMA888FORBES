@@ -113,7 +113,10 @@ export function AdversarialDialog({ campaignId }: AdversarialDialogProps) {
         try {
             const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
             const res = await fetch(`${apiUrl}/api/competitor/${selectedCompetitorId}/analyze`, {
-                method: 'POST'
+                method: 'POST',
+                headers: {
+                    'ngrok-skip-browser-warning': 'true'
+                }
             });
 
             if (!res.ok) throw new Error("Falha na análise");

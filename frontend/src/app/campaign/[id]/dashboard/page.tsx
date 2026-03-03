@@ -55,7 +55,7 @@ export default function DashboardPage() {
                     .from("tasks")
                     .select("id", { count: "exact", head: true })
                     .eq("campaign_id", campaignId)
-                    .eq("completed", false);
+                    .neq("status", "completed");
 
                 setStats({
                     mappedSections: locationsCount || 0,

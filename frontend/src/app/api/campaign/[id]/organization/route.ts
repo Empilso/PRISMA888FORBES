@@ -15,6 +15,7 @@ export async function PUT(
             method: "PUT",
             headers: {
                 "Content-Type": "application/json",
+                "ngrok-skip-browser-warning": "true",
                 ...(authHeader ? { "Authorization": authHeader } : {})
             },
             body: JSON.stringify(body),
