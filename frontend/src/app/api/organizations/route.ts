@@ -7,8 +7,11 @@ export async function GET(request: NextRequest) {
         const authHeader = request.headers.get("Authorization");
 
         const response = await fetch(`${BACKEND_URL}/api/organizations`, {
-            headers: authHeader ? { "Authorization": authHeader } : {},
-            // Next.js caching might interfere, ensure fresh data
+            headers: {
+                ...(authHeader ? { "Authorization": authHeader } : {}),
+                "ngrok-skip-browser-warning": "true",
+                "Content-Type": "application/json",
+            },
             cache: 'no-store'
         });
 
@@ -39,6 +42,7 @@ export async function POST(request: NextRequest) {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
+                "ngrok-skip-browser-warning": "true",
                 ...(authHeader ? { "Authorization": authHeader } : {})
             },
             body: JSON.stringify(body),
