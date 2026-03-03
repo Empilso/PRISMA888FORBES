@@ -10,12 +10,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, RefreshCw, Search, LayoutDashboard } from "lucide-react";
 import Link from "next/link";
-import { useParams, useSearchParams } from "next/navigation";
+import { useParams } from "next/navigation";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 export default function RadarAuditPage() {
     const params = useParams();
-    const searchParams = useSearchParams();
+
 
     // IDs from params
     const campaignId = "045a77c6-38b2-4641-a963-7896c9f2179b";
