@@ -67,6 +67,7 @@ interface Task {
     };
     ai_suggestion?: string;
     created_at?: string;
+    due_date?: string | null;
     pillar?: string;
     examples?: string[]; // Parsed examples from AI output
 }
