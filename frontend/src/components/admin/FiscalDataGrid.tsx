@@ -82,8 +82,6 @@ interface Expense {
     subfuncao: string;
     cpf_cnpj?: string;
     elemento_despesa?: string;
-    cpf_cnpj?: string;
-    elemento_despesa?: string;
     orgao?: string;
     evento?: string; // Novo campo
     fonte_recurso?: string;
