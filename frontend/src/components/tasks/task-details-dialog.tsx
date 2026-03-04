@@ -95,13 +95,17 @@ export function TaskDetailsDialog({
         setLoadingComments(true);
         try {
             const supabase = createClient();
-            const commentsRes = await fetch(`/api/campaign/${task.campaign_id || 'default'}/tasks/${task.id}/comments`);
+            const commentsRes = await fetch(`/api/campaign/${task.campaign_id || 'default'}/tasks/${task.id}/comments`, {
+                headers: { 'ngrok-skip-browser-warning': 'true' }
+            });
             if (commentsRes.ok) {
                 const commentsData = await commentsRes.json();
                 setComments(commentsData);
             }
 
-            const historyRes = await fetch(`/api/campaign/${task.campaign_id || 'default'}/tasks/${task.id}/history`);
+            const historyRes = await fetch(`/api/campaign/${task.campaign_id || 'default'}/tasks/${task.id}/history`, {
+                headers: { 'ngrok-skip-browser-warning': 'true' }
+            });
             if (historyRes.ok) {
                 const historyData = await historyRes.json();
                 setHistory(historyData);
@@ -132,7 +136,10 @@ export function TaskDetailsDialog({
 
             const res = await fetch(`/api/campaign/${task.campaign_id || 'default'}/tasks/${task.id}/comments`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'ngrok-skip-browser-warning': 'true'
+                },
                 body: JSON.stringify({
                     profile_id: user.id,
                     content: comment
@@ -484,7 +491,10 @@ export function TaskDetailsDialog({
 
                                         const res = await fetch(`/api/campaign/${task.campaign_id || 'default'}/tasks/${task.id}`, {
                                             method: 'PUT',
-                                            headers: { 'Content-Type': 'application/json' },
+                                            headers: {
+                                                'Content-Type': 'application/json',
+                                                'ngrok-skip-browser-warning': 'true'
+                                            },
                                             body: JSON.stringify({
                                                 status,
                                                 priority,

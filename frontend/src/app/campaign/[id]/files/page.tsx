@@ -142,7 +142,10 @@ export default function FilesPage() {
                 // Chama a API de ingestão
                 fetch(`/api/ingest/pdf`, {
                     method: "POST",
-                    headers: { "Content-Type": "application/json" },
+                    headers: {
+                        "Content-Type": "application/json",
+                        "ngrok-skip-browser-warning": "true"
+                    },
                     body: JSON.stringify({
                         campaign_id: campaignId,
                         file_url: urlData.publicUrl,

@@ -522,7 +522,7 @@ export default function CampaignSetupPage() {
     setHashtags(newArr);
   };
 
-  console.log("🚀 [INIT] Setup page loaded");
+
   console.log("🚀 [INIT] Campaign ID from params:", campaignId);
   console.log("🚀 [INIT] Supabase client created:", !!supabase);
 
@@ -633,6 +633,7 @@ export default function CampaignSetupPage() {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
       const res = await fetch(
         `${apiUrl}/api/campaign/${campaignId}/social/stats`,
+        { headers: { "ngrok-skip-browser-warning": "true" } }
       );
       if (res.ok) {
         const data = await res.json();
@@ -775,7 +776,10 @@ export default function CampaignSetupPage() {
         console.log("📊 [PROCESS] Processando CSV:", csvDoc.file_url);
         const csvResponse = await fetch(`${backendUrl}/api/ingest/locations`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "ngrok-skip-browser-warning": "true"
+          },
           body: JSON.stringify({
             campaign_id: campaignId,
             file_url: csvDoc.file_url,
@@ -795,7 +799,10 @@ export default function CampaignSetupPage() {
         console.log("📄 [PROCESS] Processando PDF:", pdfDoc.file_url);
         const pdfResponse = await fetch(`${backendUrl}/api/ingest/pdf`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "ngrok-skip-browser-warning": "true"
+          },
           body: JSON.stringify({
             campaign_id: campaignId,
             file_url: pdfDoc.file_url,
@@ -907,7 +914,10 @@ export default function CampaignSetupPage() {
         `${process.env.NEXT_PUBLIC_API_URL}/api/campaign/${campaignId}/publish`,
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "ngrok-skip-browser-warning": "true"
+          },
           body: JSON.stringify({ strategy_ids: null }), // Publish all approved
         },
       );
@@ -1096,6 +1106,7 @@ export default function CampaignSetupPage() {
           method: "DELETE",
           headers: {
             "Content-Type": "application/json",
+            "ngrok-skip-browser-warning": "true",
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
         },
