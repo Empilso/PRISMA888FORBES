@@ -72,10 +72,26 @@ export default function DashboardPage() {
     }, [campaignId]);
 
     return (
-        <div className="space-y-8 animate-fade-in px-4 sm:px-8 py-8 bg-[var(--bg-primary)] min-h-screen">
+        <div className="space-y-4 sm:space-y-8 animate-fade-in px-4 sm:px-8 pt-4 pb-24 sm:py-8 bg-[var(--bg-primary)] min-h-screen">
 
-            {/* Header with War Room Button */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            {/* Mobile Top Bar - Logo + War Room */}
+            <div className="flex items-center justify-between md:hidden">
+                <div className="flex items-center gap-2.5">
+                    <img
+                        src="/prisma-icon-transparent.png"
+                        alt="PRISMA 888"
+                        className="h-8 w-auto drop-shadow-lg"
+                    />
+                    <div>
+                        <p className="text-base font-black tracking-tight text-slate-900 leading-none">PRISMA 888</p>
+                        <p className="text-[9px] text-slate-400 font-semibold uppercase tracking-widest leading-none mt-0.5">Candidate Suite</p>
+                    </div>
+                </div>
+                <AdversarialDialog campaignId={campaignId} />
+            </div>
+
+            {/* Desktop Header with War Room Button */}
+            <div className="hidden md:flex flex-row justify-between items-center gap-4">
                 <div>
                     <h1 className="text-3xl font-bold text-[var(--text-primary)] tracking-tight">Visão Geral</h1>
                     <p className="text-[var(--text-secondary)]">Monitoramento em tempo real da campanha.</p>
@@ -85,8 +101,8 @@ export default function DashboardPage() {
                 </div>
             </div>
 
-            {/* Stats Grid */}
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+            {/* Stats Grid - 2x2 on mobile, 4 cols on desktop */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-6">
                 <StatsCard
                     title="Seções Mapeadas"
                     value={stats.mappedSections}
@@ -117,8 +133,8 @@ export default function DashboardPage() {
                 />
             </div>
 
-            {/* Electoral Map - REAL INTERACTIVE MAP */}
-            <div className="h-[500px] w-full bg-[var(--bg-secondary)] rounded-[2rem] shadow-sm border border-[var(--border-default)] overflow-hidden relative group transition-all hover:shadow-md">
+            {/* Electoral Map - Shorter on mobile */}
+            <div className="h-[280px] sm:h-[500px] w-full bg-[var(--bg-secondary)] rounded-2xl sm:rounded-[2rem] shadow-sm border border-[var(--border-default)] overflow-hidden relative group transition-all hover:shadow-md">
                 <ElectoralMapFull campaignId={campaignId} />
             </div>
 
@@ -126,7 +142,7 @@ export default function DashboardPage() {
             <ElectionResultsWidget campaignId={campaignId} />
 
             {/* Two Column Layout for Priorities and Diagnoses */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-8">
                 {/* Strategic Priorities (2/3 width) */}
                 <div className="lg:col-span-2">
                     <StrategicPrioritiesWidget campaignId={campaignId} />

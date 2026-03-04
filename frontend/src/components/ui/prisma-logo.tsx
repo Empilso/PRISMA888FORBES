@@ -29,12 +29,12 @@ export function PrismaLogo({
         <div className={`flex items-center gap-3 group cursor-pointer ${className || ""}`}>
             <div className="relative transition-transform group-hover:scale-105 animate-float">
                 <Image
-                    src="/prisma-icon.png"
+                    src="/prisma-icon-transparent.png"
                     alt="Prisma 888"
                     width={config.width}
                     height={config.height}
-                    className="object-contain animate-glow"
-                    style={{ width: "auto", height: "auto" }} // Fix for hydration warning
+                    className="object-contain animate-glow drop-shadow-lg"
+                    style={{ width: "auto", height: "auto" }}
                     priority
                 />
             </div>
