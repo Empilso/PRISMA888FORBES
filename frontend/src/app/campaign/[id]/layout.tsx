@@ -39,11 +39,13 @@ export default async function CampaignLayout({
                 <div className="flex h-screen overflow-hidden bg-background">
                     <DashboardSidebar campaignId={id} />
                     <div className="flex flex-1 flex-col min-h-0 overflow-hidden relative">
-                        <DashboardHeader
-                            candidateName={candidateName}
-                            role={role}
-                            lastUpdate={lastUpdate}
-                        />
+                        <div className="hidden md:block">
+                            <DashboardHeader
+                                candidateName={candidateName}
+                                role={role}
+                                lastUpdate={lastUpdate}
+                            />
+                        </div>
                         <main className="flex-1 overflow-y-auto overscroll-y-contain h-full w-full pb-20 md:pb-0">
                             {children}
                         </main>

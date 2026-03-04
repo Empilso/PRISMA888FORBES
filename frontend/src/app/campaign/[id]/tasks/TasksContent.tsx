@@ -260,12 +260,12 @@ export default function TasksContent({ campaignId, simpleMode = false }: { campa
     }
 
     return (
-        <div className="space-y-6 px-4 sm:px-8">
+        <div className="space-y-4 px-4 sm:px-8 pt-4 sm:pt-6">
             {!simpleMode && (
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
                     <div>
-                        <h2 className="text-3xl font-bold tracking-tight text-slate-900">Minhas Tarefas</h2>
-                        <p className="text-muted-foreground">
+                        <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900 dark:text-white">Minhas Tarefas</h2>
+                        <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
                             Gerencie a execução da campanha.
                         </p>
                     </div>
@@ -313,27 +313,29 @@ export default function TasksContent({ campaignId, simpleMode = false }: { campa
             </div>
 
             {/* Metrics - Clickable in Grid view */}
-            <div className="flex overflow-x-auto pb-4 -mx-4 px-4 gap-3 no-scrollbar md:grid md:grid-cols-4 md:gap-4 md:overflow-visible md:pb-0 md:mx-0 md:px-0">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 {[
                     { label: "Total", value: tasks.length, icon: Circle, color: "text-slate-500", filterValue: 'ALL' as const },
-                    { label: "A Fazer", value: tasks.filter(t => t.status === 'pending').length, icon: Circle, color: "text-slate-500", filterValue: 'pending' as const },
+                    { label: "A Fazer", value: tasks.filter(t => t.status === 'pending').length, icon: Circle, color: "text-slate-400", filterValue: 'pending' as const },
                     { label: "Em Progresso", value: tasks.filter(t => t.status === 'in_progress').length, icon: Timer, color: "text-blue-500", filterValue: 'in_progress' as const },
                     { label: "Concluídas", value: tasks.filter(t => t.status === 'completed').length, icon: CheckCircle2, color: "text-green-500", filterValue: 'completed' as const },
                 ].map((metric, i) => (
                     <Card
                         key={i}
                         className={cn(
-                            "min-w-[140px] shadow-[0_4px_12px_rgb(0,0,0,0.03)] border-slate-100/50 transition-all cursor-pointer hover:shadow-md shrink-0 rounded-2xl",
-                            statusFilter === metric.filterValue ? 'ring-2 ring-indigo-500/20 border-indigo-50 shadow-indigo-100' : 'bg-white/50'
+                            "shadow-[0_2px_8px_rgb(0,0,0,0.04)] border border-slate-100/80 transition-all cursor-pointer hover:shadow-md rounded-2xl",
+                            statusFilter === metric.filterValue
+                                ? 'ring-2 ring-indigo-500/30 border-indigo-200/80 bg-white'
+                                : 'bg-white/60'
                         )}
                         onClick={() => setStatusFilter(metric.filterValue)}
                     >
-                        <CardContent className="p-4 flex items-center justify-between gap-3">
+                        <CardContent className="p-3.5 sm:p-4 flex items-center justify-between gap-2">
                             <div>
-                                <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">{metric.label}</p>
-                                <p className="text-xl font-black text-slate-900 mt-0.5">{metric.value}</p>
+                                <p className="text-[9px] sm:text-[10px] text-slate-400 font-black uppercase tracking-widest">{metric.label}</p>
+                                <p className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white mt-0.5 leading-none">{metric.value}</p>
                             </div>
-                            <div className={cn("p-2 rounded-xl bg-slate-50", metric.color.replace('text-', 'bg-').replace('500', '50'))}>
+                            <div className={cn("p-2 rounded-xl", metric.color === 'text-slate-500' || metric.color === 'text-slate-400' ? 'bg-slate-100' : metric.color === 'text-blue-500' ? 'bg-blue-50' : 'bg-green-50')}>
                                 <metric.icon className={cn("h-4 w-4", metric.color)} />
                             </div>
                         </CardContent>
