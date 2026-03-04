@@ -530,9 +530,9 @@ export function ElectoralMapFull({ campaignId, campaigns }: ElectoralMapFullProp
         try {
             const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
             const body = {
-                neighborhood: selectedLocation.name,
-                location_name: selectedLocation.name,
+                neighborhood: selectedLocation.address || 'Geral', // Usando endereço como proxy de bairro se necessário
                 location_id: selectedLocation.id,
+                location_name: selectedLocation.name
             };
 
             const res = await fetch(`${apiUrl}/api/campaign/${campaignId}/social/micro-strategy`, {
@@ -565,6 +565,8 @@ export function ElectoralMapFull({ campaignId, campaigns }: ElectoralMapFullProp
             const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
             const body = {
                 neighborhood: selectedMention.inferred_neighborhood || 'Geral',
+                location_id: selectedLocation?.id,
+                location_name: selectedLocation?.name
             };
 
             const res = await fetch(`${apiUrl}/api/campaign/${campaignId}/social/micro-strategy`, {
