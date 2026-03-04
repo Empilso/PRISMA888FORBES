@@ -6,8 +6,19 @@ import { Toaster } from "@/components/ui/toaster";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-    title: "SheepStack v3.0 - Inteligência Eleitoral",
-    description: "Plataforma de gestão de campanhas políticas com IA avançada",
+    title: "PRISMA 888 - Inteligência Política",
+    description: "Sistema de Inteligência e Estratégia Política de Elite",
+    manifest: "/manifest.json",
+    themeColor: "#0a0a0b",
+    viewport: "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0",
+    appleWebApp: {
+        capable: true,
+        statusBarStyle: "black-translucent",
+        title: "PRISMA 888",
+    },
+    icons: {
+        apple: "/icon-512.png",
+    }
 };
 
 import Providers from "./providers";
