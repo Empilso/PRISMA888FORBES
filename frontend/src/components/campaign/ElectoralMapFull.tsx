@@ -156,6 +156,7 @@ export function ElectoralMapFull({ campaignId, campaigns }: ElectoralMapFullProp
 
 
     const displayedStrategy = microStrategy;
+    const isTyping = isGeneratingMicro;
 
     // 1. Fetch Campaign Info & Notes
     useEffect(() => {
