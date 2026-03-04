@@ -209,7 +209,9 @@ export function ElectoralMapFull({ campaignId, campaigns }: ElectoralMapFullProp
         setLoadingCompetitor(true);
         try {
             const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-            const res = await fetch(`${apiUrl}/api/competitor/${competitorId}/votes/geo`);
+            const res = await fetch(`${apiUrl}/api/competitor/${competitorId}/votes/geo`, {
+                headers: { 'ngrok-skip-browser-warning': 'true' }
+            });
             if (res.ok) {
                 const data = await res.json();
                 // Convert to Location format
@@ -420,7 +422,11 @@ export function ElectoralMapFull({ campaignId, campaigns }: ElectoralMapFullProp
         try {
             const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
             const response = await fetch(`${apiUrl}/api/campaign/${campaignId}/location/${selectedLocation.id}/tactical_action`, {
-                method: 'POST'
+                method: 'POST',
+                headers: {
+                    'ngrok-skip-browser-warning': 'true',
+                    'Content-Type': 'application/json',
+                },
             });
 
             if (!response.ok) throw new Error('Falha ao gerar ação');
@@ -451,7 +457,8 @@ export function ElectoralMapFull({ campaignId, campaigns }: ElectoralMapFullProp
         try {
             const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
             const res = await fetch(`${apiUrl}/api/campaign/${campaignId}/map/tactical`, {
-                signal: controller.signal
+                signal: controller.signal,
+                headers: { 'ngrok-skip-browser-warning': 'true' }
             });
             clearTimeout(timeoutId);
 
@@ -522,7 +529,10 @@ export function ElectoralMapFull({ campaignId, campaigns }: ElectoralMapFullProp
 
             const res = await fetch(`${apiUrl}/api/campaign/${campaignId}/social/micro-strategy`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'ngrok-skip-browser-warning': 'true'
+                },
                 body: JSON.stringify(body)
             });
 

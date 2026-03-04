@@ -128,7 +128,10 @@ export function GeneratorDialog({ campaignId, trigger, onSuccess, onRunStarted }
             // mesmo que o salvamento no banco tenha falhado.
             const res = await fetch(`/api/campaign/${campaignId}/genesis`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: {
+                    "Content-Type": "application/json",
+                    "ngrok-skip-browser-warning": "true"
+                },
                 body: JSON.stringify({
                     persona: selectedPersonaName,
                     strategy_mode: strategyMode

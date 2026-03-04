@@ -98,7 +98,9 @@ export default function RadarPremiumPage() {
                 setMandate(mandateData);
 
                 // 2. Get Phase Status
-                const statusRes = await fetch(`${API_URL}/api/mandates/${mandateData.id}/phase-status`);
+                const statusRes = await fetch(`${API_URL}/api/mandates/${mandateData.id}/phase-status`, {
+                    headers: { 'ngrok-skip-browser-warning': 'true' }
+                });
                 if (statusRes.ok) {
                     const statusData = await statusRes.json();
                     setPhases(statusData);
@@ -155,7 +157,8 @@ export default function RadarPremiumPage() {
         setIsProcessing(`phase${phaseNum}`);
         try {
             const res = await fetch(`${API_URL}/api/campaigns/${campaignId}/radar/${mandate.id}/phase${phaseNum}`, {
-                method: 'POST'
+                method: 'POST',
+                headers: { 'ngrok-skip-browser-warning': 'true' }
             });
             const data = await res.json();
             console.log(`Phase ${phaseNum} started:`, data);

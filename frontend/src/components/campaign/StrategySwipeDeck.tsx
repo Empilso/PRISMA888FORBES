@@ -212,6 +212,7 @@ export function StrategySwipeDeck({ campaignId, onTaskCreated }: StrategySwipeDe
         try {
             const res = await fetch(`/api/campaign/${campaignId}/strategies?status=published`, {
                 cache: "no-store",
+                headers: { "ngrok-skip-browser-warning": "true" }
             });
             if (!res.ok) throw new Error("Falha ao buscar estratégias");
             const data: Strategy[] = await res.json();
@@ -240,6 +241,7 @@ export function StrategySwipeDeck({ campaignId, onTaskCreated }: StrategySwipeDe
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json",
+                        "ngrok-skip-browser-warning": "true",
                         ...(token ? { "Authorization": `Bearer ${token}` } : {}),
                     },
                 });
@@ -256,6 +258,7 @@ export function StrategySwipeDeck({ campaignId, onTaskCreated }: StrategySwipeDe
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json",
+                        "ngrok-skip-browser-warning": "true",
                         ...(token ? { "Authorization": `Bearer ${token}` } : {}),
                     },
                 });

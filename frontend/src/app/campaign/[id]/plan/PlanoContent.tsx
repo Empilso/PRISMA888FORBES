@@ -52,7 +52,8 @@ export default function PlanoContent({ campaignId }: { campaignId: string }) {
         try {
             // Use API proxy to bypass RLS issues
             const res = await fetch(`/api/campaign/${campaignId}/tasks`, {
-                cache: 'no-store'
+                cache: 'no-store',
+                headers: { 'ngrok-skip-browser-warning': 'true' }
             });
 
             if (!res.ok) throw new Error("Falha ao buscar tarefas");
@@ -91,7 +92,10 @@ export default function PlanoContent({ campaignId }: { campaignId: string }) {
                 `/api/campaign/${campaignId}/tasks/${taskId}/revert`,
                 {
                     method: "POST",
-                    headers: { "Content-Type": "application/json" },
+                    headers: {
+                        "Content-Type": "application/json",
+                        "ngrok-skip-browser-warning": "true"
+                    },
                 }
             );
 

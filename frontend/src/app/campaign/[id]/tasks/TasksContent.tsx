@@ -128,7 +128,10 @@ export default function TasksContent({ campaignId, simpleMode = false }: { campa
                 .eq('id', user?.id)
                 .single();
 
-            const res = await fetch(`/api/campaign/${campaignId}/tasks`, { cache: 'no-store' });
+            const res = await fetch(`/api/campaign/${campaignId}/tasks`, {
+                cache: 'no-store',
+                headers: { 'ngrok-skip-browser-warning': 'true' }
+            });
             if (!res.ok) throw new Error("Falha ao buscar tarefas");
             let data = await res.json();
 
@@ -162,7 +165,10 @@ export default function TasksContent({ campaignId, simpleMode = false }: { campa
 
             const res = await fetch(`/api/campaign/${campaignId}/tasks/${taskId}`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'ngrok-skip-browser-warning': 'true'
+                },
                 body: JSON.stringify({
                     status: newStatus,
                     last_modified_by: user?.id
@@ -189,7 +195,8 @@ export default function TasksContent({ campaignId, simpleMode = false }: { campa
 
         try {
             const res = await fetch(`/api/campaign/${campaignId}/tasks/${taskId}`, {
-                method: 'DELETE'
+                method: 'DELETE',
+                headers: { 'ngrok-skip-browser-warning': 'true' }
             });
 
             if (!res.ok) throw new Error("Falha ao excluir");

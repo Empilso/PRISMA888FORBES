@@ -74,6 +74,7 @@ export function AIStrategiesList({ campaignId, onTaskCreated, activePhase = "all
         try {
             const response = await fetch(`/api/campaign/${campaignId}/strategies?status=published`, {
                 cache: "no-store",
+                headers: { "ngrok-skip-browser-warning": "true" }
             });
 
             if (!response.ok) {
@@ -134,7 +135,10 @@ export function AIStrategiesList({ campaignId, onTaskCreated, activePhase = "all
         try {
             const response = await fetch(`/api/campaign/${campaignId}/genesis`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: {
+                    "Content-Type": "application/json",
+                    "ngrok-skip-browser-warning": "true"
+                },
                 body: JSON.stringify({ persona: "standard" }),
             });
 
