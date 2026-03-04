@@ -3,18 +3,27 @@
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { MessageCircle, Instagram, Sparkles, Loader2 } from "lucide-react";
+import { MessageCircle, Instagram, Sparkles, Loader2, Activity, Target, Megaphone, CheckSquare } from "lucide-react";
 import { SocialMention } from "./SocialRadarLayer";
 
 import TypingText from "@/components/ui/typing-text";
+
+export interface GeoSocialOutput {
+    diagnostico: string;
+    estrategia_tato: string;
+    conteudo_sugerido: string;
+    tarefa_delega: string;
+}
 
 interface SocialMentionSheetProps {
     mention: SocialMention | null;
     isOpen: boolean;
     onOpenChange: (open: boolean) => void;
     onGenerateStrategy: () => void;
+    onDelegateTask: () => void;
     isGenerating: boolean;
-    fullStrategy: string;
+    isDelegating: boolean;
+    fullStrategy: GeoSocialOutput | null | any;
 }
 
 export function SocialMentionSheet({
@@ -22,7 +31,9 @@ export function SocialMentionSheet({
     isOpen,
     onOpenChange,
     onGenerateStrategy,
+    onDelegateTask,
     isGenerating,
+    isDelegating,
     fullStrategy
 }: SocialMentionSheetProps) {
     if (!mention) return null;
@@ -79,10 +90,70 @@ export function SocialMentionSheet({
                             )}
                         </div>
 
+                        {fullStrategy && fullStrategy.diagnostico && (
+                            <div className="space-y-4 animate-in fade-in duration-500 delay-150">
+                                {/* Diagnóstico */}
+                                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200/60 shadow-sm relative overflow-hidden">
+                                    <div className="absolute top-0 right-0 p-3 opacity-5"><Activity className="w-16 h-16" /></div>
+                                    <h5 className="flex items-center gap-2 text-sm font-bold text-slate-800 mb-2">
+                                        <Activity className="h-4 w-4 text-blue-500" /> Diagnóstico da IA
+                                    </h5>
+                                    <p className="text-sm text-slate-600 leading-relaxed font-medium">
+                                        <TypingText text={fullStrategy.diagnostico} speed={10} />
+                                    </p>
+                                </div>
+
+                                {/* Estratégia Tática */}
+                                <div className="bg-gradient-to-br from-purple-50 to-indigo-50 p-4 rounded-xl border border-purple-100 shadow-sm relative overflow-hidden">
+                                    <div className="absolute top-0 right-0 p-3 opacity-5"><Target className="w-16 h-16" /></div>
+                                    <h5 className="flex items-center gap-2 text-sm font-bold text-purple-900 mb-2">
+                                        <Target className="h-4 w-4 text-purple-600" /> Manobra Estratégica
+                                    </h5>
+                                    <p className="text-sm text-purple-800 leading-relaxed font-medium">
+                                        <TypingText text={fullStrategy.estrategia_tato} speed={10} />
+                                    </p>
+                                </div>
+
+                                {/* Conteúdo Sugerido */}
+                                <div className="bg-amber-50 p-4 rounded-xl border border-amber-200/60 shadow-sm relative overflow-hidden">
+                                    <div className="absolute top-0 right-0 p-3 opacity-5"><Megaphone className="w-16 h-16" /></div>
+                                    <h5 className="flex items-center gap-2 text-sm font-bold text-amber-900 mb-2">
+                                        <Megaphone className="h-4 w-4 text-amber-600" /> Copy & Roteiro
+                                    </h5>
+                                    <p className="text-sm text-amber-800 leading-relaxed italic">
+                                        <TypingText text={fullStrategy.conteudo_sugerido} speed={10} />
+                                    </p>
+                                </div>
+
+                                {/* Kanban Delegation */}
+                                <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-200/60 shadow-sm relative overflow-hidden flex items-start gap-3">
+                                    <div className="bg-emerald-100 p-2 rounded-lg text-emerald-600 mt-1">
+                                        <CheckSquare className="h-5 w-5" />
+                                    </div>
+                                    <div>
+                                        <h5 className="text-sm font-bold text-emerald-900 mb-1">
+                                            Ação Delegada
+                                        </h5>
+                                        <p className="text-sm text-emerald-800 leading-relaxed font-medium">
+                                            <TypingText text={fullStrategy.tarefa_delega} speed={15} />
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
                         {fullStrategy && (
-                            <div className="bg-gradient-to-br from-purple-50 to-blue-50 p-4 rounded-2xl border border-purple-100/50 animate-in fade-in duration-500">
-                                <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap font-medium">
-                                    <TypingText text={fullStrategy} speed={10} />
+                            <div className="pt-6 border-t border-slate-100 mt-6">
+                                <Button
+                                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white gap-2 h-11 rounded-xl shadow-lg shadow-emerald-200/50"
+                                    onClick={onDelegateTask}
+                                    disabled={isDelegating}
+                                >
+                                    {isDelegating ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckSquare className="h-4 w-4" />}
+                                    Delegar para Equipe (Kanban)
+                                </Button>
+                                <p className="text-[10px] text-center text-slate-400 mt-2 font-medium">
+                                    Isso criará uma tarefa pendente para sua equipe de rua.
                                 </p>
                             </div>
                         )}
@@ -90,7 +161,7 @@ export function SocialMentionSheet({
                 </div>
 
                 <SheetFooter className="mt-10">
-                    <Button variant="outline" className="w-full" onClick={() => onOpenChange(false)}>Fechar Insights</Button>
+                    <Button variant="outline" className="w-full h-11 rounded-xl" onClick={() => onOpenChange(false)}>Fechar Insights</Button>
                 </SheetFooter>
             </SheetContent>
         </Sheet>

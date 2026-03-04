@@ -45,7 +45,10 @@ class MicroStrategyRequest(BaseModel):
 
 class MicroStrategyResponse(BaseModel):
     success: bool
-    strategy: str
+    diagnostico: str
+    estrategia_tato: str
+    conteudo_sugerido: str
+    tarefa_delega: str
     neighborhood: str
     data_points: int
 
@@ -62,7 +65,7 @@ class MentionOut(BaseModel):
     lng: Optional[float]
     rival_handle: Optional[str]
     is_mock: bool
-    scraped_at: Optional[str]
+    created_at: Optional[str]
 
 
 class TacticalMapData(BaseModel):
@@ -71,6 +74,14 @@ class TacticalMapData(BaseModel):
     total_mentions: int
     sentiment_breakdown: dict
     monitored_targets: list[str] = [] # NEW: Alvos reais do setup
+
+
+class DelegateTaskRequest(BaseModel):
+    mention_id: str
+    diagnostico: str
+    estrategia_tato: str
+    conteudo_sugerido: str
+    tarefa_delega: str
 
 
 # =============================================================================
@@ -107,23 +118,33 @@ async def list_social_mentions(
     campaign_id: str,
     sentiment: Optional[str] = None,
     neighborhood: Optional[str] = None,
-    limit: int = 100
+    bounds: Optional[str] = None,
+    limit: int = 200
 ):
     """
-    Lista menções sociais com filtros opcionais.
+    Lista menções sociais reais.
+    bounds: "sw_lat,sw_lng,ne_lat,ne_lng"
     """
     supabase = get_supabase_client()
 
     query = supabase.table("social_mentions") \
         .select("*") \
         .eq("campaign_id", campaign_id) \
-        .order("scraped_at", desc=True) \
+        .order("created_at", desc=True) \
         .limit(limit)
 
     if sentiment:
         query = query.eq("sentiment_label", sentiment)
     if neighborhood:
         query = query.eq("inferred_neighborhood", neighborhood)
+        
+    if bounds:
+        try:
+            sw_lat, sw_lng, ne_lat, ne_lng = map(float, bounds.split(","))
+            query = query.gte("lat", sw_lat).lte("lat", ne_lat)
+            query = query.gte("lng", sw_lng).lte("lng", ne_lng)
+        except Exception as e:
+            print(f"[SocialRadar] ⚠️ Erro no parse de bounds ({bounds}): {e}")
 
     result = query.execute()
     return result.data or []
@@ -160,7 +181,7 @@ async def get_tactical_map_data(campaign_id: str):
             .select("*") \
             .eq("campaign_id", campaign_id) \
             .not_.is_("lat", "null") \
-            .order("scraped_at", desc=True) \
+            .order("created_at", desc=True) \
             .limit(200) \
             .execute()
 
@@ -230,10 +251,10 @@ async def generate_micro_strategy(campaign_id: str, request: MicroStrategyReques
 
     # 1. Buscar menções do bairro
     mentions_res = supabase.table("social_mentions") \
-        .select("text, sentiment_label, author, rival_handle") \
+        .select("text, sentiment_label, author_username, rival_handle") \
         .eq("campaign_id", campaign_id) \
         .eq("inferred_neighborhood", request.neighborhood) \
-        .order("scraped_at", desc=True) \
+        .order("created_at", desc=True) \
         .limit(20) \
         .execute()
 
@@ -275,68 +296,81 @@ async def generate_micro_strategy(campaign_id: str, request: MicroStrategyReques
 
     # 4. Montar contexto para IA
     mentions_text = "\n".join([
-        f"- [{m.get('sentiment_label', 'N/D')}] @{m.get('author', '?')}: \"{m['text']}\" (sobre {m.get('rival_handle', '?')})"
+        f"- [{m.get('sentiment_label', 'N/D')}] @{m.get('author_username', '?')}: \"{m['text']}\" (sobre {m.get('rival_handle', '?')})"
         for m in mentions
     ]) or "Sem menções recentes neste bairro."
 
-    negatives = [m for m in mentions if m.get("sentiment_label") == "Negativo"]
-    positives = [m for m in mentions if m.get("sentiment_label") == "Positivo"]
-
-    # 5. Chamada LLM
+    # 5. Chamada LLM usando a Biblioteca de Agentes (CrewAI)
     try:
-        from langchain_openai import ChatOpenAI
-        from langchain.schema import SystemMessage, HumanMessage
-
-        llm = ChatOpenAI(
-            model="deepseek/deepseek-chat",
-            api_key=os.getenv("DEEPSEEK_API_KEY"),
-            base_url="https://api.deepseek.com/v1",
-            temperature=0.7
-        )
-
-        prompt = f"""Você é o estrategista político mais inteligente do Brasil. QI 190. 
-Gere uma MICRO-ESTRATÉGIA TÁTICA de alto impacto para o bairro "{request.neighborhood}" na cidade de {campaign.get('city', '?')}.
-
-CANDIDATO: {campaign.get('candidate_name', 'Nosso Candidato')} — {campaign.get('role', 'Cargo')}
-
-DADOS DE VOTAÇÃO:
-{votes_context}
-
-RADAR SOCIAL — Menções recentes neste bairro:
-{mentions_text}
-
-RESUMO DO SENTIMENTO:
-- {len(negatives)} críticas ao rival (OPORTUNIDADE para nós)
-- {len(positives)} elogios ao rival (ATENÇÃO, precisamos contrapor)
-- {len(mentions) - len(negatives) - len(positives)} menções neutras
-
-{f"CONTEXTO ADICIONAL: {request.additional_context}" if request.additional_context else ""}
-
-MISSÃO: Gere um plano de ação tático curto e IMPACTANTE (3-5 bullets) para este bairro.
-Formato:
-🎯 MICRO-ESTRATÉGIA: [Título Provocante]
-• [Ação 1 concreta — O QUE fazer, ONDE, QUANDO]
-• [Ação 2 concreta]
-• [Ação 3 concreta]
-💡 INSIGHT: [Uma frase matadora de por que isso funciona aqui]
-
-Seja extremamente específico: mencione ruas, temas, e horários. Priorize onde o rival está sendo criticado."""
-
-        response = llm.invoke([
-            SystemMessage(content="Você é um estrategista político de guerrilha, QI 190. Foco: micro-targeting e mobilização de rua. Respostas em português do Brasil."),
-            HumanMessage(content=prompt)
-        ])
-
-        return MicroStrategyResponse(
-            success=True,
-            strategy=response.content,
+        from src.crew.geosocial_crew import GeoSocialCrew
+        
+        crew = GeoSocialCrew(campaign_id=campaign_id)
+        result_output = crew.generate_strategy(
             neighborhood=request.neighborhood,
-            data_points=len(mentions)
+            mentions_text=mentions_text,
+            votes_context=votes_context
         )
+
+        return {
+            "success": True,
+            "estrategia_tato": result_output.estrategia_tato,
+            "diagnostico": result_output.diagnostico,
+            "conteudo_sugerido": result_output.conteudo_sugerido,
+            "tarefa_delega": result_output.tarefa_delega,
+            "neighborhood": request.neighborhood,
+            "data_points": len(mentions)
+        }
 
     except Exception as e:
         print(f"[MicroStrategy] ❌ Erro: {e}")
         raise HTTPException(status_code=500, detail=f"Erro ao gerar micro-estratégia: {str(e)}")
+
+
+@router.post("/campaign/{campaign_id}/social/delegate-task")
+async def delegate_social_task(campaign_id: str, request: DelegateTaskRequest):
+    """
+    Transforma uma micro-estratégia gerada em uma tarefa real no Kanban.
+    """
+    supabase = get_supabase_client()
+    
+    # 1. Montar o título e descrição
+    title = f"📍 Estratégia: {request.tarefa_delega[:50]}..."
+    description = f"""
+## 🎯 Diagnóstico IA
+{request.diagnostico}
+
+## 🚀 Manobra Estratégica
+{request.estrategia_tato}
+
+## 🎬 Conteúdo Sugerido
+{request.conteudo_sugerido}
+
+## 📋 Ação Prática
+{request.tarefa_delega}
+    """.strip()
+
+    try:
+        # 2. Criar a Task
+        task_data = {
+            "campaign_id": campaign_id,
+            "title": title,
+            "description": description,
+            "status": "pending",
+            "priority": "high",
+            "pillar": "Território & Presença",
+            "phase": "Execução"
+        }
+        
+        result = supabase.table("tasks").insert(task_data).execute()
+        
+        if not result.data:
+            raise HTTPException(status_code=500, detail="Erro ao criar tarefa")
+            
+        return {"success": True, "task_id": result.data[0]["id"]}
+        
+    except Exception as e:
+        print(f"[DelegateSocial] ❌ Erro: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/campaign/{campaign_id}/social/stats")

@@ -63,13 +63,18 @@ export function ElectoralMapFull({ campaignId, campaigns }: ElectoralMapFullProp
     const [centerPosition, setCenterPosition] = useState<[number, number] | undefined>(undefined);
     const [showControls, setShowControls] = useState(false);
 
-    // Notes State
-    const [isNoteMode, setIsNoteMode] = useState(false);
-    const [notes, setNotes] = useState<MapNote[]>([]);
+    // Micro-Strategy State
+    const [isGeneratingMicro, setIsGeneratingMicro] = useState(false);
+    const [isDelegatingMicro, setIsDelegatingMicro] = useState(false);
+    const [microStrategy, setMicroStrategy] = useState<any>(null);
     const [selectedNote, setSelectedNote] = useState<MapNote | null>(null);
     const [isNoteSheetOpen, setIsNoteSheetOpen] = useState(false);
     const [noteForm, setNoteForm] = useState<Partial<MapNote>>({});
     const [isSavingNote, setIsSavingNote] = useState(false);
+
+    // Notes State
+    const [isNoteMode, setIsNoteMode] = useState(false);
+    const [notes, setNotes] = useState<MapNote[]>([]);
 
     // Estado para resultados detalhados (Location Results)
     const [locationResults, setLocationResults] = useState<LocationResult[]>([]);
@@ -147,13 +152,7 @@ export function ElectoralMapFull({ campaignId, campaigns }: ElectoralMapFullProp
         setSelectedRivals(prev => prev.includes(r) ? prev.filter(x => x !== r) : [...prev, r]);
     };
 
-    // Micro-Strategy State
-    const [microStrategy, setMicroStrategy] = useState<string>("");
-    const [isGeneratingMicro, setIsGeneratingMicro] = useState(false);
 
-    // Aliases used in JSX (typing effect was simplified)
-    const displayedStrategy = microStrategy;
-    const isTyping = isGeneratingMicro;
 
     // 1. Fetch Campaign Info & Notes
     useEffect(() => {
@@ -539,12 +538,91 @@ export function ElectoralMapFull({ campaignId, campaigns }: ElectoralMapFullProp
 
             if (!res.ok) throw new Error('Falha ao gerar micro-estratégia');
             const data = await res.json();
-            setMicroStrategy(data.strategy);
+            // Guardando o objeto inteiro 
+            setMicroStrategy(data as any);
         } catch (error) {
             console.error(error);
             toast({ title: "Erro", description: "Falha ao gerar micro-estratégia.", variant: "destructive" });
         } finally {
             setIsGeneratingMicro(false);
+        }
+    };
+
+    const handleGenerateMentionStrategy = async () => {
+        if (!selectedMention) return;
+        setIsGeneratingMicro(true);
+        setMicroStrategy("");
+
+        try {
+            const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+            const body = {
+                neighborhood: selectedMention.inferred_neighborhood || 'Geral',
+            };
+
+            const res = await fetch(`${apiUrl}/api/campaign/${campaignId}/social/micro-strategy`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'ngrok-skip-browser-warning': 'true'
+                },
+                body: JSON.stringify(body)
+            });
+
+            if (!res.ok) throw new Error('Falha ao gerar micro-estratégia social');
+            const data = await res.json();
+            // Data contém: estrategia_tato, diagnostico, conteudo_sugerido, tarefa_delega
+            setMicroStrategy(data as any);
+        } catch (error) {
+            console.error(error);
+            toast({ title: "Erro", description: "Falha ao consultar a AIOS.", variant: "destructive" });
+        } finally {
+            setIsGeneratingMicro(false);
+        }
+    };
+
+    const handleDelegateTask = async () => {
+        if (!selectedMention || !microStrategy) return;
+        setIsDelegatingMicro(true);
+
+        try {
+            const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+            const body = {
+                mention_id: selectedMention.id,
+                diagnostico: microStrategy.diagnostico,
+                estrategia_tato: microStrategy.estrategia_tato,
+                conteudo_sugerido: microStrategy.conteudo_sugerido,
+                tarefa_delega: microStrategy.tarefa_delega
+            };
+
+            const res = await fetch(`${apiUrl}/api/campaign/${campaignId}/social/delegate-task`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'ngrok-skip-browser-warning': 'true'
+                },
+                body: JSON.stringify(body)
+            });
+
+            if (!res.ok) throw new Error('Falha ao delegar tarefa');
+
+            toast({
+                title: "Sucesso!",
+                description: "Estratégia enviada para o Kanban da equipe.",
+                variant: "default"
+            });
+
+            // Opcional: fechar o sheet após delegar
+            // setIsMentionSheetOpen(false);
+
+        } catch (error) {
+            console.error(error);
+            toast({
+                title: "Erro",
+                description: "Não foi possível delegar a tarefa.",
+                variant: "destructive"
+            });
+        } finally {
+            setIsDelegatingMicro(false);
         }
     };
 
@@ -763,7 +841,7 @@ export function ElectoralMapFull({ campaignId, campaigns }: ElectoralMapFullProp
             )}
 
             {/* Search Bar - Otimizada QI 190 */}
-            <div className="absolute top-4 left-4 right-4 md:left-auto md:right-4 z-[50] md:w-80 flex gap-2">
+            <div className="absolute top-4 left-4 right-4 md:left-auto md:right-4 z-40 md:w-80 flex gap-2">
                 <div className="relative flex-1">
                     <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
                     <Input
@@ -785,7 +863,7 @@ export function ElectoralMapFull({ campaignId, campaigns }: ElectoralMapFullProp
             {/* Hint Mode */}
             {
                 isNoteMode && (
-                    <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[50] bg-amber-500 text-white px-4 py-2 rounded-full shadow-lg text-sm font-bold animate-in fade-in flex items-center gap-2">
+                    <div className="absolute top-4 left-1/2 -translate-x-1/2 z-40 bg-amber-500 text-white px-4 py-2 rounded-full shadow-lg text-sm font-bold animate-in fade-in flex items-center gap-2">
                         <StickyNote className="h-4 w-4" />
                         Modo Criação de Notas Ativo
                     </div>
@@ -1081,8 +1159,10 @@ export function ElectoralMapFull({ campaignId, campaigns }: ElectoralMapFullProp
                 isOpen={isMentionSheetOpen}
                 onOpenChange={setIsMentionSheetOpen}
                 mention={selectedMention}
-                onGenerateStrategy={() => { }}
+                onGenerateStrategy={handleGenerateMentionStrategy}
+                onDelegateTask={handleDelegateTask}
                 isGenerating={isGeneratingMicro}
+                isDelegating={isDelegatingMicro}
                 fullStrategy={microStrategy}
             />
         </div>
