@@ -106,14 +106,17 @@ export function ElectoralMapFull({ campaignId, campaigns }: ElectoralMapFullProp
     // Derived unique rivals: Use backend targets first, fallback to mentions
     const uniqueRivals = useMemo(() => {
         const targets = socialStats?.monitored_targets || [];
-        if (targets.length > 0) return targets.map(t => t.startsWith('@') ? t.substring(1) : t);
+        if (targets.length > 0) {
+            return targets
+                .filter(Boolean)
+                .map(t => String(t).startsWith('@') ? String(t).substring(1) : String(t));
+        }
 
         // EXTRACTION QI 190: Extract from ALL mentions, regardless of current filter
-        // This ensures the rival list is stable even when toggling platforms
         return Array.from(new Set(socialMentions.map(m => {
-            const h = m.rival_handle;
+            const h = m.rival_handle || '';
             return h.startsWith('@') ? h.substring(1) : h;
-        }))).sort();
+        }))).filter(Boolean).sort();
     }, [socialMentions, socialStats]);
 
     // Update selected rivals when uniqueRivals change (e.g. initial load)
@@ -134,9 +137,10 @@ export function ElectoralMapFull({ campaignId, campaigns }: ElectoralMapFullProp
     // Computed filtered mentions
     const filteredMentions = useMemo(() => {
         return socialMentions.filter(m => {
-            const handle = m.rival_handle.startsWith('@') ? m.rival_handle.substring(1) : m.rival_handle;
+            const rawHandle = m.rival_handle || '';
+            const handle = rawHandle.startsWith('@') ? rawHandle.substring(1) : rawHandle;
             return selectedRivals.includes(handle) &&
-                selectedPlatforms.includes(m.platform.toLowerCase());
+                selectedPlatforms.includes((m.platform || '').toLowerCase());
         });
     }, [socialMentions, selectedRivals, selectedPlatforms]);
 
