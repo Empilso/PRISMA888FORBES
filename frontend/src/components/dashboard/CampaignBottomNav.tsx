@@ -61,9 +61,9 @@ export function CampaignBottomNav({ campaignId }: { campaignId: string }) {
     };
 
     return (
-        <nav className="md:hidden fixed bottom-0 left-0 right-0 z-[60] px-4 pb-6 pointer-events-none">
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 z-[100] px-4 pb-6 pointer-events-none">
             {/* Pill */}
-            <div className="mx-auto max-w-md w-full h-16 bg-white/92 dark:bg-slate-900/92 border border-slate-200/60 dark:border-slate-800/60 shadow-[0_-6px_24px_rgba(0,0,0,0.09)] rounded-2xl flex items-center pointer-events-auto ring-1 ring-black/[0.03]">
+            <div className="mx-auto max-w-md w-full h-16 bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800/60 shadow-[0_-6px_24px_rgba(0,0,0,0.09)] rounded-2xl flex items-center pointer-events-auto ring-1 ring-black/[0.03] relative">
 
                 {/* Left: Tarefas + Mapa */}
                 <div className="flex flex-1 h-full">

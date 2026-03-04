@@ -306,4 +306,10 @@
       background-position: 50% 200%;
     }
   }
+
+  /* Leaflet z-index fix */
+  .leaflet-top,
+  .leaflet-bottom {
+    z-index: 40 !important;
+  }
 }
