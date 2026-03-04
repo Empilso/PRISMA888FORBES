@@ -70,39 +70,42 @@ export function CampaignBottomNav({ campaignId }: { campaignId: string }) {
                     {leftItems.map(item => <NavIcon key={item.name} {...item} />)}
                 </div>
 
-                {/* Centre slot — triangle floats above via -mt-8, text sits inside pill */}
+                {/* Centre slot — triangle floats above, text perfectly aligned with other icons */}
                 <Link
                     href={homeHref}
-                    className="relative flex flex-col items-center justify-end pb-1.5 w-[76px] h-full shrink-0 -mt-8"
+                    className="relative flex flex-col items-center justify-center gap-0.5 w-[76px] h-full shrink-0"
                 >
-                    {/* Triangle: 70 px, sits above pill */}
+                    {/* Invisible spacer mimicking the NavIcon's h-9 wrapper for perfect text alignment */}
+                    <div className="w-9 h-9 invisible" aria-hidden="true" />
+
+                    {/* Triangle: absolute, floats above the pill */}
                     <div className={cn(
-                        "relative transition-all duration-300",
+                        "absolute -top-6 transition-all duration-300 pointer-events-none",
                         homeActive
                             ? "scale-110 drop-shadow-[0_4px_14px_rgba(99,102,241,0.35)]"
-                            : "opacity-80 hover:scale-105 hover:opacity-100"
+                            : "scale-100 opacity-80"
                     )}>
                         <Image
                             src="/prisma-icon-transparent.png"
                             alt="Início"
-                            width={70}
-                            height={70}
+                            width={66}
+                            height={66}
                             className="object-contain"
-                            style={{ width: "auto", height: "auto" }}
+                            style={{ width: "66px", height: "66px" }}
                             priority
                         />
                     </div>
 
-                    {/* Label — aligns to pill bottom via justify-end + pb */}
+                    {/* Perfectly aligned label */}
                     <span className={cn(
-                        "text-[9px] font-black tracking-[0.10em] uppercase leading-none mt-0.5",
+                        "text-[9px] font-black tracking-[0.05em] uppercase leading-none",
                         homeActive ? "text-indigo-600" : "text-slate-400"
                     )}>
                         PRISMA 888
                     </span>
 
                     {homeActive && (
-                        <div className="absolute bottom-0.5 w-1 h-1 rounded-full bg-indigo-600" />
+                        <div className="absolute bottom-2 w-1 h-1 rounded-full bg-indigo-600" />
                     )}
                 </Link>
 

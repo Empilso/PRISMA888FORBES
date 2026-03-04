@@ -23,7 +23,7 @@ export function MapNavigationTools({
     loadingSocial
 }: MapNavigationToolsProps) {
     return (
-        <div className="absolute top-1/2 -translate-y-1/2 left-6 z-[1000] flex flex-col gap-2 p-2 bg-white/90 backdrop-blur-md dark:bg-slate-950/90 rounded-2xl shadow-xl border border-slate-200/50">
+        <div className="absolute top-1/2 -translate-y-1/2 left-6 z-50 flex flex-col gap-2 p-2 bg-white/90 backdrop-blur-md dark:bg-slate-950/90 rounded-2xl shadow-xl border border-slate-200/50">
             <div className="flex flex-col gap-3">
                 {/* Layer & Settings Group */}
                 <div className="flex flex-col gap-2 pb-3 border-b border-slate-200/50">

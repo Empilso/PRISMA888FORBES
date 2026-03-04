@@ -634,7 +634,7 @@ export function ElectoralMapFull({ campaignId, campaigns }: ElectoralMapFullProp
 
             {/* Float Social Stats e Filtros se o Radar estiver Activo */}
             {showSocialRadar && (
-                <div className="hidden lg:flex absolute top-1/2 -translate-y-1/2 left-24 z-[1000] bg-white/95 backdrop-blur-xl dark:bg-slate-950/95 p-5 w-72 rounded-3xl shadow-2xl border border-slate-200/50 animate-in fade-in slide-in-from-left-4 max-h-[80vh] flex flex-col gap-4 overflow-hidden">
+                <div className="hidden lg:flex absolute top-1/2 -translate-y-1/2 left-24 z-[50] bg-white/95 backdrop-blur-xl dark:bg-slate-950/95 p-5 w-72 rounded-3xl shadow-2xl border border-slate-200/50 animate-in fade-in slide-in-from-left-4 max-h-[80vh] flex flex-col gap-4 overflow-hidden">
                     <div className="flex items-center gap-2 border-b border-slate-100 dark:border-slate-800/50 pb-3">
                         <div className="bg-purple-100 dark:bg-purple-900/30 p-2 rounded-xl text-purple-600">
                             <Radar className="h-5 w-5" />
@@ -698,7 +698,7 @@ export function ElectoralMapFull({ campaignId, campaigns }: ElectoralMapFullProp
             {/* Toolbar Controles Dropdown (agora posicionado ao lado da Tool Palette) */}
 
             {showControls && (
-                <div className="absolute top-1/2 -translate-y-1/2 left-24 z-[1000] bg-white/95 backdrop-blur-xl dark:bg-slate-950/95 p-5 rounded-2xl shadow-2xl border border-slate-200/50 w-80 space-y-6 animate-in fade-in slide-in-from-left-4">
+                <div className="absolute top-1/2 -translate-y-1/2 left-24 z-[50] bg-white/95 backdrop-blur-xl dark:bg-slate-950/95 p-5 rounded-2xl shadow-2xl border border-slate-200/50 w-80 space-y-6 animate-in fade-in slide-in-from-left-4">
                     <div className="space-y-3">
                         <h4 className="text-xs font-bold uppercase text-muted-foreground flex items-center gap-2">
                             <MapIcon className="h-3 w-3" /> Estilo do Mapa
@@ -763,7 +763,7 @@ export function ElectoralMapFull({ campaignId, campaigns }: ElectoralMapFullProp
             )}
 
             {/* Search Bar - Otimizada QI 190 */}
-            <div className="absolute top-4 left-4 right-4 md:left-auto md:right-4 z-[100] md:w-80 flex gap-2">
+            <div className="absolute top-4 left-4 right-4 md:left-auto md:right-4 z-[50] md:w-80 flex gap-2">
                 <div className="relative flex-1">
                     <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
                     <Input
@@ -785,7 +785,7 @@ export function ElectoralMapFull({ campaignId, campaigns }: ElectoralMapFullProp
             {/* Hint Mode */}
             {
                 isNoteMode && (
-                    <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[100] bg-amber-500 text-white px-4 py-2 rounded-full shadow-lg text-sm font-bold animate-in fade-in flex items-center gap-2">
+                    <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[50] bg-amber-500 text-white px-4 py-2 rounded-full shadow-lg text-sm font-bold animate-in fade-in flex items-center gap-2">
                         <StickyNote className="h-4 w-4" />
                         Modo Criação de Notas Ativo
                     </div>
