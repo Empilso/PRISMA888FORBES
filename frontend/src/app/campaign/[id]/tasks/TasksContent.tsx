@@ -281,10 +281,10 @@ export default function TasksContent({ campaignId, simpleMode = false }: { campa
                                 placeholder="Buscar tarefas..."
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                className="pl-9 h-10 bg-white/80 dark:bg-slate-900/80 border-slate-200/50 rounded-2xl shadow-sm focus-visible:ring-indigo-500/30"
+                                className="pl-9 h-10 bg-white/80 dark:bg-slate-900/80 border-slate-200/50 rounded-lg shadow-sm focus-visible:ring-indigo-500/30"
                             />
                         </div>
-                        <Button size="icon" className="h-10 w-10 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl shadow-lg shrink-0">
+                        <Button size="icon" className="h-10 w-10 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg shadow-lg shrink-0">
                             <Plus className="h-5 w-5" />
                         </Button>
                     </div>
@@ -323,7 +323,7 @@ export default function TasksContent({ campaignId, simpleMode = false }: { campa
                     <Card
                         key={i}
                         className={cn(
-                            "shadow-[0_2px_8px_rgb(0,0,0,0.04)] border border-slate-100/80 transition-all cursor-pointer hover:shadow-md rounded-2xl",
+                            "shadow-[0_2px_8px_rgb(0,0,0,0.04)] border border-slate-100/80 transition-all cursor-pointer hover:shadow-md rounded-xl",
                             statusFilter === metric.filterValue
                                 ? 'ring-2 ring-indigo-500/30 border-indigo-200/80 bg-white'
                                 : 'bg-white/60'
@@ -440,7 +440,7 @@ export default function TasksContent({ campaignId, simpleMode = false }: { campa
                                     <div
                                         key={task.id}
                                         onClick={() => handleTaskClick(task)}
-                                        className="group relative bg-white rounded-2xl p-5 shadow-sm border border-slate-100 hover:shadow-xl hover:shadow-slate-200/50 hover:-translate-y-1 transition-all duration-300 flex flex-col h-auto min-h-[260px] cursor-pointer"
+                                        className="group relative bg-white rounded-xl p-5 shadow-sm border border-slate-100 hover:shadow-xl hover:shadow-slate-200/50 hover:-translate-y-1 transition-all duration-300 flex flex-col h-auto min-h-[260px] cursor-pointer"
                                     >
                                         {/* Header: Status Pill e Prioridade */}
                                         <div className="flex flex-col gap-2 mb-4">
@@ -585,7 +585,7 @@ function KanbanBoard({
         <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={onDragStart} onDragEnd={onDragEnd}>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 h-full p-2">
                 {columns.map((column) => (
-                    <div key={column.status} className="flex flex-col h-full rounded-2xl">
+                    <div key={column.status} className="flex flex-col h-full rounded-xl">
                         {/* Header Vivido */}
                         <div className="mb-4 flex items-center justify-between">
                             <div className={`px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide border ${column.color}`}>

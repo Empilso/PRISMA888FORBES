@@ -35,12 +35,12 @@ export function StatsCard({
         typeof value === "number" ? formatNumber(value) : value;
 
     return (
-        <Card className="group hover:shadow-xl transition-all duration-300 border-slate-200/50 dark:border-slate-800/50 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm rounded-[2rem] overflow-hidden shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.1)]">
+        <Card className="group hover:shadow-xl transition-all duration-300 border-slate-200/50 dark:border-slate-800/50 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm rounded-xl overflow-hidden shadow-[0_4px_16px_rgb(0,0,0,0.04)] dark:shadow-[0_4px_16px_rgb(0,0,0,0.1)]">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
                 <CardTitle className="text-[10px] md:text-sm font-bold text-slate-500 uppercase tracking-wider">
                     {title}
                 </CardTitle>
-                <div className={cn("p-2.5 rounded-2xl transition-transform group-hover:scale-110 duration-300 shadow-sm",
+                <div className={cn("p-2.5 rounded-lg transition-transform group-hover:scale-110 duration-300 shadow-sm",
                     variant === 'primary' ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600' :
                         variant === 'success' ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600' :
                             variant === 'warning' ? 'bg-amber-50 dark:bg-amber-900/30 text-amber-600' :

@@ -127,7 +127,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Electoral Map - Shorter on mobile */}
-            <div className="h-[280px] sm:h-[500px] w-full bg-[var(--bg-secondary)] rounded-2xl sm:rounded-[2rem] shadow-sm border border-[var(--border-default)] overflow-hidden relative group transition-all hover:shadow-md">
+            <div className="h-[280px] sm:h-[500px] w-full bg-[var(--bg-secondary)] rounded-xl shadow-sm border border-[var(--border-default)] overflow-hidden relative group transition-all hover:shadow-md">
                 <ElectoralMapFull campaignId={campaignId} />
             </div>
 
