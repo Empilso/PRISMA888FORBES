@@ -4,6 +4,7 @@ import { ConsoleMaster } from "@/components/console/ConsoleMaster";
 import React, { useState, useEffect } from "react";
 import { useQueryState } from 'nuqs';
 import { createClient } from "@/lib/supabase/client";
+import { cn } from "@/lib/utils";
 import { ExamplesRenderer } from "@/components/tasks/ExamplesRenderer";
 import {
     Search,
@@ -271,49 +272,48 @@ export default function TasksContent({ campaignId, simpleMode = false }: { campa
                 </div>
             )}
 
-            <div className="flex flex-col sm:flex-row gap-4 items-center justify-between bg-white p-1 rounded-lg">
-                <Tabs value={currentView || 'grid'} onValueChange={(v) => setCurrentView(v)} className="w-full sm:w-auto">
-                    <TabsList className="bg-slate-100/50 p-1 rounded-lg">
-                        <TabsTrigger value="list" className="gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm">
-                            <List className="h-4 w-4" />
-                            Lista
-                        </TabsTrigger>
-                        <TabsTrigger value="grid" className="gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm">
-                            <Grid className="h-4 w-4" />
-                            Grade
-                        </TabsTrigger>
-                        <TabsTrigger value="kanban" className="gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm">
-                            <LayoutGrid className="h-4 w-4" />
-                            Kanban
-                        </TabsTrigger>
-                        {!simpleMode && (
-                            <TabsTrigger value="console" className="gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm">
-                                <Terminal className="h-4 w-4" />
-                                Console IA
-                            </TabsTrigger>
-                        )}
-                    </TabsList>
-                </Tabs>
-
-                <div className="flex items-center gap-2 w-full sm:w-auto">
-                    <div className="relative flex-1">
-                        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                        <Input
-                            placeholder="Buscar tarefas..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            className="pl-9 h-9 bg-white"
-                        />
+            <div className="sticky top-0 z-20 bg-slate-50/80 backdrop-blur-xl -mx-4 px-4 py-3 border-b border-slate-200/50 md:static md:bg-transparent md:border-0 md:px-0 md:py-0">
+                <div className="flex flex-col gap-3">
+                    <div className="flex items-center justify-between gap-2">
+                        <div className="flex-1 relative">
+                            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                            <Input
+                                placeholder="Buscar tarefas..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="pl-9 h-10 bg-white/80 dark:bg-slate-900/80 border-slate-200/50 rounded-2xl shadow-sm focus-visible:ring-indigo-500/30"
+                            />
+                        </div>
+                        <Button size="icon" className="h-10 w-10 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl shadow-lg shrink-0">
+                            <Plus className="h-5 w-5" />
+                        </Button>
                     </div>
-                    <Button size="sm" className="gap-2 h-9">
-                        <Plus className="h-4 w-4" />
-                        Nova Tarefa
-                    </Button>
+
+                    <div className="flex overflow-x-auto pb-1 gap-1 no-scrollbar md:hidden">
+                        {[
+                            { id: 'list', icon: List, label: 'Lista' },
+                            { id: 'grid', icon: Grid, label: 'Grade' },
+                            { id: 'kanban', icon: LayoutGrid, label: 'Kanban' },
+                            { id: 'console', icon: Terminal, label: 'Console IA' }
+                        ].map((v) => (
+                            <button
+                                key={v.id}
+                                onClick={() => setCurrentView(v.id)}
+                                className={cn(
+                                    "flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all",
+                                    currentView === v.id ? "bg-indigo-600 text-white shadow-md" : "bg-white text-slate-500 border border-slate-200/50"
+                                )}
+                            >
+                                <v.icon className="h-3.5 w-3.5" />
+                                {v.label}
+                            </button>
+                        ))}
+                    </div>
                 </div>
             </div>
 
             {/* Metrics - Clickable in Grid view */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="flex overflow-x-auto pb-4 -mx-4 px-4 gap-3 no-scrollbar md:grid md:grid-cols-4 md:gap-4 md:overflow-visible md:pb-0 md:mx-0 md:px-0">
                 {[
                     { label: "Total", value: tasks.length, icon: Circle, color: "text-slate-500", filterValue: 'ALL' as const },
                     { label: "A Fazer", value: tasks.filter(t => t.status === 'pending').length, icon: Circle, color: "text-slate-500", filterValue: 'pending' as const },
@@ -322,15 +322,20 @@ export default function TasksContent({ campaignId, simpleMode = false }: { campa
                 ].map((metric, i) => (
                     <Card
                         key={i}
-                        className={`shadow-sm border-slate-100 transition-all cursor-pointer hover:shadow-md hover:border-primary/50 ${statusFilter === metric.filterValue ? 'ring-2 ring-primary/60 border-primary' : ''}`}
+                        className={cn(
+                            "min-w-[140px] shadow-[0_4px_12px_rgb(0,0,0,0.03)] border-slate-100/50 transition-all cursor-pointer hover:shadow-md shrink-0 rounded-2xl",
+                            statusFilter === metric.filterValue ? 'ring-2 ring-indigo-500/20 border-indigo-50 shadow-indigo-100' : 'bg-white/50'
+                        )}
                         onClick={() => setStatusFilter(metric.filterValue)}
                     >
-                        <CardContent className="p-4 flex items-center justify-between">
+                        <CardContent className="p-4 flex items-center justify-between gap-3">
                             <div>
-                                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">{metric.label}</p>
-                                <p className="text-2xl font-bold text-slate-900 mt-1">{metric.value}</p>
+                                <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">{metric.label}</p>
+                                <p className="text-xl font-black text-slate-900 mt-0.5">{metric.value}</p>
                             </div>
-                            <metric.icon className={`h-5 w-5 ${metric.color}`} />
+                            <div className={cn("p-2 rounded-xl bg-slate-50", metric.color.replace('text-', 'bg-').replace('500', '50'))}>
+                                <metric.icon className={cn("h-4 w-4", metric.color)} />
+                            </div>
                         </CardContent>
                     </Card>
                 ))}
@@ -338,30 +343,21 @@ export default function TasksContent({ campaignId, simpleMode = false }: { campa
 
             {/* Views Tabs */}
             <Tabs value={currentView || 'grid'} onValueChange={setCurrentView} className="w-full">
-                <div className="flex items-center justify-between mb-6">
+                <div className="hidden md:flex items-center justify-between mb-6">
                     <TabsList className="bg-slate-100/50 p-1 rounded-lg">
                         <TabsTrigger value="list" className="gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm">
-                            <List className="h-4 w-4" />
-                            Lista
+                            <List className="h-4 w-4" /> Lista
                         </TabsTrigger>
                         <TabsTrigger value="grid" className="gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm">
-                            <Grid className="h-4 w-4" />
-                            Grade
+                            <Grid className="h-4 w-4" /> Grade
                         </TabsTrigger>
                         <TabsTrigger value="kanban" className="gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm">
-                            <LayoutGrid className="h-4 w-4" />
-                            Kanban
+                            <LayoutGrid className="h-4 w-4" /> Kanban
                         </TabsTrigger>
                         <TabsTrigger value="console" className="gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm">
-                            <Terminal className="h-4 w-4" />
-                            Console IA
+                            <Terminal className="h-4 w-4" /> Console IA
                         </TabsTrigger>
                     </TabsList>
-
-                    <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground">
-                        <Filter className="h-4 w-4" />
-                        Filtros
-                    </Button>
                 </div>
 
                 <TabsContent value="console" className="mt-0">

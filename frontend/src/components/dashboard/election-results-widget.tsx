@@ -6,6 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Loader2, Trophy } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { cn } from "@/lib/utils";
 
 interface CandidateResult {
     name: string;
@@ -88,70 +89,96 @@ export function ElectionResultsWidget({ campaignId }: { campaignId: string }) {
     };
 
     return (
-        <Card className="rounded-[2rem] shadow-sm border border-[var(--border-default)] overflow-hidden bg-[var(--bg-secondary)]">
-            <CardHeader className="border-b border-[var(--border-muted)] pb-4">
+        <Card className="rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.1)] border-slate-200/50 dark:border-slate-800/50 overflow-hidden bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm">
+            <CardHeader className="border-b border-slate-100 dark:border-slate-800/50 pb-4 px-6 md:px-8">
                 <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                        <div className="p-2 bg-amber-100/10 rounded-lg text-amber-500">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2.5 bg-amber-50 dark:bg-amber-900/20 rounded-2xl text-amber-600 shadow-sm">
                             <Trophy className="h-5 w-5" />
                         </div>
                         <div>
-                            <CardTitle className="text-xl font-bold text-[var(--text-primary)]">Resultados da Última Eleição</CardTitle>
-                            <p className="text-xs text-[var(--text-secondary)] font-medium mt-0.5">Baseado no arquivo eleitoral importado</p>
+                            <CardTitle className="text-lg md:text-xl font-black text-slate-900 dark:text-white tracking-tight">Resultados da Última Eleição</CardTitle>
+                            <p className="text-[10px] md:text-xs text-slate-400 font-bold uppercase tracking-wider mt-0.5">Base de Dados Histórica (TSE)</p>
                         </div>
                     </div>
                 </div>
             </CardHeader>
             <CardContent className="p-0">
                 {loading ? (
-                    <div className="p-8 flex justify-center">
-                        <Loader2 className="h-8 w-8 animate-spin text-[var(--text-tertiary)]" />
+                    <div className="p-12 flex justify-center">
+                        <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
                     </div>
                 ) : (
-                    <Table>
-                        <TableHeader>
-                            <TableRow className="hover:bg-transparent border-[var(--border-muted)]">
-                                <TableHead className="w-[80px] text-center text-[var(--text-secondary)]">Pos</TableHead>
-                                <TableHead className="text-[var(--text-secondary)]">Candidato</TableHead>
-                                <TableHead className="text-right text-[var(--text-secondary)]">Votos</TableHead>
-                                <TableHead className="text-right text-[var(--text-secondary)]">% Válidos</TableHead>
-                                <TableHead className="text-center w-[120px] text-[var(--text-secondary)]">Status</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {results.length === 0 ? (
-                                <TableRow>
-                                    <TableCell colSpan={5} className="text-center py-8 text-[var(--text-tertiary)]">
-                                        Nenhum dado eleitoral encontrado. Importe o arquivo CSV.
-                                    </TableCell>
+                    <div className="overflow-x-auto">
+                        <Table>
+                            <TableHeader>
+                                <TableRow className="hover:bg-transparent border-slate-100 dark:border-slate-800/50">
+                                    <TableHead className="w-[70px] text-center text-[10px] font-black uppercase tracking-widest text-slate-400 px-4">Pos</TableHead>
+                                    <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400">Candidato</TableHead>
+                                    <TableHead className="text-right text-[10px] font-black uppercase tracking-widest text-slate-400">Votos</TableHead>
+                                    <TableHead className="text-right text-[10px] font-black uppercase tracking-widest text-slate-400 px-4 md:px-8">%</TableHead>
+                                    <TableHead className="text-center w-[120px] text-[10px] font-black uppercase tracking-widest text-slate-400">Status</TableHead>
                                 </TableRow>
-                            ) : (
-                                results.map((r, i) => {
-                                    const isMyCandidate = campaignName && r.name.toLowerCase().includes(campaignName.toLowerCase());
-                                    return (
-                                        <TableRow key={r.name} className={isMyCandidate ? "bg-indigo-500/10 hover:bg-indigo-500/20 border-[var(--border-muted)]" : "hover:bg-[var(--bg-tertiary)] border-[var(--border-muted)]"}>
-                                            <TableCell className="text-center font-medium text-[var(--text-secondary)]">
-                                                {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `${i + 1}º`}
-                                            </TableCell>
-                                            <TableCell className="font-medium text-[var(--text-primary)]">
-                                                {r.name}
-                                                {isMyCandidate && <span className="ml-2 text-[10px] bg-indigo-500/20 text-indigo-400 px-1.5 py-0.5 rounded font-bold">VOCÊ</span>}
-                                            </TableCell>
-                                            <TableCell className="text-right font-mono text-[var(--text-secondary)]">
-                                                {r.total_votes.toLocaleString()}
-                                            </TableCell>
-                                            <TableCell className="text-right font-mono text-[var(--text-secondary)]">
-                                                {r.percentage.toFixed(2)}%
-                                            </TableCell>
-                                            <TableCell className="text-center">
-                                                {getStatusBadge(i, r.name)}
-                                            </TableCell>
-                                        </TableRow>
-                                    );
-                                })
-                            )}
-                        </TableBody>
-                    </Table>
+                            </TableHeader>
+                            <TableBody>
+                                {results.length === 0 ? (
+                                    <TableRow>
+                                        <TableCell colSpan={5} className="text-center py-12 text-slate-400 font-medium">
+                                            Nenhum dado eleitoral encontrado. Importe o arquivo CSV.
+                                        </TableCell>
+                                    </TableRow>
+                                ) : (
+                                    results.map((r, i) => {
+                                        const isMyCandidate = campaignName && r.name.toLowerCase().includes(campaignName.toLowerCase());
+                                        return (
+                                            <TableRow key={r.name} className={cn(
+                                                "transition-colors border-slate-100 dark:border-slate-800/50",
+                                                isMyCandidate
+                                                    ? "bg-indigo-50/50 dark:bg-indigo-900/10 hover:bg-indigo-50/70"
+                                                    : "hover:bg-slate-50/50 dark:hover:bg-slate-800/20"
+                                            )}>
+                                                <TableCell className="text-center py-4 px-4 font-bold text-slate-500">
+                                                    {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : <span className="text-[11px] opacity-40">#{i + 1}</span>}
+                                                </TableCell>
+                                                <TableCell className="py-4">
+                                                    <div className="flex flex-col">
+                                                        <span className={cn("font-bold text-sm", isMyCandidate ? "text-indigo-600 dark:text-indigo-400" : "text-slate-900 dark:text-slate-200")}>
+                                                            {r.name}
+                                                        </span>
+                                                        {isMyCandidate && (
+                                                            <div className="flex items-center gap-1.5 mt-0.5">
+                                                                <div className="w-1 h-1 rounded-full bg-indigo-500 animate-pulse" />
+                                                                <span className="text-[9px] font-black text-indigo-500 uppercase tracking-widest">MINHA CAMPANHA</span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell className="text-right font-mono font-bold text-xs text-slate-600 dark:text-slate-400 py-4">
+                                                    {r.total_votes.toLocaleString('pt-BR')}
+                                                </TableCell>
+                                                <TableCell className="text-right py-4 px-4 md:px-8">
+                                                    <div className="flex flex-col items-end">
+                                                        <span className="font-mono font-black text-xs text-slate-900 dark:text-white leading-none">
+                                                            {r.percentage.toFixed(2)}%
+                                                        </span>
+                                                        <div className="w-12 h-1 bg-slate-100 dark:bg-slate-800 rounded-full mt-1.5 overflow-hidden">
+                                                            <div
+                                                                className={cn("h-full transition-all duration-1000", isMyCandidate ? "bg-indigo-500" : "bg-slate-300 dark:bg-slate-600")}
+                                                                style={{ width: `${r.percentage}%` }}
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell className="text-center py-4 px-4">
+                                                    {getStatusBadge(i, r.name)}
+                                                </TableCell>
+                                            </TableRow>
+                                        );
+                                    })
+                                )}
+                            </TableBody>
+                        </Table>
+                    </div>
                 )}
             </CardContent>
         </Card>

@@ -33,14 +33,31 @@ function SafeControls() {
 
     useEffect(() => {
         if (map) {
-            // Pequeno delay para garantir que o Leaflet inicializou os controlCorners internos
             const timer = setTimeout(() => setShow(true), 100);
             return () => clearTimeout(timer);
         }
     }, [map]);
 
     if (!show) return null;
-    return <ZoomControl position="bottomright" />;
+
+    return (
+        <div className="absolute bottom-6 right-6 z-[1000] flex flex-col gap-2 pointer-events-auto">
+            <button
+                onClick={() => map.zoomIn()}
+                className="w-10 h-10 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border border-slate-200/50 dark:border-slate-800/50 rounded-xl shadow-lg flex items-center justify-center text-slate-600 dark:text-slate-300 active:scale-90 transition-all font-bold text-xl"
+                title="Aumentar Zoom"
+            >
+                +
+            </button>
+            <button
+                onClick={() => map.zoomOut()}
+                className="w-10 h-10 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border border-slate-200/50 dark:border-slate-800/50 rounded-xl shadow-lg flex items-center justify-center text-slate-600 dark:text-slate-300 active:scale-90 transition-all font-bold text-xl"
+                title="Diminuir Zoom"
+            >
+                −
+            </button>
+        </div>
+    );
 }
 
 // Componente interno que captura bounds e zoom

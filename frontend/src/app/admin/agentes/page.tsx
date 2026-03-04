@@ -155,7 +155,9 @@ export default function AgentesPage() {
         const fetchLibraryAgents = async () => {
             try {
                 const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-                const res = await fetch(`${apiUrl}/api/agents`);
+                const res = await fetch(`${apiUrl}/api/agents`, {
+                    headers: { "ngrok-skip-browser-warning": "true" }
+                });
                 if (res.ok) {
                     const data = await res.json();
                     console.log("[Library Agents] Loaded:", data.length, "agents");
@@ -172,7 +174,9 @@ export default function AgentesPage() {
     const fetchPersonas = async () => {
         setLoading(true);
         try {
-            const response = await fetch("/api/personas");
+            const response = await fetch("/api/personas", {
+                headers: { "ngrok-skip-browser-warning": "true" }
+            });
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}`);
             }
@@ -203,7 +207,10 @@ export default function AgentesPage() {
         try {
             const response = await fetch(`/api/personas/${selectedPersona.id}`, {
                 method: "PUT",
-                headers: { "Content-Type": "application/json" },
+                headers: {
+                    "Content-Type": "application/json",
+                    "ngrok-skip-browser-warning": "true"
+                },
                 body: JSON.stringify({
                     display_name: selectedPersona.display_name,
                     description: selectedPersona.description,
@@ -241,6 +248,7 @@ export default function AgentesPage() {
         try {
             const response = await fetch(`/api/personas/${selectedPersona.id}`, {
                 method: "DELETE",
+                headers: { "ngrok-skip-browser-warning": "true" }
             });
 
             if (!response.ok) throw new Error("Falha ao excluir");
@@ -354,7 +362,10 @@ export default function AgentesPage() {
         try {
             const response = await fetch("/api/personas", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: {
+                    "Content-Type": "application/json",
+                    "ngrok-skip-browser-warning": "true"
+                },
                 body: JSON.stringify({
                     name: `nova_estrategia_${Date.now()}`, // Nome único
                     display_name: "Nova Estratégia",
@@ -436,7 +447,10 @@ export default function AgentesPage() {
         try {
             const res = await fetch(`/api/campaign/${selectedCampaignId}/genesis`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: {
+                    "Content-Type": "application/json",
+                    "ngrok-skip-browser-warning": "true"
+                },
                 body: JSON.stringify({ persona: selectedPersona.name })
             });
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { createClient } from "@/lib/supabase/client";
+import { cn } from "@/lib/utils";
 import { useState, useEffect, useMemo } from "react";
 import { useToast } from "@/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
@@ -633,94 +634,58 @@ export function ElectoralMapFull({ campaignId, campaigns }: ElectoralMapFullProp
 
             {/* Float Social Stats e Filtros se o Radar estiver Activo */}
             {showSocialRadar && (
-                <div className="absolute top-1/2 -translate-y-1/2 left-24 z-[1000] bg-white/95 backdrop-blur-xl dark:bg-slate-950/95 p-5 w-72 rounded-3xl shadow-2xl border border-slate-200/50 animate-in fade-in slide-in-from-left-4 max-h-[80vh] flex flex-col gap-4 overflow-hidden">
-
-                    <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
-                        <div className="bg-purple-100 p-2 rounded-xl text-purple-600">
+                <div className="hidden lg:flex absolute top-1/2 -translate-y-1/2 left-24 z-[1000] bg-white/95 backdrop-blur-xl dark:bg-slate-950/95 p-5 w-72 rounded-3xl shadow-2xl border border-slate-200/50 animate-in fade-in slide-in-from-left-4 max-h-[80vh] flex flex-col gap-4 overflow-hidden">
+                    <div className="flex items-center gap-2 border-b border-slate-100 dark:border-slate-800/50 pb-3">
+                        <div className="bg-purple-100 dark:bg-purple-900/30 p-2 rounded-xl text-purple-600">
                             <Radar className="h-5 w-5" />
                         </div>
                         <div>
-                            <h3 className="font-bold text-slate-900 leading-none">Radar Social</h3>
+                            <h3 className="font-bold text-slate-900 dark:text-white leading-none">Radar Social</h3>
                             <span className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">{filteredMentions.length} Menções Ativas</span>
                         </div>
                     </div>
 
-                    {/* Stats */}
                     {socialStats && (
                         <div className="flex flex-row justify-between gap-2 text-center">
-                            <div className="flex-1 bg-gradient-to-br from-green-50 to-emerald-50/50 rounded-2xl p-2 shadow-sm border border-green-100/50">
+                            <div className="flex-1 bg-gradient-to-br from-green-50 to-emerald-50/50 dark:from-green-900/10 dark:to-emerald-900/10 rounded-2xl p-2 shadow-sm border border-green-100/20">
                                 <div className="text-xl font-black text-green-600 leading-none">{socialStats.positive}</div>
                                 <div className="text-[9px] text-green-600 uppercase font-bold tracking-wider mt-1">Elogios</div>
                             </div>
-                            <div className="flex-1 bg-gradient-to-br from-amber-50 to-yellow-50/50 rounded-2xl p-2 shadow-sm border border-amber-100/50">
+                            <div className="flex-1 bg-gradient-to-br from-amber-50 to-yellow-50/50 dark:from-amber-900/10 dark:to-yellow-900/10 rounded-2xl p-2 shadow-sm border border-amber-100/20">
                                 <div className="text-xl font-black text-amber-600 leading-none">{socialStats.neutral}</div>
                                 <div className="text-[9px] text-amber-600 uppercase font-bold tracking-wider mt-1">Neutro</div>
                             </div>
-                            <div className="flex-1 bg-gradient-to-br from-red-50 to-rose-50/50 rounded-2xl p-2 shadow-sm border border-red-100/50">
+                            <div className="flex-1 bg-gradient-to-br from-red-50 to-rose-50/50 dark:from-rose-900/10 dark:to-rose-900/10 rounded-2xl p-2 shadow-sm border border-red-100/20">
                                 <div className="text-xl font-black text-red-600 leading-none">{socialStats.negative}</div>
                                 <div className="text-[9px] text-red-600 uppercase font-bold tracking-wider mt-1">Críticas</div>
                             </div>
                         </div>
                     )}
 
-                    {/* Filters Container */}
                     <div className="flex-1 overflow-y-auto pr-1 space-y-5 custom-scrollbar">
-                        {/* Redes Sociais */}
                         <div className="space-y-2">
                             <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Plataformas</span>
                             <div className="flex gap-2">
-                                <button
-                                    onClick={() => togglePlatform('instagram')}
-                                    className={`flex-1 py-2 px-3 flex justify-center items-center gap-2 rounded-xl border text-sm transition-all ${selectedPlatforms.includes('instagram') ? 'bg-pink-50 border-pink-200 text-pink-700 shadow-sm' : 'bg-slate-50 border-slate-200 text-slate-400 hover:bg-slate-100'}`}
-                                >
-                                    <Instagram className="h-4 w-4" /> IG
-                                </button>
-                                <button
-                                    onClick={() => togglePlatform('tiktok')}
-                                    className={`flex-1 py-2 px-3 flex justify-center items-center gap-2 rounded-xl border text-sm transition-all ${selectedPlatforms.includes('tiktok') ? 'bg-slate-900 border-slate-900 text-white shadow-sm' : 'bg-slate-50 border-slate-200 text-slate-400 hover:bg-slate-100'}`}
-                                >
-                                    🎵 TK
-                                </button>
+                                <button onClick={() => togglePlatform('instagram')} className={cn("flex-1 py-2 px-3 flex justify-center items-center gap-2 rounded-xl border text-sm transition-all", selectedPlatforms.includes('instagram') ? 'bg-pink-50 dark:bg-pink-900/20 border-pink-200 dark:border-pink-800 text-pink-700' : 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 text-slate-400')}><Instagram className="h-4 w-4" /> IG</button>
+                                <button onClick={() => togglePlatform('tiktok')} className={cn("flex-1 py-2 px-3 flex justify-center items-center gap-2 rounded-xl border text-sm transition-all", selectedPlatforms.includes('tiktok') ? 'bg-slate-900 dark:bg-white dark:text-slate-900 text-white' : 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 text-slate-400')}>🎵 TK</button>
                             </div>
                         </div>
 
-                        {/* Candidatos/Rivais */}
                         <div className="space-y-2">
-                            <span className="text-xs font-bold text-slate-400 uppercase tracking-widest flex justify-between">
-                                Alvos Monitorados
-                            </span>
-                            {uniqueRivals.length === 0 && !loadingSocial && (
-                                <p className="text-xs text-slate-400 italic">Nenhum rival detectado.</p>
-                            )}
-                            {loadingSocial && (
-                                <div className="flex items-center gap-2 text-xs text-purple-600">
-                                    <Loader2 className="h-4 w-4 animate-spin" /> Varrendo redes...
-                                </div>
-                            )}
+                            <span className="text-xs font-bold text-slate-400 uppercase tracking-widest flex justify-between">Alvos Monitorados</span>
                             <div className="flex flex-col gap-2">
                                 {uniqueRivals.map(rival => {
                                     const isSelected = selectedRivals.includes(rival);
-                                    // Generate the same color hash for consistency
                                     const hash = rival.split('').reduce((acc, char) => char.charCodeAt(0) + ((acc << 5) - acc), 0);
                                     const h = Math.abs(hash) % 360;
                                     const colorAccent = `hsl(${h}, 70%, 50%)`;
-
                                     return (
-                                        <button
-                                            key={rival}
-                                            onClick={() => toggleRival(rival)}
-                                            className={`flex items-center justify-between p-2 rounded-xl border transition-all ${isSelected ? 'bg-white shadow-sm border-slate-200' : 'bg-slate-50 border-transparent opacity-60 hover:opacity-100'
-                                                }`}
-                                        >
+                                        <button key={rival} onClick={() => toggleRival(rival)} className={cn("flex items-center justify-between p-2 rounded-xl border transition-all", isSelected ? 'bg-white dark:bg-slate-900 shadow-sm border-slate-200 dark:border-slate-700' : 'bg-slate-50 dark:bg-slate-800/50 border-transparent opacity-60')}>
                                             <div className="flex items-center gap-2">
-                                                <div className="w-6 h-6 rounded-md flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: isSelected ? colorAccent : '#cbd5e1' }}>
-                                                    {rival.charAt(0).toUpperCase()}
-                                                </div>
-                                                <span className={`text-sm font-medium ${isSelected ? 'text-slate-700' : 'text-slate-400'}`}>@{rival}</span>
+                                                <div className="w-6 h-6 rounded-md flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: isSelected ? colorAccent : '#cbd5e1' }}>{rival.charAt(0).toUpperCase()}</div>
+                                                <span className={cn("text-xs font-medium", isSelected ? 'text-slate-700 dark:text-slate-200' : 'text-slate-400')}>@{rival}</span>
                                             </div>
-                                            <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${isSelected ? 'border-purple-500 bg-purple-500 text-white' : 'border-slate-300'}`}>
-                                                {isSelected && <svg viewBox="0 0 24 24" fill="none" className="w-3 h-3 stroke-current stroke-[3]"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
-                                            </div>
+                                            <div className={cn("w-4 h-4 rounded-full border flex items-center justify-center", isSelected ? 'border-purple-500 bg-purple-500 text-white' : 'border-slate-300')}>{isSelected && <svg viewBox="0 0 24 24" fill="none" className="w-3 h-3 stroke-current stroke-[3]"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}</div>
                                         </button>
                                     );
                                 })}
@@ -798,12 +763,12 @@ export function ElectoralMapFull({ campaignId, campaigns }: ElectoralMapFullProp
             )}
 
             {/* Search Bar - Otimizada QI 190 */}
-            <div className="absolute top-4 right-4 z-[100] w-80 flex gap-2">
+            <div className="absolute top-4 left-4 right-4 md:left-auto md:right-4 z-[100] md:w-80 flex gap-2">
                 <div className="relative flex-1">
-                    <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
                     <Input
                         placeholder="Buscar cidade, endereço..."
-                        className="pl-8 bg-white dark:bg-slate-950 shadow-md border-0"
+                        className="h-10 pl-9 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md shadow-xl border-slate-200/50 dark:border-slate-800/50 rounded-2xl text-sm"
                         defaultValue={searchQuery}
                         onKeyDown={(e) => {
                             if (e.key === 'Enter') {
@@ -814,7 +779,7 @@ export function ElectoralMapFull({ campaignId, campaigns }: ElectoralMapFullProp
                         onBlur={(e) => setSearchQuery(e.currentTarget.value)}
                     />
                 </div>
-                <Button onClick={handleSearch} className="shadow-md">Buscar</Button>
+                <Button onClick={handleSearch} className="h-10 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl shadow-lg border-0 hidden xs:flex">Buscar</Button>
             </div>
 
             {/* Hint Mode */}
@@ -864,7 +829,7 @@ export function ElectoralMapFull({ campaignId, campaigns }: ElectoralMapFullProp
 
             {/* Sheet de Detalhes do Local */}
             <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
-                <SheetContent className="w-[400px] sm:w-[540px] overflow-y-auto p-0 gap-0 z-[99999]" side="right" style={{ zIndex: 99999 }}>
+                <SheetContent className="w-full sm:max-w-md overflow-y-auto p-0 gap-0 z-[99999] rounded-t-[2.5rem] sm:rounded-t-none" side="right">
                     {selectedLocation && (
                         <div className="flex flex-col h-full bg-slate-50">
                             <div className="bg-white p-6 border-b sticky top-0 z-10">

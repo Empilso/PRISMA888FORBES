@@ -3,6 +3,7 @@ import { DashboardSidebar } from "@/components/dashboard/dashboard-sidebar"
 import { DashboardHeader } from "@/components/dashboard/dashboard-header"
 import { TermsGuard } from "@/components/auth/TermsGuard"
 import { createClient } from "@/lib/supabase/server"
+import { CampaignBottomNav } from "@/components/dashboard/CampaignBottomNav"
 
 export default async function CampaignLayout({
     children,
@@ -37,15 +38,16 @@ export default async function CampaignLayout({
             <NuqsAdapter>
                 <div className="flex h-screen overflow-hidden bg-background">
                     <DashboardSidebar campaignId={id} />
-                    <div className="flex flex-1 flex-col min-h-0 overflow-hidden">
+                    <div className="flex flex-1 flex-col min-h-0 overflow-hidden relative">
                         <DashboardHeader
                             candidateName={candidateName}
                             role={role}
                             lastUpdate={lastUpdate}
                         />
-                        <main className="flex-1 overflow-y-auto overscroll-y-contain h-full w-full">
+                        <main className="flex-1 overflow-y-auto overscroll-y-contain h-full w-full pb-20 md:pb-0">
                             {children}
                         </main>
+                        <CampaignBottomNav campaignId={id} />
                     </div>
                 </div>
             </NuqsAdapter>

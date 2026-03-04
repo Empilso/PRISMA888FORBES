@@ -1,10 +1,10 @@
 "use client";
 
-import { Bell, Settings, User } from "lucide-react";
+import { PrismaLogo } from "@/components/ui/prisma-logo";
+import { Bell, Settings, User, Radar, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-
-import { Radar, Eye, EyeOff } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface SocialStats {
     positive: number;
@@ -31,15 +31,22 @@ export function DashboardHeader({
     onToggleThermometer,
 }: DashboardHeaderProps) {
     return (
-        <div className="border-b bg-card transition-all duration-300">
+        <div className="sticky top-0 z-40 w-full border-b bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl transition-all duration-300 shadow-sm">
             <div className="flex h-16 items-center justify-between px-4 sm:px-8">
-                <div className="flex items-center gap-6">
-                    <div>
-                        <h1 className="text-xl font-bold">Dashboard</h1>
-                        <div className="text-sm text-muted-foreground flex items-center gap-2">
-                            Análise estratégica para a campanha de{" "}
-                            <span className="font-semibold text-primary">{candidateName}</span>
-                            {role && <Badge variant="secondary" className="text-xs px-2 py-0 h-5">{role}</Badge>}
+                <div className="flex items-center gap-4 md:gap-6">
+                    {/* Logo Prisma 888 - Visível apenas no Mobile */}
+                    <div className="md:hidden flex-shrink-0 active:scale-95 transition-transform">
+                        <PrismaLogo size="sm" showSubtitle={false} />
+                    </div>
+
+                    <div className="hidden xs:flex flex-col">
+                        <h1 className="text-sm md:text-xl font-bold tracking-tight text-slate-900 dark:text-white leading-none mb-1">
+                            Dashboard
+                        </h1>
+                        <div className="text-[10px] md:text-sm text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                            <span className="hidden md:inline">Análise estratégica para a campanha de{" "}</span>
+                            <span className="font-bold text-indigo-600 dark:text-indigo-400 whitespace-nowrap">{candidateName}</span>
+                            {role && <Badge variant="secondary" className="text-[8px] md:text-xs px-1.5 py-0 h-4 md:h-5 bg-slate-100/50 dark:bg-slate-800/50 border-0">{role}</Badge>}
                         </div>
                     </div>
 
@@ -98,34 +105,32 @@ export function DashboardHeader({
                     )}
                 </div>
 
-                <div className="flex items-center gap-3">
-                    <div className="text-right">
-                        <p className="text-xs text-muted-foreground">Última atualização</p>
+                <div className="flex items-center gap-2 md:gap-3">
+                    <div className="hidden sm:block text-right">
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-bold leading-tight">Atualizado</p>
                         <p className="text-sm font-medium">{lastUpdate}</p>
                     </div>
 
-                    <div className="h-8 w-px bg-border" />
+                    <div className="hidden sm:block h-8 w-px bg-slate-200 dark:bg-slate-800" />
 
-                    <Button variant="ghost" size="icon" className={`relative transition-all ${socialStats ? 'text-purple-600' : ''}`}>
-                        <Radar className={`h-5 w-5 ${socialStats ? 'animate-pulse' : ''}`} />
+                    <Button variant="ghost" size="icon" className={cn("relative h-9 w-9 rounded-xl transition-all", socialStats ? 'text-indigo-600 bg-indigo-50 dark:bg-indigo-900/20' : '')}>
+                        <Radar className={cn("h-5 w-5", socialStats ? 'animate-pulse' : '')} />
                     </Button>
 
-                    <Button variant="ghost" size="icon" className="relative">
+                    <Button variant="ghost" size="icon" className="relative h-9 w-9 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800">
                         <Bell className="h-5 w-5" />
-                        <Badge
-                            variant="destructive"
-                            className="absolute -top-1 -right-1 h-5 w-5 p-0 flex items-center justify-center text-[10px]"
-                        >
-                            3
-                        </Badge>
+                        <span className="absolute top-1 right-1 flex h-2 w-2">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
+                        </span>
                     </Button>
 
-                    <Button variant="ghost" size="icon">
+                    <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl hidden md:flex hover:bg-slate-100 dark:hover:bg-slate-800">
                         <Settings className="h-5 w-5" />
                     </Button>
 
-                    <Button variant="ghost" size="icon">
-                        <User className="h-5 w-5" />
+                    <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl bg-slate-100 dark:bg-slate-800 border-0">
+                        <User className="h-5 w-5 text-slate-600 dark:text-slate-300" />
                     </Button>
                 </div>
             </div>

@@ -35,33 +35,24 @@ export function StatsCard({
         typeof value === "number" ? formatNumber(value) : value;
 
     return (
-        <Card className="hover:shadow-md transition-shadow duration-200">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
+        <Card className="group hover:shadow-xl transition-all duration-300 border-slate-200/50 dark:border-slate-800/50 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm rounded-[2rem] overflow-hidden shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.1)]">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+                <CardTitle className="text-[10px] md:text-sm font-bold text-slate-500 uppercase tracking-wider">
                     {title}
                 </CardTitle>
-                <div className={cn("p-2 rounded-lg", variantStyles[variant])}>
-                    <Icon className="h-4 w-4" />
+                <div className={cn("p-2.5 rounded-2xl transition-transform group-hover:scale-110 duration-300 shadow-sm",
+                    variant === 'primary' ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600' :
+                        variant === 'success' ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600' :
+                            variant === 'warning' ? 'bg-amber-50 dark:bg-amber-900/30 text-amber-600' :
+                                'bg-slate-50 dark:bg-slate-800/50 text-slate-500'
+                )}>
+                    <Icon className="h-5 w-5" />
                 </div>
             </CardHeader>
             <CardContent>
-                <div className="text-2xl font-bold">{displayValue}</div>
+                <div className="text-2xl md:text-3xl font-black tracking-tight text-slate-900 dark:text-white">{displayValue}</div>
                 {subtitle && (
-                    <p className="text-xs text-muted-foreground mt-1">{subtitle}</p>
-                )}
-                {trend && (
-                    <p className="text-xs text-muted-foreground mt-1">
-                        <span
-                            className={cn(
-                                "font-medium",
-                                trend.value > 0 ? "text-green-600" : "text-red-600"
-                            )}
-                        >
-                            {trend.value > 0 ? "+" : ""}
-                            {trend.value}%
-                        </span>{" "}
-                        {trend.label}
-                    </p>
+                    <p className="text-[10px] md:text-xs text-slate-400 font-medium mt-1 leading-tight">{subtitle}</p>
                 )}
             </CardContent>
         </Card>
