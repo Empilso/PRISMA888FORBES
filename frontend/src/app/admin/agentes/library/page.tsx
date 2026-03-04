@@ -57,17 +57,20 @@ const getCategoryConfig = (type: string) => {
     return CATEGORY_CONFIG[type.toLowerCase()] || { label: type, icon: Bot };
 };
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const NGROK_HEADERS = { "ngrok-skip-browser-warning": "true", "Content-Type": "application/json" };
+
 // API Fetchers
 const fetchAgents = async (): Promise<Agent[]> => {
-    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/agents`);
+    const res = await fetch(`${API_URL}/api/agents`, { headers: NGROK_HEADERS });
     if (!res.ok) throw new Error("Falha ao buscar agentes");
     return res.json();
 };
 
 const createAgent = async (data: AgentCreate): Promise<Agent> => {
-    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/agents`, {
+    const res = await fetch(`${API_URL}/api/agents`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: NGROK_HEADERS,
         body: JSON.stringify(data),
     });
     if (!res.ok) {
@@ -78,9 +81,9 @@ const createAgent = async (data: AgentCreate): Promise<Agent> => {
 };
 
 const updateAgent = async ({ id, data }: { id: string; data: AgentCreate }): Promise<Agent> => {
-    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/agents/${id}`, {
+    const res = await fetch(`${API_URL}/api/agents/${id}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: NGROK_HEADERS,
         body: JSON.stringify(data),
     });
     if (!res.ok) {
@@ -91,8 +94,9 @@ const updateAgent = async ({ id, data }: { id: string; data: AgentCreate }): Pro
 };
 
 const deleteAgent = async (id: string): Promise<void> => {
-    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/agents/${id}`, {
+    const res = await fetch(`${API_URL}/api/agents/${id}`, {
         method: "DELETE",
+        headers: NGROK_HEADERS,
     });
     if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
