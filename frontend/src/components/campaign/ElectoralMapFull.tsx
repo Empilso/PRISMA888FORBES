@@ -154,6 +154,9 @@ export function ElectoralMapFull({ campaignId, campaigns }: ElectoralMapFullProp
 
 
 
+
+    const displayedStrategy = microStrategy;
+
     // 1. Fetch Campaign Info & Notes
     useEffect(() => {
         const fetchCampaign = async () => {
