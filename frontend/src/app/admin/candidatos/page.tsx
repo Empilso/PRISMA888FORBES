@@ -232,6 +232,10 @@ export default function CandidatosPage() {
             const { data: session } = await supabase.auth.getSession();
             const token = session.session?.access_token;
 
+            const payload = {
+                organization_id: selectedOrgId === "none" ? null : selectedOrgId
+            };
+
             const response = await fetch(`/api/campaign/${selectedCampaignToAssign.id}/organization`, {
                 method: "PUT",
                 headers: {
