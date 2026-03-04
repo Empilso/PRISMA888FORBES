@@ -272,7 +272,7 @@ export default function TasksContent({ campaignId, simpleMode = false }: { campa
                 </div>
             )}
 
-            <div className="sticky top-0 z-20 bg-slate-50/80 backdrop-blur-xl -mx-4 px-4 py-3 border-b border-slate-200/50 md:static md:bg-transparent md:border-0 md:px-0 md:py-0">
+            <div className="sticky top-0 z-10 bg-white/95 -mx-4 px-4 py-3 border-b border-slate-200/50 md:static md:bg-transparent md:border-0 md:px-0 md:py-0">
                 <div className="flex flex-col gap-3">
                     <div className="flex items-center justify-between gap-2">
                         <div className="flex-1 relative">
