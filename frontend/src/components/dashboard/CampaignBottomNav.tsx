@@ -65,25 +65,31 @@ export function CampaignBottomNav({ campaignId }: { campaignId: string }) {
                             <Link
                                 key={item.name}
                                 href={item.href}
-                                className="relative flex flex-col items-center justify-center -mt-5"
+                                className="relative flex flex-col items-center justify-center -mt-8 gap-0.5"
                             >
                                 <div className={cn(
-                                    "flex items-center justify-center w-14 h-14 rounded-2xl transition-all duration-300",
+                                    "flex items-center justify-center transition-all duration-300",
                                     isActive
-                                        ? "scale-110 drop-shadow-[0_4px_16px_rgba(99,102,241,0.4)]"
-                                        : "opacity-80 hover:opacity-100 hover:scale-105"
+                                        ? "scale-110 drop-shadow-[0_6px_20px_rgba(99,102,241,0.45)]"
+                                        : "opacity-85 hover:opacity-100 hover:scale-105"
                                 )}>
                                     <Image
                                         src="/prisma-icon-transparent.png"
                                         alt="Home"
-                                        width={48}
-                                        height={48}
+                                        width={80}
+                                        height={80}
                                         className="object-contain"
                                         style={{ width: "auto", height: "auto" }}
                                     />
                                 </div>
+                                <span className={cn(
+                                    "text-[8px] font-black tracking-[0.15em] uppercase leading-none transition-all",
+                                    isActive ? "text-indigo-600" : "text-slate-400"
+                                )}>
+                                    PRISMA 888
+                                </span>
                                 {isActive && (
-                                    <div className="absolute -bottom-1 w-1 h-1 rounded-full bg-indigo-600 animate-in zoom-in duration-300" />
+                                    <div className="absolute -bottom-2 w-1 h-1 rounded-full bg-indigo-600 animate-in zoom-in duration-300" />
                                 )}
                             </Link>
                         );
