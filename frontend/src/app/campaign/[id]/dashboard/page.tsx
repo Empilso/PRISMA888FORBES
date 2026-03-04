@@ -74,22 +74,6 @@ export default function DashboardPage() {
     return (
         <div className="space-y-4 sm:space-y-8 animate-fade-in px-4 sm:px-8 pt-4 pb-24 sm:py-8 bg-[var(--bg-primary)] min-h-screen">
 
-            {/* Mobile Top Bar - Logo + War Room */}
-            <div className="flex items-center justify-between md:hidden">
-                <div className="flex items-center gap-2.5">
-                    <img
-                        src="/prisma-icon-transparent.png"
-                        alt="PRISMA 888"
-                        className="h-8 w-auto drop-shadow-lg"
-                    />
-                    <div>
-                        <p className="text-base font-black tracking-tight text-slate-900 leading-none">PRISMA 888</p>
-                        <p className="text-[9px] text-slate-400 font-semibold uppercase tracking-widest leading-none mt-0.5">Candidate Suite</p>
-                    </div>
-                </div>
-                <AdversarialDialog campaignId={campaignId} />
-            </div>
-
             {/* Desktop Header with War Room Button */}
             <div className="hidden md:flex flex-row justify-between items-center gap-4">
                 <div>
@@ -99,6 +83,15 @@ export default function DashboardPage() {
                 <div className="flex gap-2">
                     <AdversarialDialog campaignId={campaignId} />
                 </div>
+            </div>
+
+            {/* Mobile: Hero inline header */}
+            <div className="md:hidden flex items-center justify-between">
+                <div>
+                    <h1 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white leading-none">Visão Geral</h1>
+                    <p className="text-xs text-slate-400 mt-0.5">Monitoramento em tempo real</p>
+                </div>
+                <AdversarialDialog campaignId={campaignId} />
             </div>
 
             {/* Stats Grid - 2x2 on mobile, 4 cols on desktop */}

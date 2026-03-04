@@ -2,22 +2,21 @@
 
 import React from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
-    SquaresFour,
     Brain,
     MapTrifold,
     Crosshair,
     ShootingStar,
-    Shield
 } from "@phosphor-icons/react";
 
 interface NavItem {
     name: string;
     href: string;
-    icon: React.ElementType;
-    color?: string;
+    icon?: React.ElementType;
+    isPrismaHome?: boolean;
 }
 
 export function CampaignBottomNav({ campaignId }: { campaignId: string }) {
@@ -25,11 +24,6 @@ export function CampaignBottomNav({ campaignId }: { campaignId: string }) {
     const baseUrl = `/campaign/${campaignId}`;
 
     const items: NavItem[] = [
-        {
-            name: "Início",
-            href: `${baseUrl}/dashboard`,
-            icon: SquaresFour
-        },
         {
             name: "Tarefas",
             href: `${baseUrl}/tasks`,
@@ -40,11 +34,16 @@ export function CampaignBottomNav({ campaignId }: { campaignId: string }) {
             href: `${baseUrl}/map`,
             icon: MapTrifold
         },
+        // ← Botão central: triângulo PRISMA (home/dashboard)
+        {
+            name: "Início",
+            href: `${baseUrl}/dashboard`,
+            isPrismaHome: true,
+        },
         {
             name: "Dossiê",
             href: `${baseUrl}/plan`,
             icon: ShootingStar,
-            color: "text-violet-500"
         },
         {
             name: "Radar",
@@ -60,6 +59,37 @@ export function CampaignBottomNav({ campaignId }: { campaignId: string }) {
                     const isActive = pathname === item.href || pathname?.startsWith(item.href + '/');
                     const Icon = item.icon;
 
+                    // ──────────── Botão Central: Triângulo PRISMA ────────────
+                    if (item.isPrismaHome) {
+                        return (
+                            <Link
+                                key={item.name}
+                                href={item.href}
+                                className="relative flex flex-col items-center justify-center -mt-5"
+                            >
+                                <div className={cn(
+                                    "flex items-center justify-center w-14 h-14 rounded-2xl transition-all duration-300",
+                                    isActive
+                                        ? "scale-110 drop-shadow-[0_4px_16px_rgba(99,102,241,0.4)]"
+                                        : "opacity-80 hover:opacity-100 hover:scale-105"
+                                )}>
+                                    <Image
+                                        src="/prisma-icon-transparent.png"
+                                        alt="Home"
+                                        width={48}
+                                        height={48}
+                                        className="object-contain"
+                                        style={{ width: "auto", height: "auto" }}
+                                    />
+                                </div>
+                                {isActive && (
+                                    <div className="absolute -bottom-1 w-1 h-1 rounded-full bg-indigo-600 animate-in zoom-in duration-300" />
+                                )}
+                            </Link>
+                        );
+                    }
+
+                    // ──────────── Demais Itens ────────────
                     return (
                         <Link
                             key={item.name}
@@ -73,15 +103,11 @@ export function CampaignBottomNav({ campaignId }: { campaignId: string }) {
                                 "flex items-center justify-center w-10 h-10 rounded-xl transition-all duration-300",
                                 isActive
                                     ? "bg-gradient-to-br from-indigo-600 to-violet-700 text-white shadow-lg shadow-indigo-200/50"
-                                    : cn("text-slate-600 dark:text-slate-400", item.color)
+                                    : "text-slate-600 dark:text-slate-400"
                             )}>
-                                <Icon
-                                    weight={isActive ? "fill" : "duotone"}
-                                    className="h-6 w-6"
-                                />
+                                {Icon && <Icon weight={isActive ? "fill" : "duotone"} className="h-6 w-6" />}
                             </div>
 
-                            {/* Indicator Dot Style Google/Apple */}
                             {isActive && (
                                 <div className="absolute -bottom-1.5 w-1 h-1 rounded-full bg-indigo-600 dark:bg-white animate-in zoom-in duration-300" />
                             )}
