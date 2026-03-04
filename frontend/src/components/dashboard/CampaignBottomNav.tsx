@@ -65,7 +65,7 @@ export function CampaignBottomNav({ campaignId }: { campaignId: string }) {
                             <Link
                                 key={item.name}
                                 href={item.href}
-                                className="relative flex flex-col items-center justify-center -mt-8 gap-0.5"
+                                className="relative flex flex-col items-center justify-center -mt-8 gap-0"
                             >
                                 <div className={cn(
                                     "flex items-center justify-center transition-all duration-300",
@@ -83,7 +83,7 @@ export function CampaignBottomNav({ campaignId }: { campaignId: string }) {
                                     />
                                 </div>
                                 <span className={cn(
-                                    "text-[8px] font-black tracking-[0.15em] uppercase leading-none transition-all",
+                                    "text-[10px] font-black tracking-[0.12em] uppercase leading-none transition-all",
                                     isActive ? "text-indigo-600" : "text-slate-400"
                                 )}>
                                     PRISMA 888

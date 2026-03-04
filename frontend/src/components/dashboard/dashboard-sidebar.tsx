@@ -62,21 +62,6 @@ export function DashboardSidebar({ campaignId }: { campaignId?: string }) {
 
     return (
         <>
-            {/* Mobile Toggle Button - hidden on mobile, bottom nav is used instead */}
-            <div className="hidden">
-                <Button variant="outline" size="icon" onClick={() => setIsMobileOpen(!isMobileOpen)} className="bg-white/90 backdrop-blur shadow-md border-slate-200">
-                    {isMobileOpen ? <X className="h-5 w-5 text-slate-600" weight="duotone" /> : <List className="h-5 w-5 text-slate-600" weight="duotone" />}
-                </Button>
-            </div>
-
-            {/* Mobile Overlay */}
-            {isMobileOpen && (
-                <div
-                    className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm z-40 md:hidden"
-                    onClick={() => setIsMobileOpen(false)}
-                />
-            )}
-
             <div
                 className={cn(
                     "hidden md:flex fixed md:static inset-y-0 left-0 z-50 flex-col transition-all duration-300 ease-in-out h-full shadow-[1px_0_20px_rgba(0,0,0,0.02)]",
