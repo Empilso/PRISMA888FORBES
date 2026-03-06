@@ -29,9 +29,9 @@ interface SocialRadarLayerProps {
  * Configuração de Sentiment com Ícones Premium.
  */
 const SENTIMENT_CONFIG: Record<string, { color: string; bg: string; icon: string; label: string }> = {
-    Positivo: { color: "#10B981", bg: "rgba(16,185,129,0.15)", icon: "💎", label: "Oportunidade" },
-    Negativo: { color: "#EF4444", bg: "rgba(239,68,68,0.15)", icon: "🚨", label: "Nossa Força" },
-    Neutro: { color: "#F59E0B", bg: "rgba(245,158,11,0.15)", icon: "💬", label: "Neutro" },
+    Positivo: { color: "#10B981", bg: "rgba(16,185,129,0.15)", icon: "✨", label: "Oportunidade" },
+    Negativo: { color: "#EF4444", bg: "rgba(239,68,68,0.15)", icon: "🔥", label: "Nossa Força" },
+    Neutro: { color: "#F59E0B", bg: "rgba(245,158,11,0.15)", icon: "💡", label: "Neutro" },
 };
 
 /**
@@ -80,6 +80,7 @@ function getSpeechBubbleIcon(sentiment: string, handle: string, platform: string
     const sentimentConfig = SENTIMENT_CONFIG[sentiment] || SENTIMENT_CONFIG.Neutro;
     const theme = PLATFORM_THEME[platform.toLowerCase()] || PLATFORM_THEME.default;
     const svgIcon = PLATFORM_SVG[platform.toLowerCase()] || PLATFORM_SVG.default;
+    const isNegative = sentiment === "Negativo";
 
     // Configurações de Formato por Plataforma
     const isTikTok = platform.toLowerCase() === 'tiktok';
@@ -87,6 +88,25 @@ function getSpeechBubbleIcon(sentiment: string, handle: string, platform: string
 
     const html = `
         <div style="position: relative; cursor: pointer; filter: drop-shadow(0 8px 16px ${theme.glow});">
+            <!-- Animação de Pulso para Negativos (🚨 Crítico) -->
+            ${isNegative ? `
+                <div style="
+                    position: absolute;
+                    inset: -4px;
+                    border-radius: ${borderRadius};
+                    background: ${sentimentConfig.color};
+                    opacity: 0.6;
+                    animation: pin-pulse 1.5s infinite;
+                    z-index: -1;
+                "></div>
+                <style>
+                    @keyframes pin-pulse {
+                        0% { transform: scale(1); opacity: 0.6; }
+                        100% { transform: scale(1.4); opacity: 0; }
+                    }
+                </style>
+            ` : ''}
+
             <!-- Camada de Luminescência (Lume) -->
             <div style="
                 position: absolute;
@@ -100,9 +120,9 @@ function getSpeechBubbleIcon(sentiment: string, handle: string, platform: string
             <!-- Balão Clean Enterprise -->
             <div style="
                 position: relative;
-                width: 46px;
-                height: 46px;
-                background: rgba(255, 255, 255, 0.9);
+                width: 48px;
+                height: 48px;
+                background: rgba(255, 255, 255, 0.95);
                 border: 2px solid transparent;
                 background-clip: padding-box;
                 border-radius: ${borderRadius};
@@ -120,19 +140,20 @@ function getSpeechBubbleIcon(sentiment: string, handle: string, platform: string
                 <!-- Badge de Sentimento (Mini Gema) -->
                 <div style="
                     position: absolute;
-                    top: -8px;
-                    right: -8px;
-                    width: 20px;
-                    height: 20px;
+                    top: -10px;
+                    right: -10px;
+                    width: 22px;
+                    height: 22px;
                     background: white;
                     border: 1.5px solid ${sentimentConfig.color};
                     border-radius: 50%;
                     display: flex;
                     align-items: center;
                     justify-content: center;
-                    font-size: 11px;
-                    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+                    font-size: 12px;
+                    box-shadow: 0 2px 6px rgba(0,0,0,0.25);
                     z-index: 10;
+                    background: ${sentimentConfig.bg};
                 ">
                     ${sentimentConfig.icon}
                 </div>
@@ -146,18 +167,17 @@ function getSpeechBubbleIcon(sentiment: string, handle: string, platform: string
                 <div style="
                     background: ${theme.border};
                     color: white;
-                    font-size: 7px;
-                    font-weight: 950;
-                    padding: 1px 4px;
+                    font-size: 8px;
+                    font-weight: 900;
+                    padding: 1px 5px;
                     border-radius: 4px;
-                    max-width: 38px;
+                    max-width: 42px;
                     overflow: hidden;
                     text-overflow: ellipsis;
                     white-space: nowrap;
-                    text-transform: uppercase;
-                    letter-spacing: 0.2px;
+                    text-transform: lowercase;
                 ">
-                    ${handle.replace('@', '').substring(0, 5)}
+                    ${handle.replace('@', '').substring(0, 8)}
                 </div>
             </div>
 
@@ -180,8 +200,8 @@ function getSpeechBubbleIcon(sentiment: string, handle: string, platform: string
     return divIcon({
         className: "bg-transparent",
         html,
-        iconSize: [46, 54],
-        iconAnchor: [23, 54],
+        iconSize: [48, 56],
+        iconAnchor: [24, 56],
     });
 }
 

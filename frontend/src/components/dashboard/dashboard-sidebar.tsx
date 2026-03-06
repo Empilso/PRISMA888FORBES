@@ -70,6 +70,7 @@ export function DashboardSidebar({ campaignId }: { campaignId?: string }) {
         {
             name: "Radar de Promessas",
             href: campaignId ? `${baseUrl}/promises` : `${baseUrl}/promessas`,
+            icon: Crosshair,
         },
     ];
 
