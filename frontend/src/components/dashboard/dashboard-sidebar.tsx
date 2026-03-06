@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { PrismaLogo } from "@/components/ui/prisma-logo";
@@ -28,6 +29,24 @@ export function DashboardSidebar({ campaignId }: { campaignId?: string }) {
     const pathname = usePathname();
     const [isCollapsed, setIsCollapsed] = useState(false);
     const [isMobileOpen, setIsMobileOpen] = useState(false);
+    const [candidateName, setCandidateName] = useState<string | null>(null);
+    const [candidateRole, setCandidateRole] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (!campaignId) return;
+        const supabase = createClient();
+        supabase
+            .from("campaigns")
+            .select("candidate_name, role")
+            .eq("id", campaignId)
+            .single()
+            .then(({ data }) => {
+                if (data) {
+                    setCandidateName(data.candidate_name);
+                    setCandidateRole(data.role);
+                }
+            });
+    }, [campaignId]);
 
     // Base URL depende se estamos no contexto de uma campanha ou no dashboard geral
     const baseUrl = campaignId ? `/campaign/${campaignId}` : '/dashboard';
@@ -83,8 +102,8 @@ export function DashboardSidebar({ campaignId }: { campaignId?: string }) {
                 {!isCollapsed && campaignId && (
                     <div className="px-6 mb-6">
                         <div className="px-4 py-3 bg-slate-50 rounded-2xl border border-slate-100 flex flex-col gap-1">
-                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Campanha Ativa</span>
-                            <span className="text-xs font-semibold text-slate-700 truncate">Campanha 2024</span>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{candidateRole || 'Campanha Ativa'}</span>
+                            <span className="text-xs font-semibold text-slate-700 truncate">{candidateName || 'Carregando...'}</span>
                         </div>
                     </div>
                 )}
