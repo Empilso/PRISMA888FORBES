@@ -56,7 +56,7 @@ export function BasicInfo({ form }: BasicInfoProps) {
                     <Label htmlFor="role">Cargo / Função</Label>
                     <Input
                         id="role"
-                        placeholder="Ex: Especialista em Fraudes"
+                        placeholder="Ex: Especialista em Análises"
                         {...register("role", { required: "Cargo é obrigatório" })}
                     />
                     {errors.role && <p className="text-red-500 text-xs">{errors.role.message}</p>}

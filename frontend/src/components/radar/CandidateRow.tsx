@@ -94,7 +94,7 @@ export function CandidateRow({ candidate }: CandidateRowProps) {
                     >
                         {candidate.hasFiscalData ? (
                             <Link href={`/admin/radar/${candidate.id}`}>
-                                Auditar Agora
+                                Ver Detalhes
                                 <ChevronRight className="w-4 h-4 ml-2 opacity-80" />
                             </Link>
                         ) : (

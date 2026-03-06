@@ -273,7 +273,7 @@ export default function CityDashboard() {
                                     🏢 Credores
                                 </TabsTrigger>
                                 <TabsTrigger value="anomalias" className="text-xs">
-                                    ⚠️ Anomalias
+                                    📊 Análise Estatística
                                 </TabsTrigger>
                                 <TabsTrigger value="licitacoes" className="text-xs">
                                     📋 Licitações
@@ -344,7 +344,7 @@ export default function CityDashboard() {
                                                     <p className="text-slate-500 font-medium">{mayor.party}</p>
                                                     <Link href={`/admin/radar/${mayor.id}`}>
                                                         <Button size="sm" className="mt-2 bg-indigo-600 hover:bg-indigo-700">
-                                                            Ver Auditoria <ArrowRight className="w-3 h-3 ml-1" />
+                                                            Ver Detalhes <ArrowRight className="w-3 h-3 ml-1" />
                                                         </Button>
                                                     </Link>
                                                 </div>

@@ -208,7 +208,7 @@ export function detectOutliers(expenses: FiscalExpense[], zScoreThreshold: numbe
                     ...exp,
                     riskScore: Math.min(10, Math.floor(zScore)),
                     reason: `Valor ${zScore.toFixed(1)}x acima da média (Z-Score: ${zScore.toFixed(2)})`,
-                    forensicAnalysis: `Esta nota específica no valor de ${formatCurrency(exp.vl_despesa)} paga à empresa ${exp.nm_fornecedor} está assustadoramente alta.\n\nPara ter uma ideia, a média de gastos (padrão normal) da prefeitura é de apenas ${formatCurrency(mean)}. Esse pagamento foi ${zScore.toFixed(1)} VEZES MAIOR que a média.\n\nO que investigar neste caso:\n1. Superfaturamento óbvio: O produto ou serviço que a empresa ${exp.nm_fornecedor} forneceu realmente vale as cifras de ${formatCurrency(exp.vl_despesa)}?\n2. Favorecimento: Concentração altamente suspeita de muito dinheiro público em um único contrato desta empresa.\n\nAção recomendada: Exija imediatamente a cópia das notas fiscais e o PDF do contrato para abrir a caixa preta desse empenho.`
+                    forensicAnalysis: `Este registro no valor de ${formatCurrency(exp.vl_despesa)} emitido para ${exp.nm_fornecedor} apresenta variação estatística significativa em relação à média.\n\nPara referência, a média dos empenhos registrados é de ${formatCurrency(mean)}. Este lançamento representa ${zScore.toFixed(1)} desvios-padrão acima desse valor.\n\nPontos para análise complementar:\n1. Verificação de proporcionalidade: Avaliar se o valor é compatível com o objeto contratado e os preços praticados no mercado.\n2. Concentração de recursos: Observar se há recorrência de valores elevados destinados ao mesmo fornecedor.\n\nSugestão: Consultar a documentação de suporte (notas fiscais, contratos e termos de referência) para contextualização técnica do empenho.`
                 } as Anomaly;
             }
             return null;
@@ -223,8 +223,8 @@ export function detectNegativeValues(expenses: FiscalExpense[]): Anomaly[] {
         .map(exp => ({
             ...exp,
             riskScore: 8,
-            reason: 'Valor nominal negativo lançado na contabilidade',
-            forensicAnalysis: `O sistema encontrou um registro financeiro com valor negativo de ${formatCurrency(exp.vl_despesa)} associado a ${exp.nm_fornecedor || 'uma empresa'}. Na contabilidade transparente do governo, despesas não rodam abaixo de zero.\n\nO que investigar neste caso:\n1. Maquiagem Contábil ("Pedalada"): Estão tentando esconder esse buraco de ${formatCurrency(exp.vl_despesa)} para fingir artificialmente que a prefeitura gastou menos perante o Tribunal.\n2. Estorno Rápido Irregular: Alguém desfez esse pagamento para a ${exp.nm_fornecedor || 'empresa'} de forma completamente desorganizada.\n\nAção recomendada: O Tribunal reprova essas mágicas nos números. Peça o histórico detalhado deste registro e pressione a secretaria da fazenda sobre qual foi a justificativa para este rombo negativo.`
+            reason: 'Registro com valor nominal negativo identificado',
+            forensicAnalysis: `Foi identificado um registro financeiro com valor negativo de ${formatCurrency(exp.vl_despesa)} associado a ${exp.nm_fornecedor || 'um fornecedor'}.\n\nNa contabilidade pública, valores negativos podem decorrer de situações como estornos, anulações de empenho ou ajustes contábeis.\n\nPontos para análise complementar:\n1. Ajuste contábil: Verificar se o lançamento corresponde a uma anulação parcial ou total de empenho devidamente justificada.\n2. Estorno de pagamento: Confirmar se houve devolução de valores ou retificação de lançamento anterior.\n\nSugestão: Consultar o histórico completo deste registro junto à unidade contábil para identificar a natureza e fundamentação do ajuste.`
         }));
 }
 
@@ -238,8 +238,8 @@ export function detectDuplicates(expenses: FiscalExpense[]): Anomaly[] {
             duplicates.push({
                 ...exp,
                 riskScore: 6,
-                reason: 'Alerta de Fracionamento / Duplicidade Perfeita',
-                forensicAnalysis: `A inteligência do Prisma pegou no flagra DOIS ou mais pagamentos absolutamente idênticos (mesinhas clonadas) para a empresa ${exp.nm_fornecedor}.\n\nAmbos foram emitidos no mesmo dia (${new Date(exp.dt_emissao).toLocaleDateString('pt-BR')}) e com o exato mesmo valor, centavo por centavo: ${formatCurrency(exp.vl_despesa)}.\n\nO que investigar neste caso:\n1. Fuga de Licitação (Fatiamento de Notas): Ao invés de abrir uma licitação normal, a prefeitura picou os pagamentos para a ${exp.nm_fornecedor} em várias notinhas de ${formatCurrency(exp.vl_despesa)} emitidas de uma vez só para burlar a lei.\n2. Erro de Repetição: A prefeitura simplesmente pagou a mesma conta duas vezes.\n\nAção recomendada: Peça os comprovantes físicos de entrega do dia ${new Date(exp.dt_emissao).toLocaleDateString('pt-BR')} dessa empresa para provar que entregaram coisas independentes, e não um esquema proposital de fatiamento.`
+                reason: 'Registros com dados coincidentes identificados',
+                forensicAnalysis: `Foram identificados dois ou mais lançamentos com dados idênticos para o fornecedor ${exp.nm_fornecedor}.\n\nOs registros compartilham a mesma data de emissão (${new Date(exp.dt_emissao).toLocaleDateString('pt-BR')}) e valor idêntico: ${formatCurrency(exp.vl_despesa)}.\n\nPontos para análise complementar:\n1. Lançamentos distintos: Verificar se os registros correspondem a fornecimentos ou serviços independentes, devidamente documentados.\n2. Duplicidade de lançamento: Confirmar se não houve repetição involuntária do mesmo registro no sistema.\n\nSugestão: Consultar os documentos comprobatórios (notas fiscais, ordens de serviço) para cada lançamento a fim de validar a independência das operações.`
             });
         } else {
             seen.set(key, exp);
@@ -271,7 +271,7 @@ export function calculateRiskScore(expense: FiscalExpense, allExpenses: FiscalEx
     // Valor muito específico (pode ser fracionamento)
     const decimalPart = expense.vl_despesa % 1;
     if (decimalPart === 0 && expense.vl_despesa > 10000) {
-        score += 1; // Valores redondos altos são suspeitos
+        score += 1; // Valores redondos altos merecem atenção adicional
     }
 
     return Math.min(10, score);

@@ -109,10 +109,10 @@ export function AnomaliasTab({ citySlug }: AnomaliasTabProps) {
                         <div className="p-2 bg-red-50 rounded-lg">
                             <Shield className="w-6 h-6 text-red-600" />
                         </div>
-                        Detecção de Anomalias
+                        Análise Estatística
                     </h2>
                     <p className="text-slate-500 mt-2 text-lg font-medium leading-relaxed max-w-2xl">
-                        Monitoramento contínuo de integridade e conformidade estatística. Total detectado: <span className="text-red-600 font-bold">{totalAnomalies}</span>
+                        Monitoramento de conformidade estatística dos registros fiscais. Total de observações: <span className="text-amber-600 font-bold">{totalAnomalies}</span>
                     </p>
                 </div>
             </div>
@@ -123,11 +123,11 @@ export function AnomaliasTab({ citySlug }: AnomaliasTabProps) {
                     <Card className="border-0 shadow-sm hover:shadow-xl transition-all duration-500 bg-white group ring-1 ring-slate-100/80">
                         <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
                             <CardTitle className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                                Índice de Risco
+                                Índice de Atenção
                             </CardTitle>
                             <Tooltip>
                                 <TooltipTrigger><Info className="w-3.5 h-3.5 text-slate-300 hover:text-slate-500 cursor-help transition-colors" /></TooltipTrigger>
-                                <TooltipContent className="bg-slate-800 text-white rounded-md text-xs border-0 px-3 py-2 max-w-xs shadow-xl"><p>Proporção total de notas fiscais que engatilharam algum alerta de fraude, contabilidade anormal ou erro material.</p></TooltipContent>
+                                <TooltipContent className="bg-slate-800 text-white rounded-md text-xs border-0 px-3 py-2 max-w-xs shadow-xl"><p>Proporção de registros que apresentam variação estatística relevante, valores atípicos ou dados que merecem verificação complementar.</p></TooltipContent>
                             </Tooltip>
                         </CardHeader>
                         <CardContent>
@@ -148,7 +148,7 @@ export function AnomaliasTab({ citySlug }: AnomaliasTabProps) {
                             </CardTitle>
                             <Tooltip>
                                 <TooltipTrigger><Info className="w-3.5 h-3.5 text-slate-300 hover:text-orange-500 cursor-help transition-colors" /></TooltipTrigger>
-                                <TooltipContent className="bg-slate-800 text-white rounded-md text-xs border-0 px-3 py-2 max-w-xs shadow-xl"><p><span className="font-bold text-orange-400">Ponto Fora da Curva:</span> Notas com valores assustadoramente altos em relação ao gasto normal. Pode indicar <strong>superfaturamento</strong> ou compras direcionadas.</p></TooltipContent>
+                                <TooltipContent className="bg-slate-800 text-white rounded-md text-xs border-0 px-3 py-2 max-w-xs shadow-xl"><p><span className="font-bold text-orange-400">Valor Atípico:</span> Registros com valores significativamente acima da média estatística. Recomenda-se verificação da documentação de suporte para contextualização.</p></TooltipContent>
                             </Tooltip>
                         </CardHeader>
                         <CardContent>
@@ -167,7 +167,7 @@ export function AnomaliasTab({ citySlug }: AnomaliasTabProps) {
                             </CardTitle>
                             <Tooltip>
                                 <TooltipTrigger><Info className="w-3.5 h-3.5 text-slate-300 hover:text-red-500 cursor-help transition-colors" /></TooltipTrigger>
-                                <TooltipContent className="bg-slate-800 text-white rounded-md text-xs border-0 px-3 py-2 max-w-xs shadow-xl"><p><span className="font-bold text-red-400">Risco Contábil:</span> Valores declarados como menores que zero. Costumam ser lançados para apagar rastros e <strong>"maquiar" contas (pedaladas fiscais)</strong> fingindo que a prefeitura gastou menos no ano.</p></TooltipContent>
+                                <TooltipContent className="bg-slate-800 text-white rounded-md text-xs border-0 px-3 py-2 max-w-xs shadow-xl"><p><span className="font-bold text-red-400">Valor Negativo:</span> Registros com valores abaixo de zero, que podem corresponder a estornos, anulações de empenho ou ajustes contábeis que requerem verificação documental.</p></TooltipContent>
                             </Tooltip>
                         </CardHeader>
                         <CardContent>
@@ -186,7 +186,7 @@ export function AnomaliasTab({ citySlug }: AnomaliasTabProps) {
                             </CardTitle>
                             <Tooltip>
                                 <TooltipTrigger><Info className="w-3.5 h-3.5 text-slate-300 hover:text-purple-500 cursor-help transition-colors" /></TooltipTrigger>
-                                <TooltipContent className="bg-slate-800 text-white rounded-md text-xs border-0 px-3 py-2 max-w-xs shadow-xl"><p><span className="font-bold text-purple-400">Fatiamento:</span> Pagamentos idênticos batendo mesmo dia, credor e valor. É o principal indício de prefeituras <strong>"fatiando" notas para não atingirem o teto que obriga a fazer Licitação</strong>.</p></TooltipContent>
+                                <TooltipContent className="bg-slate-800 text-white rounded-md text-xs border-0 px-3 py-2 max-w-xs shadow-xl"><p><span className="font-bold text-purple-400">Coincidência de Dados:</span> Lançamentos com mesma data, fornecedor e valor. Pode tratar-se de operações independentes ou de lançamentos que merecem confirmação documental.</p></TooltipContent>
                             </Tooltip>
                         </CardHeader>
                         <CardContent>
@@ -288,11 +288,11 @@ export function AnomaliasTab({ citySlug }: AnomaliasTabProps) {
                         <DialogHeader className="mb-6">
                             <div className="flex justify-between items-start">
                                 <div>
-                                    <Badge variant="destructive" className="mb-2 text-[10px] font-black tracking-widest px-3 py-0.5 uppercase bg-red-100 text-red-700 hover:bg-red-200 border-0">
-                                        Risco {selectedAnomaly?.riskScore}/10
+                                    <Badge variant="destructive" className="mb-2 text-[10px] font-black tracking-widest px-3 py-0.5 uppercase bg-amber-100 text-amber-700 hover:bg-amber-200 border-0">
+                                        Relevância {selectedAnomaly?.riskScore}/10
                                     </Badge>
                                     <DialogTitle className="text-2xl font-black text-slate-900 tracking-tighter flex items-center gap-2">
-                                        <Shield className="w-5 h-5 text-red-600" /> Detalhamento da Anomalia
+                                        <Shield className="w-5 h-5 text-amber-600" /> Detalhamento do Registro
                                     </DialogTitle>
                                     <DialogDescription className="text-slate-500 font-mono text-xs mt-1">
                                         Empenho #{selectedAnomaly?.nr_empenho || "S/N"} • Emissão: {selectedAnomaly ? new Date(selectedAnomaly.dt_emissao).toLocaleDateString("pt-BR") : ""}
@@ -309,20 +309,20 @@ export function AnomaliasTab({ citySlug }: AnomaliasTabProps) {
 
                         <div className="space-y-6">
                             {/* Forensic Alert Card */}
-                            <Card className="border-0 bg-red-50 p-5 rounded-2xl ring-1 ring-red-200 shadow-inner">
-                                <p className="text-[10px] font-black text-red-500 uppercase tracking-widest mb-1 flex items-center gap-2">
+                            <Card className="border-0 bg-amber-50 p-5 rounded-2xl ring-1 ring-amber-200 shadow-inner">
+                                <p className="text-[10px] font-black text-amber-500 uppercase tracking-widest mb-1 flex items-center gap-2">
                                     <AlertTriangle className="w-3 h-3" />
-                                    Fundamento da Suspeita Primária
+                                    Observação Identificada
                                 </p>
-                                <p className="text-sm font-bold text-red-900 uppercase tracking-tight mb-4">{selectedAnomaly?.reason}</p>
+                                <p className="text-sm font-bold text-amber-900 uppercase tracking-tight mb-4">{selectedAnomaly?.reason}</p>
 
                                 {selectedAnomaly?.forensicAnalysis && (
-                                    <div className="border-t border-red-200/60 pt-4 mt-4">
-                                        <p className="text-[10px] font-black text-red-500 uppercase tracking-widest mb-2 flex items-center gap-2">
+                                    <div className="border-t border-amber-200/60 pt-4 mt-4">
+                                        <p className="text-[10px] font-black text-amber-500 uppercase tracking-widest mb-2 flex items-center gap-2">
                                             <Shield className="w-3 h-3" />
-                                            Parecer Analítico Forense
+                                            Parecer Técnico
                                         </p>
-                                        <p className="text-xs text-red-800 leading-relaxed font-medium whitespace-pre-line">
+                                        <p className="text-xs text-amber-800 leading-relaxed font-medium whitespace-pre-line">
                                             {selectedAnomaly.forensicAnalysis}
                                         </p>
                                     </div>
@@ -370,7 +370,7 @@ export function AnomaliasTab({ citySlug }: AnomaliasTabProps) {
                                 >
                                     <a href={`https://www.tce.sp.gov.br/`} target="_blank" rel="noopener noreferrer">
                                         <ExternalLink className="w-4 h-4 mr-2" />
-                                        Auditar no TCE-SP
+                                        Consultar no TCE-SP
                                     </a>
                                 </Button>
                             </div>
@@ -397,7 +397,7 @@ function AnomalyTable({ anomalies, onRowClick }: { anomalies: Anomaly[], onRowCl
             {/* Controles de Paginação Superior */}
             <div className="flex items-center justify-between p-4 border-b border-slate-200 bg-slate-50">
                 <div className="text-sm text-slate-600">
-                    Mostrando <strong>{startIndex + 1}</strong> a <strong>{endIndex}</strong> de <strong>{anomalies.length}</strong> anomalias
+                    Mostrando <strong>{startIndex + 1}</strong> a <strong>{endIndex}</strong> de <strong>{anomalies.length}</strong> registros
                 </div>
                 <div className="flex items-center gap-3">
                     <span className="text-sm text-slate-600">Exibir:</span>
@@ -426,14 +426,14 @@ function AnomalyTable({ anomalies, onRowClick }: { anomalies: Anomaly[], onRowCl
                                 <TableHead className="w-12">
                                     <Tooltip>
                                         <TooltipTrigger className="cursor-help flex items-center gap-1">Risk <Info className="w-3 h-3 text-slate-400" /></TooltipTrigger>
-                                        <TooltipContent className="bg-slate-800 text-white rounded-md text-xs border-0 px-3 py-2 max-w-[200px] shadow-xl">Grau de severidade de 1 a 10 gerado pela IA forense baseado no padrão do indício encontrado.</TooltipContent>
+                                        <TooltipContent className="bg-slate-800 text-white rounded-md text-xs border-0 px-3 py-2 max-w-[200px] shadow-xl">Grau de relevância de 1 a 10 baseado na variação estatística e características do registro.</TooltipContent>
                                     </Tooltip>
                                 </TableHead>
                                 <TableHead>Data</TableHead>
                                 <TableHead>Credor</TableHead>
                                 <TableHead className="text-right">Valor</TableHead>
                                 <TableHead>Função</TableHead>
-                                <TableHead>Motivo da Suspeita</TableHead>
+                                <TableHead>Observação</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -474,7 +474,7 @@ function AnomalyTable({ anomalies, onRowClick }: { anomalies: Anomaly[], onRowCl
                                                 <TooltipContent className="bg-slate-800 text-white rounded-md border-0 p-4 max-w-sm shadow-2xl z-50">
                                                     <div className="flex items-center gap-2 mb-2 pb-2 border-b border-slate-700">
                                                         <Shield className="w-4 h-4 text-orange-400" />
-                                                        <span className="text-[10px] font-black uppercase tracking-widest text-orange-400">Laudo Pericial</span>
+                                                        <span className="text-[10px] font-black uppercase tracking-widest text-orange-400">Análise Técnica</span>
                                                     </div>
                                                     <p className="text-xs leading-relaxed text-slate-200 whitespace-pre-line">
                                                         {anomaly.forensicAnalysis}
