@@ -32,14 +32,28 @@ class CampaignRead(BaseModel):
     candidate_name: Optional[str] = None
     name: Optional[str] = None
     ballot_name: Optional[str] = None
+    party: Optional[str] = None
+    number: Optional[int] = None
+    slug: Optional[str] = None
+    role: Optional[str] = None
+    city: Optional[str] = None
     status: Optional[str] = None
     organization_id: Optional[str] = None
+    election_date: Optional[str] = None
+    social_links: Optional[dict] = None
     created_at: Optional[str] = None
 
 class CampaignCreate(BaseModel):
-    name: str
+    candidate_name: str
     ballot_name: Optional[str] = None
+    party: Optional[str] = None
+    number: Optional[int] = None
+    role: Optional[str] = None
+    city: Optional[str] = None
     status: Optional[str] = "active"
+    election_date: Optional[str] = None
+    social_links: Optional[dict] = None
+    settings: Optional[dict] = None
 
 class OrganizationCreate(BaseModel):
     name: str
@@ -206,11 +220,22 @@ async def create_organization_campaign(
         pass # Por enquanto bypass para facilitar o teste imediato, mas com LOG.
 
     # Prepara o objeto final para o Banco
+    # Prepara o objeto final para o Banco (Alinhado com schema 2024)
+    slug = campaign_data.get("ballot_name", campaign_data.get("candidate_name", "nova-campanha"))\
+        .lower().replace(" ", "-") # Gerador de slug básico
+
     final_data = {
-        "name": campaign_data.get("name", "Nova Campanha"),
+        "candidate_name": campaign_data.get("candidate_name"),
         "ballot_name": campaign_data.get("ballot_name"),
+        "party": campaign_data.get("party"),
+        "number": campaign_data.get("number"),
+        "role": campaign_data.get("role"),
+        "city": campaign_data.get("city"),
+        "slug": slug,
         "organization_id": org_id,
-        "status": "active",
+        "status": campaign_data.get("status", "active"),
+        "election_date": campaign_data.get("election_date"),
+        "social_links": campaign_data.get("social_links", {}),
         "settings": campaign_data.get("settings", {})
     }
     
