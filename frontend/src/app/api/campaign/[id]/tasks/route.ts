@@ -25,9 +25,14 @@ export async function GET(
         });
 
         if (!response.ok) {
-            const error = await response.json().catch(() => ({ detail: 'Erro ao buscar tarefas' }));
+            const errorText = await response.text();
+            console.error(`[Proxy Error] Status: ${response.status}, URL: ${endpoint}, Body: ${errorText}`);
             return NextResponse.json(
-                { error: error.detail || 'Erro ao buscar tarefas' },
+                {
+                    error: 'Falha ao buscar tarefas no backend local',
+                    status: response.status,
+                    debug_url: endpoint // Temporário para o mestre ver o que está acontecendo
+                },
                 { status: response.status }
             );
         }
