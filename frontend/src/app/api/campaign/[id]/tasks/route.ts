@@ -13,7 +13,8 @@ export async function GET(
     const { id: campaignId } = await context.params;
 
     try {
-        const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+        // Usamos BACKEND_URL (Server-side) em vez de NEXT_PUBLIC_ para evitar cache de build
+        const backendUrl = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
         const endpoint = `${backendUrl}/api/campaign/${campaignId}/tasks`;
 
         const response = await fetch(endpoint, {
