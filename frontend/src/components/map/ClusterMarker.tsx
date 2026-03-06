@@ -10,6 +10,12 @@ interface ClusterMarkerProps {
     isCompetitor?: boolean;  // Se true, usa cores de adversário (vermelho)
 }
 
+interface PointMarkerProps {
+    cluster: MapCluster;
+    onClick: () => void;
+    isCompetitor?: boolean;
+}
+
 /**
  * Cria ícone de TRIÂNGULO (Prisma) para cluster de pontos.
  */
