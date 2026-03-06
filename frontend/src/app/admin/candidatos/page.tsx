@@ -85,8 +85,14 @@ export default function CandidatosPage() {
 
     const fetchOrganizations = async () => {
         try {
-            const { data: session } = await supabase.auth.getSession();
-            const token = session.session?.access_token;
+            const { data: sessionData } = await supabase.auth.getSession();
+            const token = sessionData.session?.access_token;
+
+            if (!token) {
+                console.warn("Nenhuma sessão ativa encontrada ao buscar organizações.");
+                setIsLoading(false);
+                return;
+            }
 
             const res = await fetch('/api/organizations', {
                 headers: {
@@ -94,22 +100,30 @@ export default function CandidatosPage() {
                 }
             });
 
-            if (res.ok) {
-                const data = await res.json();
-                const sortedData = (data || []).sort((a: Organization, b: Organization) =>
-                    a.name.localeCompare(b.name)
-                );
-                setOrganizations(sortedData);
-            } else {
-                throw new Error("Falha ao carregar API");
+            if (res.status === 401) {
+                throw new Error("Sessão expirada. Por favor, faça login novamente.");
             }
-        } catch (error) {
+
+            if (!res.ok) {
+                throw new Error(`Erro na API (${res.status}): Falha ao carregar organizações`);
+            }
+
+            const data = await res.json();
+            const sortedData = (data || []).sort((a: Organization, b: Organization) =>
+                a.name.localeCompare(b.name)
+            );
+            setOrganizations(sortedData);
+        } catch (error: any) {
             console.error("Erro ao buscar organizações:", error);
-            toast({
-                title: "Erro",
-                description: "Não foi possível carregar a lista de partidos.",
-                variant: "destructive",
-            });
+
+            // Não mostrar toast de erro se for apenas falta de sessão inicial
+            if (error.message !== "Nenhuma sessão ativa encontrada") {
+                toast({
+                    title: "Aviso de Conectividade",
+                    description: error.message || "Não foi possível carregar a lista de partidos. Verifique sua conexão.",
+                    variant: "destructive",
+                });
+            }
         }
     };
 

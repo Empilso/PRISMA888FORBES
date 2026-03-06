@@ -89,15 +89,15 @@ class DelegateTaskRequest(BaseModel):
 # =============================================================================
 
 @router.post("/campaign/{campaign_id}/social/scrape", response_model=ScrapeResponse)
-async def trigger_social_scrape(campaign_id: str):
+async def trigger_social_scrape(campaign_id: str, max_posts: Optional[int] = 10):
     """
     Dispara scraping das redes sociais dos rivais.
-    Se Apify falhar ou não houver handles, ativa Mock Mode automaticamente.
+    max_posts: Limite de posts por alvo para economia de créditos.
     """
     try:
         from src.tools.social_tools import SocialRadarPipeline
         pipeline = SocialRadarPipeline()
-        result = await pipeline.execute(campaign_id)
+        result = await pipeline.execute(campaign_id, max_posts=max_posts)
 
         return ScrapeResponse(
             success=result["success"],
@@ -160,19 +160,21 @@ async def get_tactical_map_data(campaign_id: str):
     """
     supabase = get_supabase_client()
 
-    # 0. Buscar alvos monitorados (Setup)
+    # 0. Buscar alvos monitorados (Setup na tabela campaigns)
     monitored_targets = []
     try:
-        monitors_res = supabase.table("social_monitors") \
-            .select("handle") \
-            .eq("campaign_id", campaign_id) \
-            .eq("is_active", True) \
+        result_campaign = supabase.table("campaigns") \
+            .select("social_links") \
+            .eq("id", campaign_id) \
             .execute()
         
-        monitored_targets = [m["handle"] if m["handle"].startswith("@") else f"@{m['handle']}" 
-                            for m in (monitors_res.data or [])]
+        if result_campaign.data and len(result_campaign.data) > 0:
+            social_links = result_campaign.data[0].get("social_links") or {}
+            ig = social_links.get("instagram", [])
+            tk = social_links.get("tiktok", [])
+            monitored_targets = list(set(ig + tk))
     except Exception as e:
-        print(f"[SocialRadar] ⚠️ social_monitors fallback: {e}")
+        print(f"[SocialRadar] ⚠️ social_links fallback: {e}")
 
     # 1. Buscar menções com coordenadas
     mentions = []
@@ -185,6 +187,12 @@ async def get_tactical_map_data(campaign_id: str):
             .limit(200) \
             .execute()
 
+        # 1.5 Remapear author_username para author (Frontend compatibility)
+        sentiment_map = {"Positivo": 5, "Neutro": 3, "Negativo": 1}
+        for m in mentions_res.data or []:
+            m["author"] = m.get("author_username", "anônimo")
+            m["is_mock"] = False # O banco não guarda isso, mas o frontend espera um boolean
+            m["sentiment"] = sentiment_map.get(m.get("sentiment_label", "Neutro"), 3)
         mentions = mentions_res.data or []
     except Exception as e:
         print(f"[SocialRadar] ⚠️ social_mentions fetch failed: {e}")
@@ -378,19 +386,225 @@ async def get_social_stats(campaign_id: str):
     """Retorna estatísticas resumidas do radar social para badges/dashboards."""
     supabase = get_supabase_client()
 
-    result = supabase.table("social_mentions") \
-        .select("id, sentiment_label, is_mock") \
+    # Busca as menções sociais
+    result_mentions = supabase.table("social_mentions") \
+        .select("id, sentiment_label") \
         .eq("campaign_id", campaign_id) \
         .execute()
 
-    mentions = result.data or []
+    mentions = result_mentions.data or []
     total = len(mentions)
+
+    # Busca os handles cadastrados (monitored_targets) da campanha
+    result_campaign = supabase.table("campaigns") \
+        .select("social_links") \
+        .eq("id", campaign_id) \
+        .execute()
+    
+    monitored_targets = []
+    if result_campaign.data and len(result_campaign.data) > 0:
+        social_links = result_campaign.data[0].get("social_links") or {}
+        ig = social_links.get("instagram", [])
+        tk = social_links.get("tiktok", [])
+        # Garante que seja uma lista única de handles formatados
+        monitored_targets = list(set((ig if ig else []) + (tk if tk else [])))
 
     return {
         "total_mentions": total,
         "positive": sum(1 for m in mentions if m.get("sentiment_label") == "Positivo"),
         "negative": sum(1 for m in mentions if m.get("sentiment_label") == "Negativo"),
         "neutral": sum(1 for m in mentions if m.get("sentiment_label") == "Neutro"),
-        "has_mock": any(m.get("is_mock") for m in mentions),
-        "is_active": total > 0
+        "has_mock": False, # Temporariamente desativado até coluna is_mock existir
+        "is_active": total > 0,
+        "monitored_targets": monitored_targets
     }
+
+import time
+import httpx
+
+@router.get("/campaign/{campaign_id}/social/stats/breakdown")
+async def get_social_stats_breakdown(campaign_id: str):
+    """
+    Dashboard Enterprise: Retorna uma contagem exata de posts extraídos *por perfil* social monitorado.
+    """
+    supabase = get_supabase_client()
+
+    # 1. Obter a lista oficial de alvos no Setup
+    result_campaign = supabase.table("campaigns") \
+        .select("social_links") \
+        .eq("id", campaign_id) \
+        .execute()
+    
+    monitored_targets = []
+    if result_campaign.data and len(result_campaign.data) > 0:
+        social_links = result_campaign.data[0].get("social_links") or {}
+        ig = social_links.get("instagram", []) or []
+        tk = social_links.get("tiktok", []) or []
+        kw = social_links.get("keywords", []) or []
+        ht = social_links.get("hashtags", []) or []
+        monitored_targets = list(set(ig + tk + kw + ht))
+
+    # 2. Obter todas as menções atreladas aos alvos ou gerais
+    result_mentions = supabase.table("social_mentions") \
+        .select("id, rival_handle, platform, created_at, author_username, lat, lng, inferred_neighborhood, sentiment_label") \
+        .eq("campaign_id", campaign_id) \
+        .execute()
+    
+    mentions = result_mentions.data or []
+
+    # 3. Construir o de-para (Breakdown)
+    breakdown = []
+    
+    for target in monitored_targets:
+        # Se for um handle, procuramos no campo rival_handle
+        # Se for hashtag ou palavra-chave (ainda a implementar rastreio avançado no back), fallback para 0
+        is_handle = target.startswith('@')
+        target_clean = target.strip('@ ').lower()
+        
+        def handle_match(m):
+            if not is_handle or not m.get("rival_handle"):
+                return False
+            db_handle = m.get("rival_handle").strip('@ ').lower()
+            return db_handle == target_clean
+            
+        target_mentions = [m for m in mentions if handle_match(m)]
+        
+        unique_authors = len(set([m.get("author_username") for m in target_mentions if m.get("author_username")]))
+        locations_count = len([m for m in target_mentions if m.get("lat") or m.get("lng") or m.get("inferred_neighborhood")])
+        sentiment_positive = len([m for m in target_mentions if m.get("sentiment_label") == "Positivo"])
+        sentiment_negative = len([m for m in target_mentions if m.get("sentiment_label") == "Negativo"])
+        sentiment_neutral = len([m for m in target_mentions if m.get("sentiment_label") == "Neutro"])
+        
+        breakdown.append({
+            "target": target,
+            "total_posts": len(target_mentions),
+            "platforms": list(set([m.get("platform") for m in target_mentions if m.get("platform")])),
+            "last_post": max([m.get("created_at") for m in target_mentions]) if target_mentions else None,
+            "unique_authors": unique_authors,
+            "locations_count": locations_count,
+            "sentiment_stats": {
+                "positive": sentiment_positive,
+                "negative": sentiment_negative,
+                "neutral": sentiment_neutral
+            }
+        })
+        
+    return { "breakdown": breakdown, "total_tracked_targets": len(monitored_targets) }
+
+
+@router.get("/campaign/{campaign_id}/social/target/{handle}/details")
+async def get_target_details(campaign_id: str, handle: str):
+    """
+    Visibilidade Completa por Perfil: Retorna posts, comentaristas e sentimento de um alvo específico.
+    """
+    supabase = get_supabase_client()
+    
+    # Normalizar handle
+    handle_clean = handle.strip("@ ").lower()
+    
+    # Buscar todas as menções desse alvo
+    result = supabase.table("social_mentions") \
+        .select("id, author_username, text, post_url, platform, sentiment_label, created_at, likes_count, comment_id, inferred_neighborhood, lat, lng") \
+        .eq("campaign_id", campaign_id) \
+        .execute()
+    
+    all_mentions = result.data or []
+    
+    # Filtrar pelo handle
+    target_mentions = []
+    for m in all_mentions:
+        rival = (m.get("rival_handle") or "").strip("@ ").lower()
+        if rival == handle_clean:
+            target_mentions.append(m)
+    
+    if not target_mentions:
+        return {
+            "handle": handle,
+            "total_posts": 0,
+            "posts": [],
+            "commenters": [],
+            "sentiment": {"positive": 0, "negative": 0, "neutral": 0},
+            "message": "Nenhum dado encontrado. Clique 'Sincronizar Agora' para buscar."
+        }
+    
+    # Agrupar por post_url (cada URL = 1 post)
+    posts_map = {}
+    for m in target_mentions:
+        url = m.get("post_url") or "sem_url"
+        if url not in posts_map:
+            posts_map[url] = {
+                "url": url,
+                "platform": m.get("platform"),
+                "comments_count": 0,
+                "comments": [],
+                "first_seen": m.get("created_at"),
+            }
+        posts_map[url]["comments_count"] += 1
+        posts_map[url]["comments"].append({
+            "author": m.get("author_username"),
+            "text": m.get("text", "")[:200],
+            "sentiment": m.get("sentiment_label"),
+            "likes": m.get("likes_count", 0),
+            "neighborhood": m.get("inferred_neighborhood"),
+        })
+    
+    posts_list = sorted(posts_map.values(), key=lambda p: p["comments_count"], reverse=True)
+    
+    # Comentaristas únicos
+    commenters_set = {}
+    for m in target_mentions:
+        author = m.get("author_username", "anônimo")
+        if author not in commenters_set:
+            commenters_set[author] = {"username": author, "comments_count": 0, "platforms": set()}
+        commenters_set[author]["comments_count"] += 1
+        commenters_set[author]["platforms"].add(m.get("platform", ""))
+    
+    commenters_list = sorted(
+        [{"username": c["username"], "comments_count": c["comments_count"], "platforms": list(c["platforms"])} for c in commenters_set.values()],
+        key=lambda c: c["comments_count"], reverse=True
+    )
+    
+    # Sentimento
+    sentiment = {
+        "positive": len([m for m in target_mentions if m.get("sentiment_label") == "Positivo"]),
+        "negative": len([m for m in target_mentions if m.get("sentiment_label") == "Negativo"]),
+        "neutral": len([m for m in target_mentions if m.get("sentiment_label") == "Neutro"]),
+    }
+    
+    return {
+        "handle": handle,
+        "total_mentions": len(target_mentions),
+        "total_posts": len(posts_list),
+        "total_commenters": len(commenters_list),
+        "posts": posts_list[:20],  # Top 20 posts
+        "commenters": commenters_list[:30],  # Top 30 commenters
+        "sentiment": sentiment,
+    }
+
+@router.get("/admin/services/engine/test")
+async def test_engine_connection():
+    """
+    Painel de Saúde Enterprise: Dispara um ping de teste simulando 
+    a conexão com serviços externos de Data Scraping / Tavily / AIOS.
+    """
+    start_time = time.time()
+    try:
+        # PING leve no Tavily apenas para atestar DNS e API Key local
+        tavily_key = os.getenv("TAVILY_API_KEY")
+        if not tavily_key:
+            return {"status": "offline", "reason": "TAVILY_API_KEY missing", "latency_ms": 0}
+
+        headers = {"Authorization": f"Bearer {tavily_key}", "Content-Type": "application/json"}
+        payload = {"query": "test ping", "search_depth": "basic", "max_results": 1}
+        
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            res = await client.post("https://api.tavily.com/search", headers=headers, json=payload)
+            res.raise_for_status()
+
+        latency_ms = int((time.time() - start_time) * 1000)
+        return {"status": "online", "latency_ms": latency_ms, "service": "Tavily Search API"}
+
+    except Exception as e:
+        latency_ms = int((time.time() - start_time) * 1000)
+        print(f"[Engine Test] ❌ {e}")
+        return {"status": "offline", "reason": str(e), "latency_ms": latency_ms}

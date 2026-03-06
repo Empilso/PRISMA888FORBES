@@ -62,7 +62,7 @@ export function CampaignManifesto({ campaignId, planContent }: CampaignManifesto
         };
 
         fetchStrategicPlan();
-    }, [campaignId, planContent, supabase]);
+    }, [campaignId, planContent]); // Removed supabase from dependencies to prevent infinite loop
 
     // 2. Gerar Table of Contents (TOC)
     const generateToc = (content: string) => {

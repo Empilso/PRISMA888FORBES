@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 
 import { createClient } from "@/lib/supabase/client";
@@ -44,6 +44,8 @@ import {
   Hash,
   Globe,
   Users,
+  Settings,
+  Eye,
 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { ToastAction } from "@/components/ui/toast";
@@ -68,22 +70,54 @@ import { Separator } from "@/components/ui/separator";
 
 // --- NOVOS COMPONENTES ENTERPRISE ---
 // --- NOVOS COMPONENTES ENTERPRISE ---
+interface RadarBreakdownItem {
+  target: string;
+  total_posts: number;
+  platforms: string[];
+  last_post: string | null;
+  unique_authors?: number;
+  locations_count?: number;
+  sentiment_stats?: {
+    positive: number;
+    negative: number;
+    neutral: number;
+  };
+}
+
+interface EngineStatus {
+  status: "online" | "offline" | "checking" | "error";
+  latency_ms?: number;
+  reason?: string;
+  last_check?: Date;
+}
+
 function SocialTargetCard({
   type,
   target,
   platform,
   onChange,
   onDelete,
+  breakdown,
+  density,
+  onDensityChange,
+  campaignId,
 }: {
   type: "profile" | "keyword" | "hashtag";
   target: string;
   platform?: "instagram" | "tiktok";
   onChange: (val: string) => void;
   onDelete: () => void;
+  breakdown?: RadarBreakdownItem;
+  density: number;
+  onDensityChange: (val: number) => void;
+  campaignId: string;
 }) {
   const isProfile = type === "profile";
   const isHashtag = type === "hashtag";
   const isKeyword = type === "keyword";
+  const [showDetails, setShowDetails] = useState(false);
+  const [details, setDetails] = useState<any>(null);
+  const [loadingDetails, setLoadingDetails] = useState(false);
 
   const getIcon = () => {
     if (isKeyword) return <Sparkles className="h-5 w-5 text-amber-500" />;
@@ -97,6 +131,32 @@ function SocialTargetCard({
     if (isKeyword) return "Tema Estratégico";
     if (isHashtag) return "Hashtag Global";
     return `${platform === "instagram" ? "Instagram" : "TikTok"} Target`;
+  };
+
+  const fetchDetails = async () => {
+    if (!target.trim()) return;
+    setLoadingDetails(true);
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const handle = target.replace("@", "").replace("#", "").trim();
+      const res = await fetch(
+        `${apiUrl}/api/campaign/${campaignId}/social/target/${handle}/details`,
+        { headers: { "ngrok-skip-browser-warning": "true" } }
+      );
+      if (res.ok) {
+        const data = await res.json();
+        setDetails(data);
+      }
+    } catch (e) {
+      console.error("[Details] Error:", e);
+    } finally {
+      setLoadingDetails(false);
+    }
+  };
+
+  const handleToggleDetails = () => {
+    if (!showDetails && !details) fetchDetails();
+    setShowDetails(!showDetails);
   };
 
   return (
@@ -116,21 +176,33 @@ function SocialTargetCard({
                   {getLabel()}
                 </p>
                 <div className="flex items-center gap-1.5">
-                  <div className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse" />
-                  <span className="text-[10px] font-bold text-emerald-600 uppercase">
-                    Radar Ativo
+                  <div className={`w-1 h-1 rounded-full ${breakdown?.total_posts !== undefined && breakdown.total_posts > 0 ? "bg-emerald-500 animate-pulse" : "bg-slate-300"}`} />
+                  <span className={`text-[10px] font-bold uppercase ${breakdown?.total_posts !== undefined && breakdown.total_posts > 0 ? "text-emerald-600" : "text-slate-400"}`}>
+                    {breakdown?.total_posts !== undefined && breakdown.total_posts > 0 ? `${breakdown.total_posts} posts sincronizados` : 'Aguardando Sinc'}
                   </span>
                 </div>
               </div>
             </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 rounded-full text-slate-300 hover:text-red-500 hover:bg-red-50"
-              onClick={onDelete}
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
+            <div className="flex items-center gap-1">
+              <Select value={density.toString()} onValueChange={(v) => onDensityChange(parseInt(v))}>
+                <SelectTrigger className="h-7 w-20 text-[10px] bg-slate-50 border-none font-bold">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="5" className="text-[10px] font-bold">5 (TEST)</SelectItem>
+                  <SelectItem value="20" className="text-[10px] font-bold">20 (NORMAL)</SelectItem>
+                  <SelectItem value="100" className="text-[10px] font-bold">100 (ELITE)</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 rounded-full text-slate-300 hover:text-red-500 hover:bg-red-50"
+                onClick={onDelete}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
 
           <div className="relative">
@@ -146,6 +218,109 @@ function SocialTargetCard({
               onChange={(e) => onChange(e.target.value)}
             />
           </div>
+
+          {/* 📡 Métricas de Breakdown */}
+          {breakdown && breakdown.total_posts !== undefined && (
+            <div className="grid grid-cols-3 gap-2 mt-1 pt-3 border-t border-slate-100">
+              <div className="flex flex-col items-center p-2 rounded-lg bg-slate-50">
+                <span className="text-xs font-bold text-slate-700">{breakdown.unique_authors || 0}</span>
+                <span className="text-[9px] uppercase tracking-wider text-slate-400">Autores</span>
+              </div>
+              <div className="flex flex-col items-center p-2 rounded-lg bg-blue-50/50">
+                <span className="text-xs font-bold text-blue-700">{breakdown.locations_count || 0}</span>
+                <span className="text-[9px] uppercase tracking-wider text-blue-500">Locais</span>
+              </div>
+              <div className="flex flex-col items-center p-2 rounded-lg bg-emerald-50/50">
+                <span className="text-xs font-bold text-emerald-700">{breakdown.sentiment_stats?.positive || 0}</span>
+                <span className="text-[9px] uppercase tracking-wider text-emerald-600">Positivos</span>
+              </div>
+            </div>
+          )}
+
+          {/* 🔍 Botão Ver Detalhes */}
+          {breakdown && breakdown.total_posts > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleToggleDetails}
+              className="w-full h-7 text-[10px] font-bold text-purple-600 bg-purple-50/50 hover:bg-purple-100 rounded-lg"
+            >
+              {loadingDetails ? (
+                <Loader2 className="h-3 w-3 animate-spin mr-1" />
+              ) : (
+                <Eye className="h-3 w-3 mr-1" />
+              )}
+              {showDetails ? "Fechar Detalhes" : "Ver Detalhes Completos"}
+            </Button>
+          )}
+
+          {/* 📋 Painel de Detalhes Expandido */}
+          {showDetails && details && (
+            <div className="mt-2 pt-3 border-t border-purple-100 space-y-3 animate-in slide-in-from-top-2 duration-300">
+              {/* Resumo */}
+              <div className="grid grid-cols-3 gap-2">
+                <div className="text-center p-2 bg-purple-50 rounded-lg">
+                  <p className="text-lg font-black text-purple-700">{details.total_mentions || 0}</p>
+                  <p className="text-[9px] uppercase text-purple-500 font-bold">Menções</p>
+                </div>
+                <div className="text-center p-2 bg-cyan-50 rounded-lg">
+                  <p className="text-lg font-black text-cyan-700">{details.total_posts || 0}</p>
+                  <p className="text-[9px] uppercase text-cyan-500 font-bold">Posts</p>
+                </div>
+                <div className="text-center p-2 bg-amber-50 rounded-lg">
+                  <p className="text-lg font-black text-amber-700">{details.total_commenters || 0}</p>
+                  <p className="text-[9px] uppercase text-amber-500 font-bold">Autores</p>
+                </div>
+              </div>
+
+              {/* Sentimento */}
+              {details.sentiment && (
+                <div className="flex gap-1">
+                  <div className="flex-1 h-2 rounded-full bg-emerald-400" style={{ flex: details.sentiment.positive || 1 }} title={`${details.sentiment.positive} positivos`} />
+                  <div className="flex-1 h-2 rounded-full bg-slate-300" style={{ flex: details.sentiment.neutral || 1 }} title={`${details.sentiment.neutral} neutros`} />
+                  <div className="flex-1 h-2 rounded-full bg-red-400" style={{ flex: details.sentiment.negative || 1 }} title={`${details.sentiment.negative} negativos`} />
+                </div>
+              )}
+
+              {/* Posts */}
+              {details.posts && details.posts.length > 0 && (
+                <div>
+                  <p className="text-[10px] font-black uppercase text-slate-500 mb-1.5">📍 Posts Encontrados</p>
+                  <div className="space-y-1.5 max-h-32 overflow-y-auto">
+                    {details.posts.slice(0, 10).map((post: any, i: number) => (
+                      <div key={i} className="flex items-center gap-2 p-1.5 bg-slate-50 rounded-lg text-[10px]">
+                        <span className="font-bold text-slate-500 w-5">#{i + 1}</span>
+                        <a
+                          href={post.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:underline truncate flex-1 font-medium"
+                        >
+                          {post.url !== "sem_url" ? post.url.replace("https://www.instagram.com/", "").slice(0, 40) : "Post sem URL"}
+                        </a>
+                        <span className="font-bold text-slate-700 bg-white px-1.5 py-0.5 rounded">{post.comments_count} msgs</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Comentaristas */}
+              {details.commenters && details.commenters.length > 0 && (
+                <div>
+                  <p className="text-[10px] font-black uppercase text-slate-500 mb-1.5">👥 Top Comentaristas</p>
+                  <div className="flex flex-wrap gap-1">
+                    {details.commenters.slice(0, 15).map((c: any, i: number) => (
+                      <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-100 rounded-full text-[9px] font-bold text-slate-600">
+                        @{c.username}
+                        <span className="text-purple-500">({c.comments_count})</span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </Card>
     </div>
@@ -462,15 +637,34 @@ export default function CampaignSetupPage() {
 
   // 📡 Social Links (Monitor de Rivais)
   const [igHandles, setIgHandles] = useState<string[]>([""]);
-  const [tkHandles, setTkHandles] = useState<string[]>([""]);
-  const [keywords, setKeywords] = useState<string[]>([""]);
-  const [hashtags, setHashtags] = useState<string[]>([""]);
+  const [tkHandles, setTkHandles] = useState<string[]>([]);
+  const [keywords, setKeywords] = useState<string[]>([]);
+  const [hashtags, setHashtags] = useState<string[]>([]);
   const [savingSocial, setSavingSocial] = useState(false);
   const [socialLoaded, setSocialLoaded] = useState(false);
+
+  // Enterprise Status States
+  const [radarBreakdown, setRadarBreakdown] = useState<Record<string, RadarBreakdownItem>>({});
+  const [engineStatus, setEngineStatus] = useState<EngineStatus>({ status: 'checking' });
+
+  // ⚙️ Radar Advanced Settings
+  const [radarConfig, setRadarConfig] = useState<{
+    fetch_interval: string;
+    posts_limit: number;
+    last_sync: string | null;
+  }>({
+    fetch_interval: "12h",
+    posts_limit: 5,
+    last_sync: null,
+  });
+  const [isSyncing, setIsSyncing] = useState(false);
 
   // 🖥️ Console de Execução Global
   const [currentRunId, setCurrentRunId] = useState<string | null>(null);
   const [isConsoleOpen, setIsConsoleOpen] = useState(false);
+
+  // 🛡️ Prevenção de Loops Infinitos (Guarda de Inicialização Única por ID)
+  const initializedRef = useRef<string | null>(null);
 
   const handleRunStarted = (runId: string) => {
     console.log("🎧 Console listening to:", runId); // DEBUG
@@ -483,7 +677,7 @@ export default function CampaignSetupPage() {
     });
   };
 
-  const supabase = createClient();
+  const supabase = React.useMemo(() => createClient(), []);
   const { toast } = useToast();
 
   // --- HELPER FUNCTIONS FOR SOCIAL TARGETS ---
@@ -619,12 +813,26 @@ export default function CampaignSetupPage() {
   };
 
   useEffect(() => {
-    fetchCampaign();
-    fetchRuns();
-    fetchStrategies();
-    fetchDataHealth();
-    fetchSocialStats();
-    fetchSocialLinks();
+    // 🛡️ Guard: Executa apenas uma vez se o campaignId for o mesmo
+    if (initializedRef.current === campaignId) return;
+    initializedRef.current = campaignId;
+
+    console.log("🛠️ [INIT] Estabilizando Página de Setup para ID:", campaignId);
+
+    const init = async () => {
+      setLoading(true);
+      await Promise.all([
+        fetchCampaign(),
+        fetchRuns(),
+        fetchStrategies(),
+        fetchDataHealth(),
+        fetchSocialStats(),
+        fetchSocialLinks(),
+        fetchEnterpriseRadarHealth()
+      ]);
+      setLoading(false);
+    }
+    init();
   }, [campaignId]);
 
   // 📡 Fetch Social Radar Stats
@@ -641,6 +849,49 @@ export default function CampaignSetupPage() {
       }
     } catch (e) {
       console.log("[SocialRadar] Stats not available yet");
+    }
+  };
+
+  const fetchEnterpriseRadarHealth = async () => {
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
+      // 1. Fetch Engine Status Ping
+      setEngineStatus({ status: 'checking' });
+      const engineRes = await fetch(`${apiUrl}/api/admin/services/engine/test`, {
+        headers: { 'ngrok-skip-browser-warning': 'true' }
+      }).catch(() => null);
+
+      if (engineRes && engineRes.ok) {
+        const engineData = await engineRes.json();
+        setEngineStatus({
+          status: engineData.status,
+          latency_ms: engineData.latency_ms,
+          reason: engineData.reason,
+          last_check: new Date()
+        });
+      } else {
+        setEngineStatus({ status: 'error', reason: 'Failed to reach backend connection test', last_check: new Date() });
+      }
+
+      // 2. Fetch Radar Breakdown
+      const breakdownRes = await fetch(`${apiUrl}/api/campaign/${campaignId}/social/stats/breakdown`, {
+        headers: { 'ngrok-skip-browser-warning': 'true' }
+      }).catch(() => null);
+
+      if (breakdownRes && breakdownRes.ok) {
+        const breakdownData = await breakdownRes.json();
+        if (breakdownData.breakdown && Array.isArray(breakdownData.breakdown)) {
+          const mappedBreakdown: Record<string, RadarBreakdownItem> = {};
+          breakdownData.breakdown.forEach((item: RadarBreakdownItem) => {
+            mappedBreakdown[item.target] = item;
+          });
+          setRadarBreakdown(mappedBreakdown);
+        }
+      }
+
+    } catch (e) {
+      console.error("[EnterpriseHealth] Failed to load deep stats", e);
     }
   };
 
@@ -667,6 +918,13 @@ export default function CampaignSetupPage() {
         if (tk.length > 0) setTkHandles(tk);
         if (sl.keywords?.length > 0) setKeywords(sl.keywords);
         if (sl.hashtags?.length > 0) setHashtags(sl.hashtags);
+        if (sl.radar_config) {
+          setRadarConfig({
+            fetch_interval: sl.radar_config.fetch_interval || "12h",
+            posts_limit: sl.radar_config.posts_limit || 100,
+            last_sync: sl.radar_config.last_sync || null,
+          });
+        }
       }
       setSocialLoaded(true);
     } catch (e) {
@@ -692,6 +950,7 @@ export default function CampaignSetupPage() {
           .map((h) => h.trim().replace(/^#/, ""))
           .filter((h) => h)
           .map((h) => `#${h}`),
+        radar_config: radarConfig,
       };
 
       const { error } = await supabase
@@ -847,6 +1106,49 @@ export default function CampaignSetupPage() {
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(event.active.id as string);
+  };
+
+  // 🔄 Forçar sincronização do Radar
+  const handleSyncSocialData = async () => {
+    setIsSyncing(true);
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      // Usar o limite definido no radarConfig (ou 10 como default)
+      const max_posts = radarConfig.posts_limit || 10;
+
+      const res = await fetch(
+        `${apiUrl}/api/campaign/${campaignId}/social/scrape?max_posts=${max_posts}`,
+        {
+          method: "POST",
+          headers: { "ngrok-skip-browser-warning": "true" }
+        }
+      );
+
+      if (!res.ok) {
+        throw new Error("Erro ao acionar motor");
+      }
+
+      const result = await res.json();
+
+      const newSyncDate = new Date().toISOString();
+      setRadarConfig(prev => ({ ...prev, last_sync: newSyncDate }));
+
+      toast({
+        title: "📡 Sincronização Concluída!",
+        description: `${result.mentions_count || 0} menções detectadas e mapeadas. Atualizando painéis...`,
+      });
+      fetchEnterpriseRadarHealth();
+      // Salva o config atualizado p/ manter o last_sync persistente e recarregar stats
+      setTimeout(saveSocialLinks, 500);
+    } catch (e: any) {
+      toast({
+        title: "Erro de Sincronização",
+        description: "Não foi possível conectar ao motor AIOS ou executar scraper.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   const handleDragEnd = async (event: DragEndEvent) => {
@@ -1154,36 +1456,25 @@ export default function CampaignSetupPage() {
     }
   };
 
-  // 🔧 FIX: Filtros com versão correta
-  // - "Sugestões da IA": Filtra por run_id (versão selecionada) E status=suggested
-  // - "Aprovados": Mostra TODOS aprovados/publicados/executados (de qualquer versão)
-  const suggestedStrategies = strategies.filter(
+  // 🔧 FIX: Filtros com versão correta (Memorizados para evitar LOOPS)
+  const suggestedStrategies = React.useMemo(() => strategies.filter(
     (s) => s.status === "suggested" && s.run_id === selectedRunId,
-  );
-  const approvedStrategies = strategies.filter(
+  ), [strategies, selectedRunId]);
+
+  const approvedStrategies = React.useMemo(() => strategies.filter(
     (s) =>
       s.status === "approved" ||
       s.status === "published" ||
       s.status === "executed",
-  );
+  ), [strategies]);
 
   // 🔧 DEBUG: Log quando versão muda
+  // 🔧 SYNC: Sincroniza console com a versão selecionada sem disparar re-render em loop
   useEffect(() => {
-    if (selectedRunId) {
-      console.log("🔄 [VERSION CHANGE] Trocando versão para:", selectedRunId);
-      console.log(
-        "🔄 [VERSION CHANGE] Sugestões filtradas:",
-        suggestedStrategies.length,
-      );
-      console.log(
-        "🔄 [VERSION CHANGE] Aprovados (todas versões):",
-        approvedStrategies.length,
-      );
-
-      // Sincroniza console para mostrar logs históricos
+    if (selectedRunId && selectedRunId !== currentRunId) {
       setCurrentRunId(selectedRunId);
     }
-  }, [selectedRunId]);
+  }, [selectedRunId, currentRunId]);
 
   const handleStrategyClick = (strategy: Strategy) => {
     setSelectedStrategy(strategy);
@@ -1563,6 +1854,13 @@ export default function CampaignSetupPage() {
                               target={handle}
                               onChange={(val) => updateIgHandle(idx, val)}
                               onDelete={() => removeIgHandle(idx)}
+                              breakdown={radarBreakdown[handle]}
+                              density={radarConfig.posts_limit}
+                              onDensityChange={(v) => {
+                                setRadarConfig(prev => ({ ...prev, posts_limit: v }));
+                                setTimeout(saveSocialLinks, 100);
+                              }}
+                              campaignId={campaignId}
                             />
                           ))}
                         </div>
@@ -1593,6 +1891,13 @@ export default function CampaignSetupPage() {
                               target={handle}
                               onChange={(val) => updateTkHandle(idx, val)}
                               onDelete={() => removeTkHandle(idx)}
+                              breakdown={radarBreakdown[handle]}
+                              density={radarConfig.posts_limit}
+                              onDensityChange={(v) => {
+                                setRadarConfig(prev => ({ ...prev, posts_limit: v }));
+                                setTimeout(saveSocialLinks, 100);
+                              }}
+                              campaignId={campaignId}
                             />
                           ))}
                         </div>
@@ -1622,6 +1927,13 @@ export default function CampaignSetupPage() {
                               target={kw}
                               onChange={(val) => updateKeyword(idx, val)}
                               onDelete={() => removeKeyword(idx)}
+                              breakdown={radarBreakdown[kw]}
+                              density={radarConfig.posts_limit}
+                              onDensityChange={(v) => {
+                                setRadarConfig(prev => ({ ...prev, posts_limit: v }));
+                                setTimeout(saveSocialLinks, 100);
+                              }}
+                              campaignId={campaignId}
                             />
                           ))}
                         </div>
@@ -1651,6 +1963,13 @@ export default function CampaignSetupPage() {
                               target={ht}
                               onChange={(val) => updateHashtag(idx, val)}
                               onDelete={() => removeHashtag(idx)}
+                              breakdown={radarBreakdown[ht]}
+                              density={radarConfig.posts_limit}
+                              onDensityChange={(v) => {
+                                setRadarConfig(prev => ({ ...prev, posts_limit: v }));
+                                setTimeout(saveSocialLinks, 100);
+                              }}
+                              campaignId={campaignId}
                             />
                           ))}
                         </div>
@@ -1658,6 +1977,151 @@ export default function CampaignSetupPage() {
                     </div>
                   </CardContent>
                 </Card>
+
+                {/* 🚀 PAINEL AVANÇADO: Saúde e Configuração do Motor */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
+                  {/* Card de Saúde do Radar */}
+                  <Card className="col-span-1 border-slate-200 shadow-sm relative overflow-hidden bg-white/50 backdrop-blur-sm">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                        <CheckCircle className="h-4 w-4 text-emerald-500" />
+                        Saúde do Radar
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="flex flex-col gap-1">
+                        <span className="text-xs text-slate-500 font-medium uppercase tracking-wider">Menções Rastreadas</span>
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-3xl font-black text-slate-900">{socialStats?.total_mentions || 0}</span>
+                          <span className="text-sm font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">Ativo</span>
+                        </div>
+                      </div>
+
+                      <div className="bg-slate-50 rounded-lg p-3 border border-slate-100 space-y-2">
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs text-slate-500">Última Sincronização</span>
+                          <span className="text-xs font-bold text-slate-700">
+                            {radarConfig.last_sync ? new Date(radarConfig.last_sync).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Pendente'}
+                          </span>
+                        </div>
+                        <Button
+                          onClick={handleSyncSocialData}
+                          disabled={isSyncing}
+                          className="w-full h-8 text-xs bg-white text-slate-700 hover:bg-slate-100 border border-slate-200 mt-2"
+                        >
+                          {isSyncing ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-2" /> : <RefreshCcw className="h-3.5 w-3.5 mr-2" />}
+                          {isSyncing ? "Sincronizando..." : "Sincronizar Agora"}
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* NOVO: Card de Saúde da Conexão Externa (Tavily/AIOS) */}
+                  <Card className="col-span-1 border-slate-200 shadow-sm relative overflow-hidden bg-gradient-to-br from-slate-50 to-white">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-bold text-slate-800 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Globe className="h-4 w-4 text-blue-500" />
+                          Conexão AIOS
+                        </div>
+                        {engineStatus.status === 'checking' && <Loader2 className="h-4 w-4 animate-spin text-slate-300" />}
+                        {engineStatus.status === 'online' && <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.6)]" />}
+                        {engineStatus.status === 'offline' && <div className="h-2 w-2 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]" />}
+                        {engineStatus.status === 'error' && <AlertTriangle className="h-4 w-4 text-amber-500" />}
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="flex flex-col gap-1">
+                        <span className="text-xs text-slate-500 font-medium uppercase tracking-wider">Status da Rede (Tavily)</span>
+                        <div className="flex items-baseline gap-2">
+                          <span className={cn(
+                            "text-2xl font-black uppercase tracking-tight",
+                            engineStatus.status === 'online' ? "text-emerald-600" :
+                              engineStatus.status === 'offline' ? "text-red-600" :
+                                engineStatus.status === 'error' ? "text-amber-600" : "text-slate-400"
+                          )}>
+                            {engineStatus.status === 'checking' ? 'Testando...' : engineStatus.status}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="bg-slate-50 rounded-lg p-3 border border-slate-100 space-y-2 relative">
+                        <Terminal className="h-16 w-16 absolute -top-4 -right-2 text-slate-900 opacity-[0.02]" />
+                        <div className="flex justify-between items-center z-10 relative">
+                          <span className="text-xs text-slate-500">Latência do Motor</span>
+                          <span className="text-xs font-bold text-slate-700 font-mono">
+                            {engineStatus.latency_ms ? `${engineStatus.latency_ms}ms` : '--'}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center z-10 relative">
+                          <span className="text-[10px] text-slate-400">Último Teste:</span>
+                          <span className="text-[10px] text-slate-500">
+                            {engineStatus.last_check ? new Date(engineStatus.last_check).toLocaleTimeString() : '--:--'}
+                          </span>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Card de Configuração do Motor */}
+                  <Card className="col-span-1 lg:col-span-1 border-slate-200 shadow-sm relative overflow-hidden bg-white/50 backdrop-blur-sm">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                        <Settings className="h-4 w-4 text-purple-500" />
+                        Configurações do Motor AIOS
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        {/* Frequência */}
+                        <div className="space-y-3">
+                          <Label className="text-xs font-bold text-slate-500 uppercase">Frequência de Varredura</Label>
+                          <Select
+                            value={radarConfig.fetch_interval}
+                            onValueChange={(val) => {
+                              setRadarConfig(prev => ({ ...prev, fetch_interval: val }));
+                              setTimeout(saveSocialLinks, 100);
+                            }}
+                          >
+                            <SelectTrigger className="h-10 bg-slate-50 font-medium border-slate-100 rounded-xl">
+                              <SelectValue placeholder="Selecione o intervalo" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="6h">A cada 6 horas</SelectItem>
+                              <SelectItem value="12h">A cada 12 horas</SelectItem>
+                              <SelectItem value="24h">Uma vez ao dia (24h)</SelectItem>
+                              <SelectItem value="manual">Manual (Apenas no botão)</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <p className="text-[11px] text-slate-400">Determina de quanto em quanto tempo o robô vasculha a rede em busca de novidades.</p>
+                        </div>
+
+                        {/* Limites de Posts */}
+                        <div className="space-y-3">
+                          <Label className="text-xs font-bold text-slate-500 uppercase">Volume Histórico (Posts por Conta)</Label>
+                          <Select
+                            value={radarConfig.posts_limit.toString()}
+                            onValueChange={(val) => {
+                              setRadarConfig(prev => ({ ...prev, posts_limit: parseInt(val) }));
+                              setTimeout(saveSocialLinks, 100);
+                            }}
+                          >
+                            <SelectTrigger className="h-10 bg-slate-50 font-medium border-slate-100 rounded-xl">
+                              <SelectValue placeholder="Selecione o limite" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="5">🧪 5 posts — Teste (economia máxima)</SelectItem>
+                              <SelectItem value="20">📊 20 posts — Normal (monitoramento)</SelectItem>
+                              <SelectItem value="100">🚀 100 posts — Elite (análise profunda)</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <p className="text-[11px] text-slate-400">⚠️ Cada post consome créditos de API. Use <strong>5 (Teste)</strong> para validar perfis antes de escalar.</p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
               </div>
             )}
 

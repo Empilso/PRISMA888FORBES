@@ -82,22 +82,20 @@ function ClusteredMarkers({ locations, onLocationClick, isCompetitor = false }: 
             b.getNorth()
         ];
 
-        // Verifica se houve mudança real nos valores (evita setState loop)
-        const hasBoundsChanged = !bounds ||
-            newBounds[0] !== bounds[0] ||
-            newBounds[1] !== bounds[1] ||
-            newBounds[2] !== bounds[2] ||
-            newBounds[3] !== bounds[3];
+        // Usa functional state update para não precisar de 'bounds' na dependency array do hook
+        setBounds((prevBounds) => {
+            const hasBoundsChanged = !prevBounds ||
+                newBounds[0] !== prevBounds[0] ||
+                newBounds[1] !== prevBounds[1] ||
+                newBounds[2] !== prevBounds[2] ||
+                newBounds[3] !== prevBounds[3];
 
-        if (hasBoundsChanged) {
-            setBounds(newBounds);
-        }
+            return hasBoundsChanged ? newBounds : prevBounds;
+        });
 
         const newZoom = map.getZoom();
-        if (newZoom !== zoom) {
-            setZoom(newZoom);
-        }
-    }, [map, bounds, zoom]);
+        setZoom((prevZoom) => newZoom !== prevZoom ? newZoom : prevZoom);
+    }, [map]);
 
     // Subscreve eventos do mapa
     useMapEvents({
@@ -188,7 +186,7 @@ import { memo } from 'react';
 
 // ... (existing code)
 
-const MapComponent = memo(function MapComponent({
+const MapComponent = function MapComponent({
     locations,
     competitorLocations = [],
     onLocationClick,
@@ -242,6 +240,6 @@ const MapComponent = memo(function MapComponent({
             {children}
         </MapContainer>
     );
-});
+};
 
 export default MapComponent;

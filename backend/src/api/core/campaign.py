@@ -161,9 +161,9 @@ async def generate_tactical_action(campaign_id: str, location_id: int):
         
         return TacticalActionResponse(
             success=True,
-            action_title=strategy['title'],
-            action_description=strategy['description'],
-            strategy_id=strategy['id']
+            action_title=strategy.get('title', 'Ação Sugerida'),
+            action_description=strategy.get('description', ''),
+            strategy_id=str(strategy.get('id', ''))
         )
     except Exception as e:
         print(f"Erro no Agente de Guerrilha: {e}")

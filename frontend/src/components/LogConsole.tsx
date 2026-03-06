@@ -32,7 +32,7 @@ export function LogConsole({ campaignId, className, height = "h-[400px]", theme 
     const [isConnected, setIsConnected] = useState(false);
     const [rainbowEnabled, setRainbowEnabled] = useState(true);
     const scrollRef = useRef<HTMLDivElement>(null);
-    const supabase = createClient();
+    const supabase = React.useMemo(() => createClient(), []);
 
     // Auto-scroll to bottom
     useEffect(() => {
@@ -86,7 +86,7 @@ export function LogConsole({ campaignId, className, height = "h-[400px]", theme 
         return () => {
             supabase.removeChannel(channel);
         };
-    }, [campaignId, supabase]);
+    }, [campaignId]);
 
     const handleClear = () => {
         setLogs([]);

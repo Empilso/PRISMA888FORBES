@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useToast } from "@/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -103,46 +103,50 @@ export function ElectoralMapFull({ campaignId, campaigns }: ElectoralMapFullProp
     const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(['instagram', 'tiktok']);
     const [selectedRivals, setSelectedRivals] = useState<string[]>([]);
 
-    // Derived unique rivals: Use backend targets first, fallback to mentions
+    // Derived unique rivals: Use backend targets ONLY (conforme solicitação)
     const uniqueRivals = useMemo(() => {
         const targets = socialStats?.monitored_targets || [];
-        if (targets.length > 0) {
-            return targets
-                .filter(Boolean)
-                .map(t => String(t).startsWith('@') ? String(t).substring(1) : String(t));
-        }
+        // Mantém o formato original vindo do backend (com @ se existir)
+        return targets.filter(Boolean).map(t => String(t));
+    }, [socialStats]);
 
-        // EXTRACTION QI 190: Extract from ALL mentions, regardless of current filter
-        return Array.from(new Set(socialMentions.map(m => {
-            const h = m.rival_handle || '';
-            return h.startsWith('@') ? h.substring(1) : h;
-        }))).filter(Boolean).sort();
-    }, [socialMentions, socialStats]);
+    // QI 190: Estado para rastrear se o usuário já interagiu com os filtros de rivais
+    const [isRivalFilterModified, setIsRivalFilterModified] = useState(false);
 
-    // Update selected rivals when uniqueRivals change (e.g. initial load)
-    useEffect(() => {
-        if (uniqueRivals.length > 0 && selectedRivals.length === 0) {
-            setSelectedRivals(uniqueRivals);
-        } else if (uniqueRivals.length > 0 && selectedRivals.length > 0) {
-            // Estabilização QI 190: Evitar que re-cálculos de uniqueRivals forcem re-renders inúteis
-            // se o conteúdo for idêntico
-            const isIdentical = uniqueRivals.length === selectedRivals.length &&
-                uniqueRivals.every((v, i) => v === selectedRivals[i]);
-            if (!isIdentical && selectedRivals.length === 0) {
-                setSelectedRivals(uniqueRivals);
-            }
-        }
-    }, [uniqueRivals]); // Removido selectedRivals do array para evitar loop
+    const toggleRival = (r: string) => {
+        setIsRivalFilterModified(true);
+        setSelectedRivals(prev => prev.includes(r) ? prev.filter(x => x !== r) : [...prev, r]);
+    };
 
     // Computed filtered mentions
     const filteredMentions = useMemo(() => {
+        // QI 190: Se o usuário ainda não tocou nos filtros de rivais e temos menções, 
+        // mostramos todas as menções inicialmente (Modo Inteligente).
+        const hasNoInteraction = !isRivalFilterModified;
+
         return socialMentions.filter(m => {
-            const rawHandle = m.rival_handle || '';
-            const handle = rawHandle.startsWith('@') ? rawHandle.substring(1) : rawHandle;
-            return selectedRivals.includes(handle) &&
-                selectedPlatforms.includes((m.platform || '').toLowerCase());
+            // Normalização agressiva para comparação
+            const mHandle = (m.rival_handle || '').toLowerCase().replace(/@/g, '');
+
+            // Filtro de Plataforma (Sempre ativo)
+            const isPlatformSelected = selectedPlatforms.includes((m.platform || '').toLowerCase());
+            if (!isPlatformSelected) return false;
+
+            // Se o usuário já interagiu com os botões de alvos, respeitamos estritamente a seleção
+            if (isRivalFilterModified) {
+                // Se o usuário desselecionou tudo, não mostra nada
+                if (selectedRivals.length === 0) return false;
+
+                return selectedRivals.some(selected => {
+                    const s = selected.toLowerCase().replace(/@/g, '');
+                    return s === mHandle;
+                });
+            }
+
+            // Se não interagiu, mostra tudo o que for de plataforma válida
+            return true;
         });
-    }, [socialMentions, selectedRivals, selectedPlatforms]);
+    }, [socialMentions, selectedRivals, selectedPlatforms, isRivalFilterModified]);
 
     // Otimização QI 190: Memoizar locations para evitar re-calculo caro no Leaflet
     const memoizedLocations = useMemo(() => locations, [locations]);
@@ -150,10 +154,6 @@ export function ElectoralMapFull({ campaignId, campaigns }: ElectoralMapFullProp
     // Filter toggles
     const togglePlatform = (p: string) => {
         setSelectedPlatforms(prev => prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p]);
-    };
-
-    const toggleRival = (r: string) => {
-        setSelectedRivals(prev => prev.includes(r) ? prev.filter(x => x !== r) : [...prev, r]);
     };
 
 
@@ -763,7 +763,9 @@ export function ElectoralMapFull({ campaignId, campaigns }: ElectoralMapFullProp
                             <span className="text-xs font-bold text-slate-400 uppercase tracking-widest flex justify-between">Alvos Monitorados</span>
                             <div className="flex flex-col gap-2">
                                 {uniqueRivals.map(rival => {
-                                    const isSelected = selectedRivals.includes(rival);
+                                    // QI 190: Se o filtro não foi modificado, todos aparecem selecionados
+                                    const isSelected = isRivalFilterModified ? selectedRivals.includes(rival) : true;
+
                                     const hash = rival.split('').reduce((acc, char) => char.charCodeAt(0) + ((acc << 5) - acc), 0);
                                     const h = Math.abs(hash) % 360;
                                     const colorAccent = `hsl(${h}, 70%, 50%)`;
@@ -771,7 +773,7 @@ export function ElectoralMapFull({ campaignId, campaigns }: ElectoralMapFullProp
                                         <button key={rival} onClick={() => toggleRival(rival)} className={cn("flex items-center justify-between p-2 rounded-xl border transition-all", isSelected ? 'bg-white dark:bg-slate-900 shadow-sm border-slate-200 dark:border-slate-700' : 'bg-slate-50 dark:bg-slate-800/50 border-transparent opacity-60')}>
                                             <div className="flex items-center gap-2">
                                                 <div className="w-6 h-6 rounded-md flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: isSelected ? colorAccent : '#cbd5e1' }}>{rival.charAt(0).toUpperCase()}</div>
-                                                <span className={cn("text-xs font-medium", isSelected ? 'text-slate-700 dark:text-slate-200' : 'text-slate-400')}>@{rival}</span>
+                                                <span className={cn("text-xs font-medium", isSelected ? 'text-slate-700 dark:text-slate-200' : 'text-slate-400')}>{rival}</span>
                                             </div>
                                             <div className={cn("w-4 h-4 rounded-full border flex items-center justify-center", isSelected ? 'border-purple-500 bg-purple-500 text-white' : 'border-slate-300')}>{isSelected && <svg viewBox="0 0 24 24" fill="none" className="w-3 h-3 stroke-current stroke-[3]"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}</div>
                                         </button>

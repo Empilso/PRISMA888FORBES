@@ -31,4 +31,5 @@ def inspect_table(table_name):
 
 if __name__ == "__main__":
     inspect_table("personas")
-    inspect_table("agents")
+    inspect_table("social_mentions")
+    inspect_table("campaigns")

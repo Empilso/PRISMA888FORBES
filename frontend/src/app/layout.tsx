@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
@@ -9,8 +9,6 @@ export const metadata: Metadata = {
     title: "PRISMA 888 - Inteligência Política",
     description: "Sistema de Inteligência e Estratégia Política de Elite",
     manifest: "/manifest.json",
-    themeColor: "#0a0a0b",
-    viewport: "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0",
     appleWebApp: {
         capable: true,
         statusBarStyle: "black-translucent",
@@ -19,6 +17,14 @@ export const metadata: Metadata = {
     icons: {
         apple: "/icon-512.png",
     }
+};
+
+export const viewport: Viewport = {
+    themeColor: "#0a0a0b",
+    width: "device-width",
+    initialScale: 1,
+    maximumScale: 1,
+    userScalable: false,
 };
 
 import Providers from "./providers";

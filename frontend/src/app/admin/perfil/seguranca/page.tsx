@@ -31,7 +31,7 @@ export default function SecuritySettingsPage() {
             }
         }
         checkMfa();
-    }, [supabase]);
+    }, []);
 
     const startEnrollment = async () => {
         setLoading(true);

@@ -76,7 +76,7 @@ class ApifyScraper:
             return items_res.json() if items_res.status_code == 200 else []
 
     async def scrape_instagram_comments(self, handles: list[str], max_posts: int = 5) -> list[dict]:
-        """Scrape comentários de posts de perfis específicos."""
+        """Scrape comentários de posts de perfis específicos — dados REAIS."""
         all_comments = []
         for handle in handles:
             clean_handle = handle.replace("@", "").strip()
@@ -85,7 +85,9 @@ class ApifyScraper:
                 "directUrls": [f"https://www.instagram.com/{clean_handle}/"],
                 "resultsLimit": max_posts * 10
             }
+            print(f"[Apify] 📸 Buscando IG @{clean_handle} (limit={max_posts * 10})")
             results = await self._run_actor("apify/instagram-comment-scraper", run_input)
+            print(f"[Apify] 📸 Retornou {len(results)} itens de @{clean_handle}")
             for item in results:
                 all_comments.append({
                     "author": item.get("ownerUsername", "anônimo"),
@@ -93,7 +95,9 @@ class ApifyScraper:
                     "platform": "instagram",
                     "source_url": item.get("url", ""),
                     "rival_handle": f"@{clean_handle}",
-                    "likes": item.get("likesCount", 0)
+                    "likes": item.get("likesCount", 0),
+                    "comment_id": item.get("id", ""),
+                    "timestamp": item.get("timestamp", ""),
                 })
         return all_comments
 
@@ -133,13 +137,9 @@ class ApifyScraper:
                     "likes": item.get("likesCount", 0)
                 })
         return all_results
-                        all_results.append({"text": f"Mencao simulada para termo {kw}", "platform": "tiktok"})
-            except Exception as e:
-                print(f"[Apify] ⚠️ Erro na busca de keyword {kw}: {e}")
-        return all_results
 
     async def scrape_tiktok_comments(self, handles: list[str], max_posts: int = 5) -> list[dict]:
-        """Scrape comentários do TikTok usando apify/tiktok-scraper."""
+        """Scrape comentários do TikTok usando apify/tiktok-scraper — dados REAIS."""
         all_comments = []
         for handle in handles:
             clean_handle = handle.replace("@", "").strip()
@@ -151,40 +151,25 @@ class ApifyScraper:
                     "resultsLimit": max_posts * 10,
                     "excludeReviews": True
                 }
-                async with httpx.AsyncClient(timeout=120.0) as client:
-                    response = await client.post(
-                        f"{self.base_url}/acts/apify~tiktok-scraper/runs",
-                        params={"token": self.api_token},
-                        json=run_input
-                    )
-                    if response.status_code != 201: continue
-                    
-                    run_data = response.json()
-                    run_id = run_data["data"]["id"]
-                    
-                    # Wait/Poll logic (Simplified for space, same as Instagram)
-                    import asyncio
-                    for _ in range(20):
-                        await asyncio.sleep(15)
-                        status_res = await client.get(f"{self.base_url}/actor-runs/{run_id}", params={"token": self.api_token})
-                        if status_res.json()["data"]["status"] == "SUCCEEDED": break
-                    
-                    dataset_id = run_data["data"]["defaultDatasetId"]
-                    items_res = await client.get(f"{self.base_url}/datasets/{dataset_id}/items", params={"token": self.api_token, "format": "json"})
-                    items = items_res.json()
-                    
-                    for item in items:
-                        text = item.get("text") or item.get("commentText", "")
-                        if text and len(text) > 5:
-                            all_comments.append({
-                                "author": item.get("author", "anônimo"),
-                                "text": text,
-                                "platform": "tiktok",
-                                "source_url": item.get("webVideoUrl", ""),
-                                "rival_handle": f"@{clean_handle}"
-                            })
+                print(f"[Apify] 🎵 Buscando TikTok @{clean_handle} (limit={max_posts * 10})")
+                results = await self._run_actor("apify/tiktok-scraper", run_input)
+                print(f"[Apify] 🎵 Retornou {len(results)} itens de TikTok @{clean_handle}")
+                
+                for item in results:
+                    text = item.get("text") or item.get("commentText", "")
+                    if text and len(text) > 5:
+                        all_comments.append({
+                            "author": item.get("authorMeta", {}).get("name", "") or item.get("author", "anônimo"),
+                            "text": text,
+                            "platform": "tiktok",
+                            "source_url": item.get("webVideoUrl", ""),
+                            "rival_handle": f"@{clean_handle}",
+                            "likes": item.get("diggCount", 0) or item.get("likesCount", 0),
+                            "comment_id": item.get("id", ""),
+                            "timestamp": item.get("createTime", ""),
+                        })
             except Exception as e:
-                print(f"[Apify] TikTok Error for @{clean_handle}: {e}")
+                print(f"[Apify] ❌ TikTok Error for @{clean_handle}: {e}")
         return all_comments
 
 
@@ -381,17 +366,15 @@ class MockDataGenerator:
             mentions.append({
                 "campaign_id": campaign_id,
                 "platform": random.choice(["instagram", "tiktok"]),
-                "author": f"user_{random.randint(1000, 9999)}",
+                "author_username": f"user_{random.randint(1000, 9999)}",
                 "text": text,
-                "sentiment": random.randint(*sent_range),
                 "sentiment_label": label,
                 "inferred_neighborhood": neighborhood["name"],
                 "lat": city_lat + neighborhood["lat_offset"] + jitter_lat,
                 "lng": city_lng + neighborhood["lng_offset"] + jitter_lng,
-                "source_url": "",
-                "rival_handle": rival,
-                "is_mock": True,
-                "scraped_at": datetime.now(timezone.utc).isoformat()
+                "post_url": "",
+                "target_type": "rival",
+                "rival_handle": rival
             })
 
         print(f"[MockGen] ✅ Gerados {len(mentions)} comentários mock para {city}")
@@ -407,7 +390,7 @@ class SocialRadarPipeline:
     def __init__(self):
         self.supabase = get_supabase_client()
 
-    async def execute(self, campaign_id: str) -> dict:
+    async def execute(self, campaign_id: str, max_posts: int = 10) -> dict:
         """
         Executa o pipeline completo para uma campanha.
         Retorna dict com status e contagem de menções.
@@ -423,9 +406,6 @@ class SocialRadarPipeline:
             raise ValueError(f"Campanha {campaign_id} não encontrada")
 
         city = campaign.data.get("city", "São Paulo")
-        social_links = campaign.data.get("social_links") or {}
-        ig_handles = social_links.get("instagram", [])
-        tk_handles = social_links.get("tiktok", [])
         
         # Novo QI 190: Buscar monitores por target_type (profile, keyword, hashtag)
         monitors = {"profile": [], "keyword": [], "hashtag": []}
@@ -447,31 +427,56 @@ class SocialRadarPipeline:
         except Exception as e:
             print(f"[Pipeline] ⚠️ social_monitors skip: {e}")
 
-        print(f"[Pipeline] 🎯 Campanha: {campaign_id} | Cidade: {city}")
+        print(f"[Pipeline] 🎯 Campanha: {campaign_id} | Cidade: {city} | Limite: {max_posts}")
+        
+        # NOVO: Lei do Sync Incremental - Não apagamos mais o histórico!
+        # Vamos buscar os IDs dos comentários já existentes para não duplicar.
+        existing_ids = set()
+        try:
+            res_ids = self.supabase.table("social_mentions") \
+                .select("comment_id") \
+                .eq("campaign_id", campaign_id) \
+                .neq("comment_id", "") \
+                .execute()
+            if res_ids.data:
+                existing_ids = {row["comment_id"] for row in res_ids.data if row.get("comment_id")}
+            print(f"[Pipeline] 🛡️ Sync Incremental Ativo: {len(existing_ids)} comentários já no banco.")
+        except Exception as e:
+            print(f"[Pipeline] ⚠️ Erro ao buscar IDs existentes: {e}")
+
         print(f"[Pipeline] 🔍 Alvos - Perfis: {len(monitors['profile'])} | Temas: {len(monitors['keyword'])} | Hashtags: {len(monitors['hashtag'])}")
 
         comments = []
-        used_mock = False
 
         # 2. Tentar Scraping Real (QI 190 - Escuta Global)
         scraper = ApifyScraper()
         
-        # Scrape de Perfis
+        # Scrape de Perfis (Instagram e TikTok)
         if monitors["profile"]:
             try:
-                # Filtrar handles por plataforma se necessário ou mandar todos
-                ig_profiles = [h for h in monitors["profile"] if h.startswith("@") or "instagram" in h] # Heuristica simples
+                # Filtrar handles por plataforma
+                ig_profiles = [h for h in monitors["profile"] if h.startswith("@") or "instagram" in h]
+                tk_profiles = [h for h in monitors["profile"] if "tiktok" in h or not h.startswith("@")] # Simplificação: se não tem @ e não é IG, tenta TK
+                
+                # Se for handle tático puro (ex: @webermanga), o scraper detecta pela plataforma no DB
+                # Mas aqui enviamos para os métodos específicos
                 if ig_profiles:
-                    ig_comments = await scraper.scrape_instagram_comments(ig_profiles)
+                    ig_comments = await scraper.scrape_instagram_comments(ig_profiles, max_posts=max_posts)
                     comments.extend(ig_comments)
-                    print(f"[Pipeline] 📡 Apify retornou {len(ig_comments)} comentários de perfis")
+                    print(f"[Pipeline] 📸 Apify retornou {len(ig_comments)} comentários de IG")
+
+                if tk_profiles:
+                    tk_comments = await scraper.scrape_tiktok_comments(tk_profiles, max_posts=max_posts)
+                    comments.extend(tk_comments)
+                    print(f"[Pipeline] 🎵 Apify retornou {len(tk_comments)} comentários de TikTok")
+
             except Exception as e:
                 print(f"[Pipeline] ⚠️ Scrape de perfis falhou: {e}")
 
         # Scrape de Keywords (Temas)
         if monitors["keyword"]:
             try:
-                kw_results = await scraper.scrape_keywords(monitors["keyword"])
+                kw_results = await scraper.scrape_keywords(monitors["keyword"], max_results=max_posts * 2)
                 comments.extend(kw_results)
                 print(f"[Pipeline] 🔍 Apify retornou {len(kw_results)} resultados por temas")
             except Exception as e:
@@ -480,45 +485,51 @@ class SocialRadarPipeline:
         # Scrape de Hashtags
         if monitors["hashtag"]:
             try:
-                tag_results = await scraper.scrape_hashtags(monitors["hashtag"])
+                tag_results = await scraper.scrape_hashtags(monitors["hashtag"], max_results=max_posts * 2)
                 comments.extend(tag_results)
                 print(f"[Pipeline] 🏷️ Apify retornou {len(tag_results)} resultados por hashtags")
             except Exception as e:
                 print(f"[Pipeline] ⚠️ Scrape de hashtags falhou: {e}")
-                print(f"[Pipeline] 📡 Apify retornou {len(tk_comments)} comentários de TikTok")
-            except Exception as e:
-                print(f"[Pipeline] ⚠️ Apify TikTok falhou: {e}")
 
-        # 3. Fallback: Mock Mode
+        # 3. Sem dados reais → Retornar erro claro (Mock desativado)
         if not comments:
-            print("[Pipeline] 🎭 Ativando MOCK MODE — gerando dados fictícios")
-            mock_gen = MockDataGenerator()
-            mock_mentions = await mock_gen.generate_mock_mentions(
-                campaign_id=campaign_id,
-                city=city,
-                rival_handles=all_handles or ["@adversario"],
-                count=random.randint(10, 15)
-            )
-            # Mocks já vêm com sentimento, inserir direto
-            self._persist_mentions(mock_mentions)
-            used_mock = True
+            print("[Pipeline] ⚠️ Nenhum dado real capturado. Mock Mode DESATIVADO.")
             return {
-                "success": True,
-                "mentions_count": len(mock_mentions),
-                "source": "mock",
+                "success": False,
+                "mentions_count": 0,
+                "source": "none",
                 "city": city,
-                "message": f"🎭 Mock Mode: {len(mock_mentions)} menções geradas para {city}"
+                "message": "⚠️ Nenhum dado real capturado."
             }
 
-        # 4. Refinar sentimento com LLM
-        if comments:
+        # NOVO: Filtrar apenas comentários novos antes do Refinador LLM
+        new_comments = []
+        for c in comments:
+            c_id = c.get("comment_id")
+            if not c_id or c_id not in existing_ids:
+                new_comments.append(c)
+
+        if not new_comments:
+            print("[Pipeline] 🛡️ Nenhum comentário novo encontrado. Economia de LLM ativada.")
+            return {
+                "success": True,
+                "mentions_count": 0,
+                "source": "incremental",
+                "city": city,
+                "message": f"🛡️ Sync Incremental: 0 novos / {len(existing_ids)} mantidos"
+            }
+
+        print(f"[Pipeline] 🧠 Enviando {len(new_comments)} NOVOS comentários para Refinaria LLM...")
+
+        # 4. Refinar sentimento com LLM (apenas os novos)
+        if new_comments:
             try:
                 refinery = SentimentRefinery()
-                enriched = refinery.analyze_batch(comments, city)
+                enriched = refinery.analyze_batch(new_comments, city)
             except Exception as e:
                 print(f"[Pipeline] ⚠️ Refinaria falhou: {e}")
                 # Fallback: marcar como neutro
-                for c in comments:
+                for c in new_comments:
                     c["sentiment"] = 3
                     c["sentiment_label"] = "Neutro"
                     c["inferred_neighborhood"] = "Centro"
@@ -527,20 +538,22 @@ class SocialRadarPipeline:
             # 5. Geocodificar bairros
             enriched = await self._geocode_neighborhoods(enriched, city)
 
-            # 6. Persistir
+            # 6. Persistir (com dados enriquecidos)
             records = [{
                 "campaign_id": campaign_id,
                 "platform": c.get("platform", "instagram"),
-                "author": c.get("author", "anônimo"),
+                "author_username": c.get("author", "anônimo"),
                 "text": c["text"],
-                "sentiment": c.get("sentiment", 3),
                 "sentiment_label": c.get("sentiment_label", "Neutro"),
                 "inferred_neighborhood": c.get("inferred_neighborhood", "Centro"),
                 "lat": c.get("lat"),
                 "lng": c.get("lng"),
-                "source_url": c.get("source_url", ""),
+                "post_url": c.get("source_url", ""),
+                "target_type": "rival",
                 "rival_handle": c.get("rival_handle", ""),
-                "is_mock": False
+                "likes_count": c.get("likes", 0),
+                "comment_id": c.get("comment_id", ""),
+                "source": "apify"
             } for c in enriched]
 
             self._persist_mentions(records)
@@ -599,9 +612,25 @@ class SocialRadarPipeline:
         """Persiste menções no Supabase."""
         if not records:
             return
+            
+        # Garante que não vamos inserir duplicatas se houver IDs iguais na mesma leva nova
+        unique_records = []
+        seen = set()
+        for r in records:
+            c_id = r.get("comment_id")
+            if c_id and c_id in seen:
+                continue
+            if c_id:
+                seen.add(c_id)
+            unique_records.append(r)
+            
         try:
-            self.supabase.table("social_mentions").insert(records).execute()
-            print(f"[Pipeline] 💾 {len(records)} menções salvas no banco")
+            # Em lote de 500 para evitar payload grande demais
+            batch_size = 500
+            for i in range(0, len(unique_records), batch_size):
+                batch = unique_records[i:i + batch_size]
+                self.supabase.table("social_mentions").insert(batch).execute()
+            print(f"[Pipeline] 💾 {len(unique_records)} NOVAS menções salvas no banco!")
         except Exception as e:
             print(f"[Pipeline] ❌ Erro ao salvar menções: {e}")
             raise

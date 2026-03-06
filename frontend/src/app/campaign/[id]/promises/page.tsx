@@ -135,7 +135,7 @@ export default function RadarPremiumPage() {
         } finally {
             setLoading(false);
         }
-    }, [campaignId, API_URL, supabase]);
+    }, [campaignId, API_URL]);
 
     useEffect(() => {
         fetchData();
