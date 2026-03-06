@@ -87,8 +87,8 @@ export function useMapClusters({
 
     // Configurações do Supercluster
     const clusterOptions = useMemo((): Supercluster.Options<ClusterProperties, ClusterProperties> => ({
-        radius: 75, // Raio de clustering em pixels (ajustar conforme necessário)
-        maxZoom: 16, // Zoom máximo onde clustering ainda acontece
+        radius: 120, // Raio de clustering em pixels (aumentado para agrupar pontos próximos)
+        maxZoom: 17, // Zoom máximo onde clustering ainda acontece (aumentado de 16)
         minZoom: 3,
         map: (props: ClusterProperties) => ({
             cluster: false,
