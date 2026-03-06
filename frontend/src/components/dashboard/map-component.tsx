@@ -64,10 +64,9 @@ function SafeControls() {
 interface ClusteredMarkersProps {
     locations: LocationPoint[];
     onLocationClick: (location: LocationPoint) => void;
-    isCompetitor?: boolean;
 }
 
-function ClusteredMarkers({ locations, onLocationClick, isCompetitor = false }: ClusteredMarkersProps) {
+function ClusteredMarkers({ locations, onLocationClick }: ClusteredMarkersProps) {
     const map = useMap();
     const [bounds, setBounds] = useState<[number, number, number, number] | null>(null);
     const [zoom, setZoom] = useState(map.getZoom());
@@ -154,7 +153,6 @@ function ClusteredMarkers({ locations, onLocationClick, isCompetitor = false }: 
                             key={key}
                             cluster={cluster}
                             onClick={() => handleClusterClick(cluster)}
-                            isCompetitor={isCompetitor}
                         />
                     );
                 }
@@ -164,7 +162,6 @@ function ClusteredMarkers({ locations, onLocationClick, isCompetitor = false }: 
                         key={key}
                         cluster={cluster}
                         onClick={() => handlePointClick(cluster)}
-                        isCompetitor={isCompetitor}
                     />
                 );
             })}
@@ -175,7 +172,6 @@ function ClusteredMarkers({ locations, onLocationClick, isCompetitor = false }: 
 // Props do componente principal
 interface MapComponentProps {
     locations: LocationPoint[];
-    competitorLocations?: LocationPoint[]; // Para overlay de concorrente
     onLocationClick: (location: LocationPoint) => void;
     mapStyle?: string;
     centerPosition?: [number, number];
@@ -188,7 +184,6 @@ import { memo } from 'react';
 
 const MapComponent = function MapComponent({
     locations,
-    competitorLocations = [],
     onLocationClick,
     mapStyle = 'osm-bright',
     centerPosition,
@@ -228,14 +223,7 @@ const MapComponent = function MapComponent({
                 onLocationClick={onLocationClick}
             />
 
-            {/* Renderização clusterizada - CONCORRENTE (overlay vermelho) */}
-            {competitorLocations.length > 0 && (
-                <ClusteredMarkers
-                    locations={competitorLocations}
-                    onLocationClick={() => { }}  // Clique desabilitado para concorrente
-                    isCompetitor
-                />
-            )}
+
 
             {children}
         </MapContainer>

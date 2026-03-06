@@ -33,8 +33,7 @@ class AgentSchema(BaseModel):
             'web_search', 'tavily_search', 'vector_search',
             'db_query', 'campaign_data', 'statistics',
             'calculator', 'campaign_stats', 
-            'law_search', 'competitor_analysis', 'market_scan',
-            'radar_google_scanner', 'radar_fiscal_verbas', 'radar_extrator_promessas'
+            'law_search', 'radar_google_scanner', 'radar_fiscal_verbas', 'radar_extrator_promessas'
         }
         
         for tool in v:
@@ -103,19 +102,7 @@ class StrategiesList(BaseModel):
     """Output estruturado para a Genesis Crew"""
     strategies: List[Strategy] = Field(..., description="Lista de estratégias geradas pela IA")
 
-# ============ ADVERSARIAL ANALYSIS SCHEMAS (Phase 3) ============
 
-class AdversarialWeakness(BaseModel):
-    weakness_point: str = Field(..., description="O ponto fraco identificado no plano do concorrente.")
-    competitor_quote: str = Field(..., description="Citação exata do documento do concorrente que prova o ponto fraco.")
-    our_counter_narrative: str = Field(..., description="Narrativa de contra-ataque sugerida para o nosso candidato.")
-    risk_level: Literal['Low', 'Medium', 'High'] = Field(..., description="Nível de risco que essa fraqueza do concorrente representa para ele mesmo (oportunidade para nós).")
-
-class AdversarialReport(BaseModel):
-    """Output estruturado para a Task de Análise Adversária"""
-    competitor_name: str = Field(..., description="Nome do concorrente analisado")
-    analysis_summary: str = Field(..., description="Resumo executivo da análise de vulnerabilidade.")
-    weaknesses: List[AdversarialWeakness] = Field(..., description="Lista de pontos fracos identificados e como explorá-los.")
 
 # ============ RADAR CREW SCHEMAS (NEW) ============
 

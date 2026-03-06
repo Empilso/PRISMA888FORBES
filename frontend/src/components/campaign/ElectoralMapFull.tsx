@@ -83,12 +83,7 @@ export function ElectoralMapFull({ campaignId, campaigns }: ElectoralMapFullProp
     const [ballotName, setBallotName] = useState<string>("");
     const [isGeneratingAction, setIsGeneratingAction] = useState(false);
 
-    // Competitor Overlay State
-    const [showCompetitorOverlay, setShowCompetitorOverlay] = useState(false);
-    const [competitors, setCompetitors] = useState<{ id: string, name: string, color: string }[]>([]);
-    const [selectedCompetitorId, setSelectedCompetitorId] = useState<string | null>(null);
-    const [competitorLocations, setCompetitorLocations] = useState<Location[]>([]);
-    const [loadingCompetitor, setLoadingCompetitor] = useState(false);
+
 
     // Social Radar State
     const [showSocialRadar, setShowSocialRadar] = useState(false);
@@ -196,82 +191,6 @@ export function ElectoralMapFull({ campaignId, campaigns }: ElectoralMapFullProp
         }
     };
 
-    // Fetch competitors list
-    useEffect(() => {
-        const fetchCompetitors = async () => {
-            try {
-                const { data, error } = await supabase
-                    .from('competitors')
-                    .select('id, name, color')
-                    .eq('campaign_id', campaignId);
-                if (data) setCompetitors(data);
-            } catch (e) {
-                console.error("Failed to fetch competitors", e);
-            }
-        };
-        fetchCompetitors();
-    }, [campaignId]);
-
-    // Fetch competitor locations when selected
-    const fetchCompetitorGeo = async (competitorId: string) => {
-        setLoadingCompetitor(true);
-        try {
-            const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-            const res = await fetch(`${apiUrl}/api/competitor/${competitorId}/votes/geo`, {
-                headers: { 'ngrok-skip-browser-warning': 'true' }
-            });
-            if (res.ok) {
-                const data = await res.json();
-                // Convert to Location format
-                const locs: Location[] = data.locations.map((loc: any) => ({
-                    id: loc.id,
-                    name: loc.name,
-                    address: '',
-                    position: loc.position,
-                    votes: loc.total_votes || 0,
-                    meta: 0,
-                    color: 'red',
-                    my_votes: loc.votes,
-                    my_share: loc.percentage
-                }));
-                setCompetitorLocations(locs);
-                if (data.matched > 0) {
-                    toast({
-                        title: `📍 ${data.competitor_name}`,
-                        description: `${data.matched} locais carregados no mapa`
-                    });
-                }
-            }
-        } catch (e) {
-            console.error("Failed to fetch competitor geo", e);
-        } finally {
-            setLoadingCompetitor(false);
-        }
-    };
-
-    // Toggle competitor overlay
-    const handleToggleCompetitor = () => {
-        if (showCompetitorOverlay) {
-            // Desligando
-            setShowCompetitorOverlay(false);
-            setCompetitorLocations([]);
-            setSelectedCompetitorId(null);
-        } else {
-            // Ligando - se tiver competidor selecionado, carrega
-            setShowCompetitorOverlay(true);
-            if (selectedCompetitorId) {
-                fetchCompetitorGeo(selectedCompetitorId);
-            }
-        }
-    };
-
-    // When competitor selection changes
-    const handleCompetitorChange = (competitorId: string) => {
-        setSelectedCompetitorId(competitorId);
-        if (showCompetitorOverlay && competitorId) {
-            fetchCompetitorGeo(competitorId);
-        }
-    };
 
     // 2. Fetch Detailed Results for Selected Location
     useEffect(() => {
@@ -695,7 +614,8 @@ export function ElectoralMapFull({ campaignId, campaigns }: ElectoralMapFullProp
         try {
             const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
             await fetch(`${apiUrl}/api/campaign/${campaignId}/map_notes/${selectedNote.id}`, {
-                method: 'DELETE'
+                method: 'DELETE',
+                headers: { "ngrok-skip-browser-warning": "true" }
             });
             toast({ title: "Sucesso", description: "Nota excluída." });
             setIsNoteSheetOpen(false);
@@ -806,49 +726,6 @@ export function ElectoralMapFull({ campaignId, campaigns }: ElectoralMapFullProp
                         </select>
                     </div>
 
-                    <div className="space-y-3 pt-4 border-t border-slate-100">
-                        <h4 className="text-xs font-bold uppercase text-muted-foreground flex items-center gap-2">
-                            <Users className="h-3 w-3" /> Radar de Concorrentes
-                        </h4>
-
-                        {competitors.length === 0 ? (
-                            <p className="text-xs text-muted-foreground">Nenhum concorrente cadastrado.</p>
-                        ) : (
-                            <div className="space-y-3">
-                                <div className="flex items-center justify-between">
-                                    <Label htmlFor="competitor-mode" className="text-sm font-medium text-slate-700">
-                                        Exibir Camada
-                                    </Label>
-                                    <Switch
-                                        id="competitor-mode"
-                                        checked={showCompetitorOverlay}
-                                        onCheckedChange={handleToggleCompetitor}
-                                        disabled={loadingCompetitor}
-                                    />
-                                </div>
-
-                                {showCompetitorOverlay && (
-                                    <div className="animate-in fade-in slide-in-from-top-1">
-                                        <select
-                                            className="w-full text-sm p-2 rounded border bg-background hover:bg-slate-50 transition-colors"
-                                            value={selectedCompetitorId || ''}
-                                            onChange={(e) => handleCompetitorChange(e.target.value)}
-                                            disabled={loadingCompetitor}
-                                        >
-                                            <option value="" disabled>Selecione um alvo...</option>
-                                            {competitors.map(c => (
-                                                <option key={c.id} value={c.id}>🔴 {c.name}</option>
-                                            ))}
-                                        </select>
-                                        {loadingCompetitor && <p className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Carregando pontos...</p>}
-                                    </div>
-                                )}
-                            </div>
-                        )}
-                    </div>
-
-
-
                 </div>
             )}
 
@@ -894,7 +771,6 @@ export function ElectoralMapFull({ campaignId, campaigns }: ElectoralMapFullProp
                 )}
                 <MapComponent
                     locations={locations}
-                    competitorLocations={showCompetitorOverlay ? competitorLocations : []}
                     onLocationClick={handleLocationClick}
                     mapStyle={mapStyle}
                     centerPosition={centerPosition}

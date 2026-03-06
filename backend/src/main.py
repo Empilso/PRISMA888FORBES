@@ -142,7 +142,6 @@ from src.api.financial.tcesp_debug import router as tcesp_debug_router
 from src.api.core.cities_politicians import router as cities_politicians_router
 from src.api.social.radar_premium import router as radar_premium_router
 from src.api.financial.tse import router as tse_router
-from src.api.core.competitors import router as competitors_router
 from src.api.core.knowledge import router as knowledge_router
 from src.api.core.organizations import router as organizations_router
 from src.api.social.social_radar import router as social_radar_router
@@ -174,7 +173,6 @@ app.include_router(tcesp_debug_router)
 app.include_router(cities_politicians_router)
 app.include_router(radar_premium_router)
 app.include_router(tse_router)
-app.include_router(competitors_router)
 app.include_router(organizations_router)
 app.include_router(social_radar_router)
 from src.api.core.admin import router as admin_router

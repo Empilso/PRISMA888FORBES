@@ -338,144 +338,7 @@ class CampaignStatsTool(BaseTool):
             return f"Erro ao buscar estatísticas: {str(e)}"
 
 
-# ============================================================
-# FERRAMENTA 3: ANÁLISE DE COMPETIÇÃO POR LOCAL (TÁTICO)
-# ============================================================
 
-class LocationCompetitorInput(BaseModel):
-    """Schema de input para análise de competição local"""
-    location_id: str = Field(
-        ..., 
-        description="ID do local de votação para analisar a competição"
-    )
-
-
-class LocationCompetitorAnalysisTool(BaseTool):
-    name: str = "Location Competitor Analysis"
-    description: str = """
-    Analisa a competição eleitoral em um local específico de votação.
-    Retorna o ranking de candidatos, quem é o vencedor local 
-    e a distância em votos para ultrapassá-lo.
-    
-    Use esta ferramenta para micro-targeting: entender onde atacar
-    e quem são os principais adversários em cada região.
-    
-    Exemplo: {"location_id": "uuid-do-local"}
-    """
-    args_schema: type[BaseModel] = LocationCompetitorInput
-    
-    def _run(self, location_id: str) -> str:
-        """Analisa competição em um local específico."""
-        campaign_id = os.getenv("CURRENT_CAMPAIGN_ID", "")
-        
-        if not campaign_id:
-            return "Erro: CURRENT_CAMPAIGN_ID não definido no ambiente."
-        
-        try:
-            supabase = get_supabase_client()
-            
-            # 1. Buscar informações do local
-            location = supabase.table("locations") \
-                .select("id, name, votes_count, vote_goal") \
-                .eq("id", location_id) \
-                .single() \
-                .execute()
-            
-            if not location.data:
-                return f"Local não encontrado: {location_id}"
-            
-            location_name = location.data.get("name", "Local sem nome")
-            our_votes = location.data.get("votes_count", 0) or 0
-            
-            # 2. Buscar resultados de todos candidatos neste local
-            # Tabela location_results: location_id, candidate_name, candidate_party, votes
-            results = supabase.table("location_results") \
-                .select("candidate_name, candidate_party, votes") \
-                .eq("location_id", location_id) \
-                .order("votes", desc=True) \
-                .execute()
-            
-            if not results.data:
-                return f"Sem dados de competição para o local: {location_name}"
-            
-            # 3. Identificar nossa campanha (pelo campaign_id)
-            campaign = supabase.table("campaigns") \
-                .select("candidate_name") \
-                .eq("id", campaign_id) \
-                .single() \
-                .execute()
-            
-            our_candidate = campaign.data.get("candidate_name", "Nosso Candidato") if campaign.data else "Nosso Candidato"
-            
-            # 4. Calcular ranking e posição
-            candidates = results.data
-            total_votes = sum(c.get("votes", 0) or 0 for c in candidates)
-            
-            # Encontrar nossa posição
-            our_position = None
-            our_result_votes = 0
-            for i, c in enumerate(candidates, 1):
-                if c.get("candidate_name", "").lower() == our_candidate.lower():
-                    our_position = i
-                    our_result_votes = c.get("votes", 0) or 0
-                    break
-            
-            # Se não encontrou, usar votos da tabela locations
-            if our_position is None:
-                our_result_votes = our_votes
-                # Estimar posição baseado nos votos
-                our_position = len([c for c in candidates if (c.get("votes", 0) or 0) > our_votes]) + 1
-            
-            # Vencedor
-            winner = candidates[0] if candidates else None
-            winner_name = winner.get("candidate_name", "N/A") if winner else "N/A"
-            winner_party = winner.get("candidate_party", "") if winner else ""
-            winner_votes = winner.get("votes", 0) if winner else 0
-            
-            # Distância para o vencedor
-            distance = winner_votes - our_result_votes
-            
-            # 5. Formatar resposta
-            report = f"""
-🎯 ANÁLISE DE COMPETIÇÃO: {location_name}
-{'='*50}
-
-📊 RANKING DE CANDIDATOS:
-"""
-            for i, c in enumerate(candidates[:5], 1):
-                name = c.get("candidate_name", "N/A")
-                party = c.get("candidate_party", "")
-                votes = c.get("votes", 0) or 0
-                pct = (votes / total_votes * 100) if total_votes > 0 else 0
-                medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"{i}."
-                
-                if name.lower() == our_candidate.lower():
-                    report += f"\n   {medal} {name} ({party}): {votes:,} votos ({pct:.1f}%) ← VOCÊ"
-                else:
-                    report += f"\n   {medal} {name} ({party}): {votes:,} votos ({pct:.1f}%)"
-            
-            report += f"""
-
-📍 SUA POSIÇÃO: {our_position}º lugar com {our_result_votes:,} votos
-
-🏆 VENCEDOR: {winner_name} ({winner_party}) com {winner_votes:,} votos
-📏 DISTÂNCIA: {distance:,} votos atrás do líder
-"""
-            
-            # 6. Recomendação tática
-            if our_position == 1:
-                report += f"\n✅ RECOMENDAÇÃO: Você lidera! Proteja esta base."
-            elif distance <= 50:
-                report += f"\n⚡ RECOMENDAÇÃO: Disputável! Apenas {distance} votos. Prioridade ALTA."
-            elif distance <= 200:
-                report += f"\n🔥 RECOMENDAÇÃO: Alcançável com esforço moderado. Foco em engajamento."
-            else:
-                report += f"\n⚠️ RECOMENDAÇÃO: Gap significativo. Considere investir em outros locais."
-            
-            return report
-            
-        except Exception as e:
-            return f"Erro ao analisar competição: {str(e)}"
 
 
 # ============================================================
@@ -486,11 +349,6 @@ class LocationCompetitorAnalysisTool(BaseTool):
 campaign_vector_search = CampaignVectorSearchTool()
 knowledge_base_tool = KnowledgeBaseTool()
 campaign_stats = CampaignStatsTool()
-
-# Ferramentas Táticas (Micro-Targeting)
-location_competitor_analysis = LocationCompetitorAnalysisTool()
-competitor_vector_search = CampaignVectorSearchTool() # Alias: A mesma tool suporta 'author' param para rivais
-
 
 # ============================================================
 # FUNÇÃO UTILITÁRIA PARA TESTE
@@ -510,19 +368,6 @@ def test_vector_search(query: str = "educação", campaign_id: str = None):
     print(result)
     return result
 
-
-def test_competitor_analysis(location_id: str, campaign_id: str = None):
-    """Função para testar a análise de competição."""
-    if campaign_id:
-        os.environ["CURRENT_CAMPAIGN_ID"] = campaign_id
-    
-    print(f"🎯 Testando análise de competição...")
-    print(f"   Location ID: {location_id}")
-    print("-" * 50)
-    
-    result = location_competitor_analysis._run(location_id)
-    print(result)
-    return result
 
 
 if __name__ == "__main__":

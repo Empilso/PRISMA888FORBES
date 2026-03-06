@@ -20,15 +20,10 @@ from pydantic import PrivateAttr, ConfigDict
 from src.crew.tools import (
     campaign_vector_search, 
     campaign_stats, 
-    location_competitor_analysis,
-    competitor_vector_search, # NEW
-    location_competitor_analysis,
-    competitor_vector_search, # NEW
     municipal_spend_tool # NEW Phase 3 Audit Tool
 )
 from crewai_tools import PDFSearchTool, ScrapeWebsiteTool, FileReadTool # Knowledge Tools
-# Note: Importing Schemas for Pydantic Output
-from src.models.enterprise import AIExecutionLogSchema, StrategiesList, AdversarialReport
+from src.models.enterprise import AIExecutionLogSchema, StrategiesList
 
 load_dotenv()
 
@@ -265,9 +260,6 @@ class GenesisCrew:
             "campaign_data": campaign_stats,
             "db_query": campaign_stats,
             "statistics": campaign_stats,
-            "competitor_analysis": location_competitor_analysis,
-            "market_scan": location_competitor_analysis,
-            "competitor_vector_search": competitor_vector_search, # NEW
             "municipal_expenses": municipal_spend_tool # NEW War Room
         }
         
@@ -421,16 +413,13 @@ class GenesisCrew:
         defaults = {
             "analyst": {"role": "Campaign Analyst", "goal": "Analyze data", "backstory": "Expert data analyst."},
             "strategist": {"role": "Senior Strategist", "goal": "Develop strategy", "backstory": "Political veteran."},
-            "planner": {"role": "Tactical Planner", "goal": "Create tasks", "backstory": "Project manager."},
-            # NEW Phase 3 Agent
-            "counter_intel": {"role": "Analista de Contra-Inteligência", "goal": "Encontrar falhas nos rivais", "backstory": "Especialista em debates e desconstrução de narrativas adversárias.", "tools": ["competitor_vector_search", "municipal_expenses"]}
+            "planner": {"role": "Tactical Planner", "goal": "Create tasks", "backstory": "Project manager."}
         }
         
         # Create Core Agents
         agents["analyst"] = self._resolve_agent_config("analyst", defaults["analyst"])
         agents["strategist"] = self._resolve_agent_config("strategist", defaults["strategist"])
         agents["planner"] = self._resolve_agent_config("planner", defaults["planner"])
-        agents["counter_intel"] = self._resolve_agent_config("counter_intel", defaults["counter_intel"]) # NEW
         
         # Optional Agents
         if "psychologist" in self.config.get("agents", {}):
@@ -634,7 +623,6 @@ class GenesisCrew:
             return {
                 "strategic_plan": strategic_plan or str(result), 
                 "strategies": strategies,
-                "adversarial_report": result.pydantic.model_dump() if hasattr(result, 'pydantic') and isinstance(result.pydantic, AdversarialReport) else None,
                 "raw_output": str(result)
             }
 
@@ -691,70 +679,6 @@ class GenesisCrew:
         else:
             self.log("⚠️ No strategies found to save.", "System", "warning")
 
-
-    def run_adversarial_analysis(self, competitor_name: str) -> Dict:
-        """
-        PHASE 3: ADVERSARIAL ENGINE EXECUTION
-        Runs a specialized Crew to analyze a specific competitor.
-        """
-        self.log(f"🕵️ Starting Adversarial Analysis against '{competitor_name}'", "System", "info")
-        self._update_persona_status('running')
-        
-        try:
-            # 1. Setup Agent
-            agents = self._create_agents()
-            counter_intel_agent = agents.get("counter_intel")
-            
-            if not counter_intel_agent:
-                raise ValueError("Agent 'counter_intel' not configured correctly.")
-
-            # 2. Create Task
-            adversarial_task = Task(
-                description=f"""
-                ANÁLISE ADVERSÁRIA: {competitor_name}
-                
-                1. Use a ferramenta 'Competitor Vector Search' para buscar o plano de governo de '{competitor_name}'.
-                2. Busque por temas críticos: 'segurança', 'saúde', 'dívida', 'impostos'.
-                3. Identifique pelo menos 3 pontos fracos (contradições, promessas vagas, ou riscos fiscais).
-                4. Para cada ponto fraco, formule um contra-ataque narrativo para o nosso candidato.
-                
-                Gere um RELATÓRIO DE COLISÃO estruturado.
-                """,
-                agent=counter_intel_agent,
-                expected_output="Adversarial Report JSON",
-                output_pydantic=AdversarialReport
-            )
-            
-            # 3. Run Mini-Crew
-            crew = Crew(
-                agents=[counter_intel_agent],
-                tasks=[adversarial_task],
-                verbose=True,
-                process=Process.sequential,
-                task_callback=self._log_task_finish,
-                max_execution_time=300
-            )
-            
-            result = crew.kickoff()
-            
-            # 4. Extract Result
-            report = None
-            if hasattr(result, 'pydantic') and isinstance(result.pydantic, AdversarialReport):
-                report = result.pydantic.model_dump()
-            elif hasattr(result, 'to_dict'):
-                 report = result.to_dict()
-            
-            self._update_persona_status('idle')
-            return {
-                "status": "success",
-                "report": report,
-                "raw": str(result)
-            }
-            
-        except Exception as e:
-            self.log(f"❌ Adversarial Analysis Failed: {e}", "System", "error")
-            self._update_persona_status('error')
-            raise e
 
     def execute(self):
         try:
