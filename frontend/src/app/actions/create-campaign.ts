@@ -155,20 +155,24 @@ export async function createCampaign(formData: FormData) {
         console.log("✅ Usuário Auth criado:", authUser.user.id);
 
         // 4. Atualizar Profile (vincular à campanha)
-        // O trigger 'handle_new_user' já deve ter criado o profile. Vamos atualizar.
+        // Tentamos atualizar. Se não existir (trigger falhou), criamos manualmente.
+        const profileData = {
+            id: authUser.user.id,
+            email: email || `${slug}@sheepstack.com`,
+            full_name: nome,
+            campaign_id: campaign.id,
+            role: "candidate",
+            phone: telefone,
+            cpf: cpf
+        };
+
         const { error: profileError } = await supabaseAdmin
             .from("profiles")
-            .update({
-                campaign_id: campaign.id,
-                role: "candidate",
-                phone: telefone,
-                cpf: cpf
-            })
-            .eq("id", authUser.user.id);
+            .upsert(profileData);
 
         if (profileError) {
-            console.error("Erro ao vincular profile:", profileError);
-            return { success: false, error: "Erro ao vincular usuário à campanha." };
+            console.error("Erro ao vincular/criar profile:", profileError);
+            return { success: false, error: "Erro ao configurar perfil do usuário." };
         }
 
         // 5. Salvar Documentos na tabela documents
