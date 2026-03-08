@@ -64,7 +64,7 @@ function CandidateForm() {
             cpf: "",
             email: "",
             telefone: "",
-            login: `candidato.${Math.random().toString(36).substring(7)}`,
+            login: `candidato.${Math.random().toString(36).substring(7)}@prisma888.com`,
             password: Math.random().toString(36).substring(2, 10),
             cargo: "",
             numero: "",

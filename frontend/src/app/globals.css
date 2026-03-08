@@ -312,4 +312,17 @@
   .leaflet-bottom {
     z-index: 40 !important;
   }
+
+  /* Premium Map Tooltip Styles */
+  .custom-map-tooltip {
+    @apply bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-none shadow-2xl rounded-2xl p-0 !important;
+  }
+
+  .leaflet-tooltip-top:before {
+    @apply border-t-white/95 dark:border-t-slate-900/95 !important;
+  }
+
+  .leaflet-tooltip-bottom:before {
+    @apply border-b-white/95 dark:border-b-slate-900/95 !important;
+  }
 }

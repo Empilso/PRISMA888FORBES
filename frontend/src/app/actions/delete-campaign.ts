@@ -30,16 +30,29 @@ export async function deleteCampaign(campaignId: string) {
             throw new Error("Falha ao identificar usuários da campanha.");
         }
 
-        // 2. Deletar usuários do Auth (Isso deve deletar os profiles em cascade)
-        if (profiles && profiles.length > 0) {
-            console.log(`Encontrados ${profiles.length} usuários para remover.`);
-            for (const profile of profiles) {
-                const { error: deleteUserError } = await supabaseAdmin.auth.admin.deleteUser(profile.id);
+        // 2. Deletar usuários do Auth
+        // Tentar deletar baseado nos profiles encontrados
+        const authUserIds = new Set<string>(profiles?.map(p => p.id) || []);
+
+        // Busca Resiliente: Listar usuários do Auth e filtrar por campaign_id nos metadados
+        // Isso garante que deletamos o usuário mesmo se o profile for deletado antes ou nunca criado
+        const { data: authUsers } = await supabaseAdmin.auth.admin.listUsers();
+        if (authUsers?.users) {
+            authUsers.users.forEach(u => {
+                if (u.user_metadata?.campaign_id === campaignId) {
+                    authUserIds.add(u.id);
+                }
+            });
+        }
+
+        if (authUserIds.size > 0) {
+            console.log(`Encontrados ${authUserIds.size} IDs de usuário únicos para remover.`);
+            for (const userId of authUserIds) {
+                const { error: deleteUserError } = await supabaseAdmin.auth.admin.deleteUser(userId);
                 if (deleteUserError) {
-                    console.error(`Erro ao deletar usuário ${profile.id}:`, deleteUserError);
-                    // Não vamos travar, mas é um problema.
+                    console.error(`Erro ao deletar usuário ${userId}:`, deleteUserError);
                 } else {
-                    console.log(`Usuário ${profile.id} removido.`);
+                    console.log(`Usuário ${userId} removido do Auth.`);
                 }
             }
         }

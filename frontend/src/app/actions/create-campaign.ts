@@ -116,36 +116,40 @@ export async function createCampaign(formData: FormData) {
 
         console.log("✅ Campanha criada:", campaign.id);
 
-        // 3. Criação do Usuário (Auth) - COM ROLLBACK EM CASO DE FALHA
+        // 3. Criação do Usuário (Auth) - COM VERIFICAÇÃO PRÉVIA E ROLLBACK
+        const emailAcesso = email || login || `${slug}@prisma888.com`;
+
+        // Check if user already exists in Auth to avoid "already registered" error and partial data
+        const { data: existingUser } = await supabaseAdmin.auth.admin.listUsers();
+        const userExists = existingUser.users.find(u => u.email === emailAcesso);
+
+        if (userExists) {
+            console.error("❌ Usuário já existe no Auth:", emailAcesso);
+            // Rollback campaign if it was created
+            await supabaseAdmin.from("campaigns").delete().eq("id", campaign.id);
+            return {
+                success: false,
+                error: `O e-mail ou login '${emailAcesso}' já está em uso por outro candidato. Por favor, use um diferente.`
+            };
+        }
+
         const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
-            email: email || `${slug}@sheepstack.com`, // Fallback se não tiver email
+            email: emailAcesso,
             password: password,
             email_confirm: true,
             user_metadata: {
                 full_name: nome,
                 role: "candidate",
-                campaign_id: campaign.id // Guardar aqui também por segurança
+                campaign_id: campaign.id
             }
         });
 
         if (authError) {
             console.error("❌ Erro ao criar usuário Auth:", authError);
 
-            // 🔄 ROLLBACK: Deletar a campanha que foi criada para evitar "zumbis"
-            console.log("🔄 Executando rollback: deletando campanha", campaign.id);
+            // 🔄 ROLLBACK COMPLETO
+            await supabaseAdmin.from("campaigns").delete().eq("id", campaign.id);
 
-            const { error: rollbackError } = await supabaseAdmin
-                .from("campaigns")
-                .delete()
-                .eq("id", campaign.id);
-
-            if (rollbackError) {
-                console.error("⚠️ Erro no rollback (campanha órfã pode existir):", rollbackError);
-            } else {
-                console.log("✅ Rollback concluído: campanha deletada.");
-            }
-
-            // Retornar erro específico para o frontend
             return {
                 success: false,
                 error: `Erro ao criar usuário de acesso: ${authError.message}. A campanha foi desfeita.`
@@ -158,12 +162,10 @@ export async function createCampaign(formData: FormData) {
         // Tentamos atualizar. Se não existir (trigger falhou), criamos manualmente.
         const profileData = {
             id: authUser.user.id,
-            email: email || `${slug}@sheepstack.com`,
+            email: emailAcesso,
             full_name: nome,
             campaign_id: campaign.id,
-            role: "candidate",
-            phone: telefone,
-            cpf: cpf
+            role: "candidate"
         };
 
         const { error: profileError } = await supabaseAdmin
@@ -172,7 +174,13 @@ export async function createCampaign(formData: FormData) {
 
         if (profileError) {
             console.error("Erro ao vincular/criar profile:", profileError);
-            return { success: false, error: "Erro ao configurar perfil do usuário." };
+
+            // 🔄 ROLLBACK TOTAL (Auth + Campanha)
+            console.log("🔄 Executando rollback total: falha no profile");
+            await supabaseAdmin.auth.admin.deleteUser(authUser.user.id);
+            await supabaseAdmin.from("campaigns").delete().eq("id", campaign.id);
+
+            return { success: false, error: "Erro ao configurar perfil do usuário. O cadastro foi revertido." };
         }
 
         // 5. Salvar Documentos na tabela documents

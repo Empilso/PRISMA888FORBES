@@ -140,8 +140,8 @@ function SocialTargetCard({
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
       const handle = target.replace("@", "").replace("#", "").trim();
       const res = await fetch(
-        `${apiUrl}/api/campaign/${campaignId}/social/target/${handle}/details`,
-        { headers: { "ngrok-skip-browser-warning": "true" } }
+        `/api/campaign/${campaignId}/social/target/${handle}/details`,
+        { headers: { underdog_skip_browser_warning: "true" } }
       );
       if (res.ok) {
         const data = await res.json();
@@ -840,7 +840,7 @@ export default function CampaignSetupPage() {
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
       const res = await fetch(
-        `${apiUrl}/api/campaign/${campaignId}/social/stats`,
+        `/api/campaign/${campaignId}/social/stats`,
         { headers: { "ngrok-skip-browser-warning": "true" } }
       );
       if (res.ok) {
@@ -858,8 +858,8 @@ export default function CampaignSetupPage() {
 
       // 1. Fetch Engine Status Ping
       setEngineStatus({ status: 'checking' });
-      const engineRes = await fetch(`${apiUrl}/api/admin/services/engine/test`, {
-        headers: { 'ngrok-skip-browser-warning': 'true' }
+      const engineRes = await fetch(`/api/admin/services/engine/test`, {
+        headers: { underdog_skip_browser_warning: "true" }
       }).catch(() => null);
 
       if (engineRes && engineRes.ok) {
@@ -875,8 +875,8 @@ export default function CampaignSetupPage() {
       }
 
       // 2. Fetch Radar Breakdown
-      const breakdownRes = await fetch(`${apiUrl}/api/campaign/${campaignId}/social/stats/breakdown`, {
-        headers: { 'ngrok-skip-browser-warning': 'true' }
+      const breakdownRes = await fetch(`/api/campaign/${campaignId}/social/stats/breakdown`, {
+        headers: { underdog_skip_browser_warning: "true" }
       }).catch(() => null);
 
       if (breakdownRes && breakdownRes.ok) {
@@ -1033,7 +1033,7 @@ export default function CampaignSetupPage() {
       const csvDoc = documents.find((d) => d.file_type === "csv");
       if (csvDoc && locationsCount === 0) {
         console.log("📊 [PROCESS] Processando CSV:", csvDoc.file_url);
-        const csvResponse = await fetch(`${backendUrl}/api/ingest/locations`, {
+        const csvResponse = await fetch(`/api/ingest/locations`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -1056,7 +1056,7 @@ export default function CampaignSetupPage() {
       const pdfDoc = documents.find((d) => d.file_type === "pdf");
       if (pdfDoc && chunksCount === 0) {
         console.log("📄 [PROCESS] Processando PDF:", pdfDoc.file_url);
-        const pdfResponse = await fetch(`${backendUrl}/api/ingest/pdf`, {
+        const pdfResponse = await fetch(`/api/ingest/pdf`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -1117,10 +1117,10 @@ export default function CampaignSetupPage() {
       const max_posts = radarConfig.posts_limit || 10;
 
       const res = await fetch(
-        `${apiUrl}/api/campaign/${campaignId}/social/scrape?max_posts=${max_posts}`,
+        `/api/campaign/${campaignId}/social/scrape?max_posts=${max_posts}`,
         {
           method: "POST",
-          headers: { "ngrok-skip-browser-warning": "true" }
+          headers: { underdog_skip_browser_warning: "true" }
         }
       );
 
@@ -1213,7 +1213,7 @@ export default function CampaignSetupPage() {
 
     try {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/campaign/${campaignId}/publish`,
+        `/api/campaign/${campaignId}/publish`,
         {
           method: "POST",
           headers: {
@@ -1403,7 +1403,7 @@ export default function CampaignSetupPage() {
       const backendUrl =
         process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
       const response = await fetch(
-        `${backendUrl}/api/campaign/${campaignId}/run/${selectedRunId}`,
+        `/api/campaign/${campaignId}/run/${selectedRunId}`,
         {
           method: "DELETE",
           headers: {

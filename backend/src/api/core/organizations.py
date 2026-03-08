@@ -90,13 +90,19 @@ def get_current_user_id(authorization: str = Header(None)):
 @router.get("/organizations", response_model=List[OrganizationRead])
 async def list_organizations(user_id: str = Depends(get_current_user_id)):
     """Lista todas as organizações cadastradas"""
+    print(f"🔍 [Organizations] Listing orgs for user: {user_id}")
     supabase = get_supabase_client()
     try:
         result = supabase.table("organizations").select("*").execute()
+        if not result.data:
+            print("⚠️ [Organizations] No organizations found in table.")
+            return []
         return result.data
     except Exception as e:
-        print(f"Error listing orgs: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"❌ [Organizations] Error listing orgs: {e}")
+        # Retorna erro mais descritivo se possível
+        error_detail = str(e)
+        raise HTTPException(status_code=500, detail=f"Database error: {error_detail}")
 
 @router.post("/organizations", response_model=OrganizationRead)
 async def create_organization(org: OrganizationCreate, user_id: str = Depends(get_current_user_id)):
