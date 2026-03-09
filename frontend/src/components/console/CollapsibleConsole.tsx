@@ -9,9 +9,11 @@ interface CollapsibleConsoleProps {
     campaignId: string;
     isRunning?: boolean;
     logsCount?: number;
+    runId?: string | null;
+    onNewLog?: (log: any) => void;
 }
 
-export function CollapsibleConsole({ campaignId, isRunning, logsCount = 0 }: CollapsibleConsoleProps) {
+export function CollapsibleConsole({ campaignId, isRunning, logsCount = 0, runId, onNewLog }: CollapsibleConsoleProps) {
     const [isExpanded, setIsExpanded] = useState(false);
     const [consoleTheme, setConsoleTheme] = useState<'dark' | 'light'>('dark');
 
@@ -47,7 +49,7 @@ export function CollapsibleConsole({ campaignId, isRunning, logsCount = 0 }: Col
                             "font-medium text-sm tracking-tight",
                             consoleTheme === 'dark' ? "text-slate-300" : "text-slate-600"
                         )}>
-                            Console de Execução em Tempo Real
+                            Genesis Crew Console {runId ? `(Run: ${runId.slice(0, 8)})` : 'Realtime'}
                         </span>
 
                         {isRunning ? (
@@ -106,6 +108,7 @@ export function CollapsibleConsole({ campaignId, isRunning, logsCount = 0 }: Col
             )}>
                 <LogConsole
                     campaignId={campaignId}
+                    onNewLog={onNewLog}
                     height="h-full"
                     className="border-none rounded-none bg-transparent shadow-none"
                     theme={consoleTheme}

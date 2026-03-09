@@ -25,9 +25,10 @@ interface LogConsoleProps {
     className?: string;
     height?: string;
     theme?: 'dark' | 'light';
+    onNewLog?: (log: any) => void;
 }
 
-export function LogConsole({ campaignId, className, height = "h-[400px]", theme = 'dark' }: LogConsoleProps) {
+export function LogConsole({ campaignId, className, height = "h-[400px]", theme = 'dark', onNewLog }: LogConsoleProps) {
     const [logs, setLogs] = useState<LogEntry[]>([]);
     const [isConnected, setIsConnected] = useState(false);
     const [rainbowEnabled, setRainbowEnabled] = useState(true);
@@ -77,6 +78,7 @@ export function LogConsole({ campaignId, className, height = "h-[400px]", theme 
                 (payload) => {
                     const newLog = payload.new as LogEntry;
                     setLogs((prev) => [...prev, newLog]);
+                    if (onNewLog) onNewLog(newLog);
                 }
             )
             .subscribe((status) => {

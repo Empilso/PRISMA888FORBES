@@ -27,6 +27,7 @@ export async function updateCampaign(campaignId: string, formData: FormData) {
         const cidade = formData.get("cidade") as string;
         const electionDate = formData.get("electionDate") as string;
         const socialLinksRaw = formData.get("socialLinks") as string;
+        const organizationId = formData.get("organization_id") as string;
 
         const csvFile = formData.get("csvFile") as File;
         const pdfFile = formData.get("pdfFile") as File;
@@ -107,6 +108,7 @@ export async function updateCampaign(campaignId: string, formData: FormData) {
             party: partido?.trim() || currentCampaign.party,
             number: safeInt(numero) ?? currentCampaign.number,
             election_date: electionDate?.trim() || currentCampaign.election_date,
+            organization_id: organizationId || currentCampaign.organization_id,
         };
 
         // Social Links: merge inteligente

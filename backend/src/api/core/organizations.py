@@ -296,3 +296,58 @@ async def get_organization_analytics(slug: str):
         "total_strategies": total_strategies,
         "total_estimated_votes": 125000 # Mock de agregação de IA
     }
+@router.delete("/organizations/{org_id}")
+async def delete_organization(org_id: str, user_id: str = Depends(get_current_user_id)):
+    """
+    Exclui uma organização e todos os seus dados vinculados (Cascade Enterprise).
+    """
+    supabase = get_supabase_client()
+    print(f"🗑️ [Organizations] User {user_id} requested deletion of org: {org_id}")
+    
+    try:
+        # 1. Buscar campanhas vinculadas
+        campaigns_res = supabase.table("campaigns").select("id").eq("organization_id", org_id).execute()
+        campaign_ids = [c["id"] for c in campaigns_res.data] if campaigns_res.data else []
+        
+        if campaign_ids:
+            print(f"🧹 [Cleanup] Removing dependencies for {len(campaign_ids)} campaigns")
+            # Deletar em ordem inversa de dependência
+            
+            # Logs de execução
+            supabase.table("ai_execution_logs").delete().in_("campaign_id", campaign_ids).execute()
+            
+            # Tarefas
+            supabase.table("tasks").delete().in_("campaign_id", campaign_ids).execute()
+            
+            # Estratégias
+            supabase.table("strategies").delete().in_("campaign_id", campaign_ids).execute()
+            
+            # Runs de análise
+            supabase.table("analysis_runs").delete().in_("campaign_id", campaign_ids).execute()
+            
+            # Documentos (metadados)
+            supabase.table("documents").delete().in_("campaign_id", campaign_ids).execute()
+            
+            # Localizações
+            supabase.table("locations").delete().in_("campaign_id", campaign_ids).execute()
+            
+            # Finalmente deletar as campanhas
+            supabase.table("campaigns").delete().in_("id", campaign_ids).execute()
+        
+        # 2. Desvincular usuários (Profiles)
+        supabase.table("profiles").update({
+            "organization_id": None,
+            "org_role": None
+        }).eq("organization_id", org_id).execute()
+        
+        # 3. Deletar a organização
+        result = supabase.table("organizations").delete().eq("id", org_id).execute()
+        
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Organização não encontrada para exclusão")
+            
+        return {"success": True, "message": "Organização e dependências removidas com sucesso"}
+
+    except Exception as e:
+        print(f"❌ [Organizations] Error deleting org: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro ao excluir organização: {str(e)}")

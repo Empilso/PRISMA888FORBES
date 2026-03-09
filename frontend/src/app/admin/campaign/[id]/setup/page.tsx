@@ -38,6 +38,7 @@ import {
   ChevronDown,
   Terminal,
   Radar,
+  Map as MapIcon,
   Plus,
   Instagram,
   Save,
@@ -488,8 +489,8 @@ function DraggableStrategyCard({
             {strategy.title}
           </CardTitle>
         </CardHeader>
-        <CardContent className="p-4 pt-1">
-          <p className="text-sm text-slate-500 line-clamp-3 mb-4 leading-relaxed">
+        <CardContent className="p-4 pt-1 flex flex-col h-full">
+          <p className="text-sm text-slate-500 line-clamp-3 mb-4 leading-relaxed flex-1">
             {strategy.description}
           </p>
 
@@ -670,11 +671,43 @@ export default function CampaignSetupPage() {
     console.log("🎧 Console listening to:", runId); // DEBUG
     setCurrentRunId(runId);
     setIsConsoleOpen(true);
+    // Marcamos que a execução começou para podermos notificar o fim
+    setIsProcessing(true);
     toast({
       title: "IA Iniciada",
       description:
         "Acompanhe o progresso no console abaixo e as estratégias em tempo real.",
     });
+  };
+
+  // 🔔 Função para detectar fim da execução e avisar o usuário
+  const handleNewLog = (log: any) => {
+    try {
+      if (!log) return;
+      const rawOutput = typeof log.raw_output === 'string' ? log.raw_output :
+        (typeof log.message === 'string' ? log.message : "");
+      const isSuccess = log.is_success === true || log.status === 'success';
+
+      if (isSuccess || rawOutput.includes("finalizada com sucesso") || rawOutput.includes("Resultados salvos")) {
+        // Só dispara o toast se estávamos processando
+        if (isProcessing) {
+          setIsProcessing(false);
+          toast({
+            title: "Estratégia Concluída! 🏁",
+            description: "O plano estratégico foi gerado com sucesso para este candidato.",
+            duration: 10000,
+          });
+          // Recarregar estratégias para mostrar as novas
+          fetchStrategies();
+        }
+      }
+
+      if (log.is_success === false || log.status === 'error') {
+        setIsProcessing(false);
+      }
+    } catch (err) {
+      console.error("Erro no handleNewLog:", err);
+    }
   };
 
   const supabase = React.useMemo(() => createClient(), []);
@@ -1499,12 +1532,23 @@ export default function CampaignSetupPage() {
               <h1 className="text-lg font-bold truncate flex items-center gap-2">
                 🎯 Simulador
                 {campaign && (
-                  <span className="text-muted-foreground font-normal text-base border-l pl-2 ml-2">
-                    {campaign.candidate_name.split(" ")[0]}{" "}
-                    <span className="text-xs bg-slate-100 px-1.5 py-0.5 rounded text-slate-500">
-                      {campaign.role}
+                  <>
+                    <span className="text-muted-foreground font-normal text-base border-l pl-2 ml-2">
+                      {campaign.candidate_name.split(" ")[0]}{" "}
+                      <span className="text-xs bg-slate-100 px-1.5 py-0.5 rounded text-slate-500">
+                        {campaign.role}
+                      </span>
                     </span>
-                  </span>
+                    <a
+                      href={`/campaign/${campaignId}/map`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="ml-4 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-[10px] font-bold uppercase transition-all hover:bg-blue-100"
+                    >
+                      <MapIcon className="h-3 w-3" />
+                      Abrir Mapa Tático
+                    </a>
+                  </>
                 )}
               </h1>
             </div>
@@ -2132,6 +2176,17 @@ export default function CampaignSetupPage() {
                 {/* Dossiê Fixo no Topo */}
                 {strategies.length > 0 && (
                   <div className="px-4 sm:px-8 pt-4 pb-2 shrink-0">
+                    <div className="flex items-center gap-2 mb-2 px-1">
+                      <div className="bg-purple-100 p-1 rounded-lg">
+                        <Bot className="h-4 w-4 text-purple-600" />
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">Agente Estrategista</span>
+                        <h2 className="text-sm font-black text-slate-800 uppercase">
+                          {selectedRun?.persona_name || "Genesis Alpha"}
+                        </h2>
+                      </div>
+                    </div>
                     <CampaignManifesto
                       campaignId={campaignId}
                       planContent={selectedRun?.strategic_plan_text}
@@ -2298,6 +2353,8 @@ export default function CampaignSetupPage() {
           <CollapsibleConsole
             campaignId={campaignId}
             isRunning={!!currentRunId}
+            runId={currentRunId}
+            onNewLog={handleNewLog}
             logsCount={strategies.length}
           />
 

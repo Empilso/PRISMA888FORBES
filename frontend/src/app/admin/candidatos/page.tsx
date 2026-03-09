@@ -12,7 +12,8 @@ import {
     Loader2,
     Bot,
     Check,
-    CheckCircle2
+    CheckCircle2,
+    MapPin
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -50,6 +51,7 @@ interface Campaign {
         ia_count: number;
         approved_count: number;
         has_plan: boolean;
+        locations_count?: number;
     };
 }
 
@@ -73,6 +75,8 @@ export default function CandidatosPage() {
     const [selectedCampaignToAssign, setSelectedCampaignToAssign] = useState<Campaign | null>(null);
     const [selectedOrgId, setSelectedOrgId] = useState<string>("none");
     const [isAssigning, setIsAssigning] = useState(false);
+    const [filterPartyId, setFilterPartyId] = useState<string>("all");
+    const [filterStatus, setFilterStatus] = useState<string>("all");
 
     const supabase = createClient();
     const { toast } = useToast();
@@ -174,6 +178,23 @@ export default function CandidatosPage() {
                     console.warn("Erro ao buscar analysis_runs (RLS?):", err);
                 }
 
+                // 3. Fetch Locations Count for each campaign individually to avoid 1000 limit
+                const locationCountsMap: Record<string, number> = {};
+                try {
+                    await Promise.all(campaignIds.map(async (id) => {
+                        const { count, error: countErr } = await supabase
+                            .from("locations")
+                            .select("id", { count: "exact", head: true })
+                            .eq("campaign_id", id);
+
+                        if (!countErr) {
+                            locationCountsMap[id] = count || 0;
+                        }
+                    }));
+                } catch (err) {
+                    console.warn("Erro ao buscar contagens de locais:", err);
+                }
+
                 const enrichedCandidates = campaigns.map(c => {
                     const campStrategies = strategies?.filter(s => s.campaign_id === c.id) || [];
                     const campRuns = runs?.filter(r => r.campaign_id === c.id) || [];
@@ -186,7 +207,8 @@ export default function CandidatosPage() {
                             approved_count: campStrategies.filter(s =>
                                 s.status === 'approved' || s.status === 'published' || s.status === 'executed'
                             ).length,
-                            has_plan: campRuns.length > 0
+                            has_plan: campRuns.length > 0,
+                            locations_count: locationCountsMap[c.id] || 0
                         }
                     };
                 });
@@ -279,13 +301,21 @@ export default function CandidatosPage() {
         }
     };
 
-    // Filter candidates based on search query
-    const filteredCandidates = candidates.filter(c =>
-        c.candidate_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        c.ballot_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        c.city?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        c.number?.toString().includes(searchQuery)
-    );
+    // Filter candidates based on search query, party and status
+    const filteredCandidates = candidates.filter(c => {
+        const searchTerm = searchQuery.toLowerCase();
+        const matchesSearch = !searchQuery ||
+            c.candidate_name?.toLowerCase().includes(searchTerm) ||
+            c.ballot_name?.toLowerCase().includes(searchTerm) ||
+            c.city?.toLowerCase().includes(searchTerm) ||
+            c.number?.toString().includes(searchQuery) ||
+            c.party?.toLowerCase().includes(searchTerm);
+
+        const matchesParty = filterPartyId === "all" || c.organization_id === filterPartyId;
+        const matchesStatus = filterStatus === "all" || filterStatus === "active"; // Candidates are active by default
+
+        return matchesSearch && matchesParty && matchesStatus;
+    });
 
     const getInitials = (name: string) => {
         return name
@@ -331,14 +361,33 @@ export default function CandidatosPage() {
                         onChange={(e) => setSearchQuery(e.target.value)}
                     />
                 </div>
-                <Button variant="outline" className="gap-2 border-gray-300 text-gray-700">
-                    Todos os Partidos
-                    <ChevronDown className="h-4 w-4" />
-                </Button>
-                <Button variant="outline" className="gap-2 border-gray-300 text-gray-700">
-                    Todos os Status
-                    <ChevronDown className="h-4 w-4" />
-                </Button>
+
+                {/* Filtro de Partido (Tenant) Real */}
+                <Select value={filterPartyId} onValueChange={setFilterPartyId}>
+                    <SelectTrigger className="w-[200px] h-10 bg-white border-gray-300">
+                        <SelectValue placeholder="Todos os Partidos" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">Todos os Partidos</SelectItem>
+                        {organizations.map((org) => (
+                            <SelectItem key={org.id} value={org.id}>
+                                {org.name}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+
+                {/* Filtro de Status */}
+                <Select value={filterStatus} onValueChange={setFilterStatus}>
+                    <SelectTrigger className="w-[160px] h-10 bg-white border-gray-300">
+                        <SelectValue placeholder="Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">Todos os Status</SelectItem>
+                        <SelectItem value="active">Ativo</SelectItem>
+                        <SelectItem value="inactive">Inativo</SelectItem>
+                    </SelectContent>
+                </Select>
             </div>
 
             {/* Table */}
@@ -416,6 +465,10 @@ export default function CandidatosPage() {
                                                     <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 border-emerald-100 px-1.5 py-0 h-5 text-[10px] gap-1 font-medium hover:bg-emerald-100">
                                                         <CheckCircle2 className="w-3 h-3" />
                                                         {candidato.metrics?.approved_count} Aprov.
+                                                    </Badge>
+                                                    <Badge variant="secondary" className="bg-blue-50 text-blue-700 border-blue-100 px-1.5 py-0 h-5 text-[10px] gap-1 font-medium hover:bg-blue-100">
+                                                        <MapPin className="w-3 h-3" />
+                                                        {candidato.metrics?.locations_count} Pontos
                                                     </Badge>
                                                 </div>
                                             </div>

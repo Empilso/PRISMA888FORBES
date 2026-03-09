@@ -47,6 +47,12 @@ const ELECTION_RULES: Record<string, { date: string; type: 'municipal' | 'geral'
     'Deputado Distrital': { date: '2026-10-04', type: 'geral' },
 };
 
+interface Organization {
+    id: string;
+    name: string;
+    slug: string;
+}
+
 function CandidateForm() {
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -56,6 +62,7 @@ function CandidateForm() {
     const { toast } = useToast();
     const [isLoading, setIsLoading] = useState(false);
     const [isFetching, setIsFetching] = useState(false);
+    const supabase = createClient();
 
     const { register, handleSubmit, setValue, watch, reset } = useForm({
         defaultValues: {
@@ -69,6 +76,7 @@ function CandidateForm() {
             cargo: "",
             numero: "",
             partido: "",
+            organization_id: "",
             cidade: "",
             electionDate: "2026-10-04" // Próxima eleição geral (Padrão)
         }
@@ -76,6 +84,8 @@ function CandidateForm() {
 
     const [csvFile, setCsvFile] = useState<File | null>(null);
     const [pdfFile, setPdfFile] = useState<File | null>(null);
+    const [organizations, setOrganizations] = useState<Organization[]>([]);
+    const [isLoadingOrgs, setIsLoadingOrgs] = useState(false);
 
     // Watch cargo para atualizar data automaticamente
     const cargoAtual = watch("cargo");
@@ -98,6 +108,29 @@ function CandidateForm() {
         }
     }, [searchParams, isEditing, setValue]);
 
+    // 📡 Fetch Organizations for Selector
+    useEffect(() => {
+        const fetchOrgs = async () => {
+            setIsLoadingOrgs(true);
+            try {
+                const { data: session } = await supabase.auth.getSession();
+                const token = session.session?.access_token;
+                const res = await fetch("/api/organizations", {
+                    headers: { "Authorization": `Bearer ${token}` }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    setOrganizations(data || []);
+                }
+            } catch (e) {
+                console.error("Erro ao buscar orgs:", e);
+            } finally {
+                setIsLoadingOrgs(false);
+            }
+        };
+        fetchOrgs();
+    }, [supabase]);
+
     // Fetch data if editing (via Server Action com admin client)
     useEffect(() => {
         if (isEditing) {
@@ -119,6 +152,10 @@ function CandidateForm() {
                     setValue("cidade", campaign!.city);
                     setValue("cargo", campaign!.role);
                     setValue("partido", campaign!.party);
+                    // IMPORTANTE: Sincronizar organization_id se existir
+                    if (campaign!.organization_id) {
+                        setValue("organization_id", campaign!.organization_id);
+                    }
                     setValue("numero", campaign!.number);
                     setValue("electionDate", campaign!.election_date);
 
@@ -480,12 +517,26 @@ function CandidateForm() {
                         </div>
                         <div className="grid grid-cols-3 gap-4">
                             <div className="space-y-1.5">
-                                <Label className="text-xs text-[var(--text-secondary)]">Partido *</Label>
-                                <Input
-                                    placeholder="Ex: PL"
-                                    className="h-10 border-gray-300"
-                                    {...register("partido")}
-                                />
+                                <Label className="text-xs text-[var(--text-secondary)]">Partido (Org) *</Label>
+                                <Select
+                                    onValueChange={(v) => {
+                                        const org = organizations.find(o => o.id === v);
+                                        setValue("organization_id", v);
+                                        setValue("partido", org?.name || "");
+                                    }}
+                                    value={watch("organization_id")}
+                                >
+                                    <SelectTrigger className="h-10 border-gray-300">
+                                        <SelectValue placeholder={isLoadingOrgs ? "Carregando..." : "Selecione o Partido..."} />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {organizations.map((org) => (
+                                            <SelectItem key={org.id} value={org.id}>
+                                                {org.name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
                             </div>
                             <div className="space-y-1.5">
                                 <Label className="text-xs text-[var(--text-secondary)]">Cidade *</Label>

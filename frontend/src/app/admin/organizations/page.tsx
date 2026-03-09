@@ -25,6 +25,15 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
+import { useToast } from "@/components/ui/use-toast";
 
 interface Organization {
     id: string;
@@ -39,8 +48,12 @@ export default function OrganizationsPage() {
     const [searchQuery, setSearchQuery] = useState("");
     const [organizations, setOrganizations] = useState<Organization[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [isDeleting, setIsDeleting] = useState(false);
+    const [orgToDelete, setOrgToDelete] = useState<Organization | null>(null);
+
     const supabase = createClient();
     const router = useRouter();
+    const { toast } = useToast();
 
     useEffect(() => {
         fetchOrganizations();
@@ -70,6 +83,46 @@ export default function OrganizationsPage() {
             console.error("Erro ao buscar organizações:", error);
         } finally {
             setIsLoading(false);
+        }
+    };
+
+    const handleDelete = async () => {
+        if (!orgToDelete) return;
+
+        setIsDeleting(true);
+        try {
+            const { data: session } = await supabase.auth.getSession();
+            const token = session.session?.access_token;
+
+            const res = await fetch(`/api/organizations?id=${orgToDelete.id}`, {
+                method: "DELETE",
+                headers: {
+                    "Authorization": `Bearer ${token}`
+                }
+            });
+
+            if (!res.ok) {
+                const errorData = await res.json();
+                throw new Error(errorData.detail || "Erro ao excluir organização");
+            }
+
+            toast({
+                title: "Sucesso!",
+                description: `A organização ${orgToDelete.name} e todos os seus dados vinculados foram removidos.`,
+            });
+
+            // Atualizar lista local
+            setOrganizations(prev => prev.filter(o => o.id !== orgToDelete.id));
+            setOrgToDelete(null);
+        } catch (error: any) {
+            console.error("Erro ao excluir:", error);
+            toast({
+                title: "Erro na Exclusão",
+                description: error.message || "Não foi possível excluir a organização.",
+                variant: "destructive"
+            });
+        } finally {
+            setIsDeleting(false);
         }
     };
 
@@ -184,7 +237,11 @@ export default function OrganizationsPage() {
                                                     <DropdownMenuItem onClick={() => window.open(`/organization/${org.slug}`, '_blank')}>
                                                         Abrir em Nova Aba
                                                     </DropdownMenuItem>
-                                                    <DropdownMenuItem className="text-red-600">
+                                                    <DropdownMenuItem
+                                                        className="text-red-600 focus:text-red-600 cursor-pointer"
+                                                        onClick={() => setOrgToDelete(org)}
+                                                    >
+                                                        <Trash2 className="h-4 w-4 mr-2" />
                                                         Excluir
                                                     </DropdownMenuItem>
                                                 </DropdownMenuContent>
@@ -197,6 +254,47 @@ export default function OrganizationsPage() {
                     </tbody>
                 </table>
             </div>
+            <Dialog open={!!orgToDelete} onOpenChange={(open) => !open && setOrgToDelete(null)}>
+                <DialogContent className="sm:max-w-[425px]">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2 text-red-600">
+                            <Trash2 className="h-5 w-5" />
+                            Confirmar Exclusão Enterprise
+                        </DialogTitle>
+                        <DialogDescription asChild className="py-2">
+                            <div>
+                                Você está prestes a excluir permanentemente a organização <strong>{orgToDelete?.name}</strong>.
+                                <br /><br />
+                                <span className="text-amber-700 font-semibold underline">Esta ação é irreversível e removerá:</span>
+                                <ul className="list-disc list-inside mt-2 text-xs space-y-1">
+                                    <li>Todas as Campanhas vinculadas</li>
+                                    <li>Estratégias de IA e Mapas</li>
+                                    <li>Logs de execução e Tarefas</li>
+                                    <li>Documentos e Arquivos PDF/CSV</li>
+                                </ul>
+                            </div>
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter className="gap-2 sm:gap-0">
+                        <Button
+                            variant="outline"
+                            onClick={() => setOrgToDelete(null)}
+                            disabled={isDeleting}
+                        >
+                            Cancelar
+                        </Button>
+                        <Button
+                            variant="destructive"
+                            onClick={handleDelete}
+                            disabled={isDeleting}
+                            className="gap-2"
+                        >
+                            {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                            Confirmar Exclusão
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

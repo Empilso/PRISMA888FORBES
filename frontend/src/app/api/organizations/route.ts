@@ -66,3 +66,36 @@ export async function POST(request: NextRequest) {
         );
     }
 }
+export async function DELETE(request: NextRequest) {
+    try {
+        const authHeader = request.headers.get("Authorization");
+        const { searchParams } = new URL(request.url);
+        const orgId = searchParams.get("id");
+
+        if (!orgId) {
+            return NextResponse.json({ error: "Missing organization ID" }, { status: 400 });
+        }
+
+        const response = await fetch(`${BACKEND_URL}/api/organizations/${orgId}`, {
+            method: "DELETE",
+            headers: {
+                "ngrok-skip-browser-warning": "true",
+                ...(authHeader ? { "Authorization": authHeader } : {})
+            }
+        });
+
+        if (!response.ok) {
+            const errData = await response.json().catch(() => ({}));
+            return NextResponse.json(errData, { status: response.status });
+        }
+
+        const data = await response.json();
+        return NextResponse.json(data, { status: 200 });
+    } catch (error) {
+        console.error("[Organizations DELETE] Error:", error);
+        return NextResponse.json(
+            { error: "Failed to delete organization" },
+            { status: 500 }
+        );
+    }
+}
