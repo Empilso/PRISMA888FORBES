@@ -33,11 +33,25 @@ export function ElectionResultsWidget({ campaignId }: { campaignId: string }) {
 
             if (campaignData) setCampaignName(campaignData.candidate_name);
 
-            // 2. Buscar resultados brutos por local
-            // Nota: Idealmente teríamos uma view 'election_results_summary', mas vamos agregar no client por enquanto se não houver
+            // 2. Buscar IDs das localizações desta campanha (Isolamento de Tenant)
+            const { data: campaignLocations } = await supabase
+                .from('locations')
+                .select('id')
+                .eq('campaign_id', campaignId);
+
+            const locationIds = campaignLocations?.map(l => l.id) || [];
+
+            if (locationIds.length === 0) {
+                setResults([]);
+                setLoading(false);
+                return;
+            }
+
+            // 3. Buscar resultados APENAS dessas localizações
             const { data: rawData, error } = await supabase
                 .from('location_results')
-                .select('candidate_name, votes');
+                .select('candidate_name, votes')
+                .in('location_id', locationIds);
 
             if (error) {
                 console.error("Erro ao buscar resultados:", error);

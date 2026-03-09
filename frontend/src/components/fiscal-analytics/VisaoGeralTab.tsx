@@ -332,13 +332,14 @@ export function VisaoGeralTab({ citySlug, mockRevenue = 100000000 }: VisaoGeralT
                             </Card>
                         </TooltipTrigger>
                         <TooltipContent className="bg-slate-900 border-slate-800 text-white p-4 shadow-2xl rounded-xl max-w-sm">
-                            <p className="font-bold text-emerald-400 mb-1 text-sm border-b border-slate-700 pb-1">Receita Orçamentária Líquida</p>
+                            <p className="font-bold text-emerald-400 mb-1 text-sm border-b border-slate-700 pb-1">Conformidade Contábil (LRF)</p>
                             <p className="text-xs text-slate-300 leading-relaxed mt-2">
-                                Valor auditado (LRF/MCASP). O Portal do TCE-SP exibe a <strong>Receita Financeira</strong> agregada (+R$ 72M), pois soma de forma bruta Ingressos Extraorçamentários (retenções, cauções) e Repasses Intraorçamentários.
+                                Valor auditado via <strong>Receita Orçamentária Líquida</strong>. O Portal do TCE-SP exibe o montante bruto de R$ 755M, que consolida Ingressos Extraorçamentários (retenções/cauções) não computáveis como arrecadação municipal direta.
                             </p>
-                            <p className="text-[10px] text-slate-500 mt-2 font-mono mt-2 bg-slate-800 p-1.5 rounded">
-                                Fin = Orçamentária + Extra + Intra
-                            </p>
+                            <div className="text-[10px] text-slate-500 mt-2 font-mono bg-slate-800/50 p-2 rounded border border-slate-700">
+                                <span className="text-emerald-500">Prisma</span>: R$ 683M (Orçamentária)<br />
+                                <span className="text-blue-400">TCE-SP</span>: R$ 755M (Bruta/Extra)
+                            </div>
                         </TooltipContent>
                     </Tooltip>
                 </TooltipProvider>

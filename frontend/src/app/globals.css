@@ -115,6 +115,16 @@
   --chart-3: 30 80% 55%;
   --chart-4: 280 65% 60%;
   --chart-5: 340 75% 55%;
+
+  /* Enterprise Shadows for Dark Mode */
+  --shadow-premium: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+}
+
+.enterprise-dark {
+  @apply dark;
+  --bg-primary: hsl(var(--background));
+  --text-primary: hsl(var(--foreground));
+  --border-default: hsl(var(--border));
 }
 
 @layer utilities {

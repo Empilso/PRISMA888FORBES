@@ -175,10 +175,9 @@ export function ElectoralMapFull({ campaignId, campaigns }: ElectoralMapFullProp
 
     const fetchNotes = async () => {
         try {
-            const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-            const res = await fetch(`${apiUrl}/api/campaign/${campaignId}/map_notes`, {
+            // Usa URL relativa para passar pelo next.config.mjs proxy (evita CORS e Failed to fetch)
+            const res = await fetch(`/api/campaign/${campaignId}/map_notes`, {
                 headers: {
-                    'ngrok-skip-browser-warning': 'true',
                     'Content-Type': 'application/json',
                 }
             });
@@ -280,12 +279,26 @@ export function ElectoralMapFull({ campaignId, campaigns }: ElectoralMapFullProp
                     });
                 }
 
-                const getPerformanceColor = (myVotes: number, totalVotes: number): string => {
+                const getPerformanceColor = (locationId: string, myVotes: number, totalVotes: number, allResults: any[]): string => {
                     if (totalVotes === 0) return 'gray';
-                    const share = (myVotes / totalVotes) * 100;
-                    if (share >= 20) return 'green';
-                    if (share >= 5) return 'yellow';
-                    return 'red';
+
+                    // Filtrar resultados apenas desta localização
+                    const locResults = allResults.filter(r => r.location_id === locationId)
+                        .sort((a, b) => (b.votes || 0) - (a.votes || 0));
+
+                    if (locResults.length === 0) return 'gray';
+
+                    // Encontrar a posição do nosso candidato (ballotName)
+                    const myPos = locResults.findIndex(r => {
+                        const cName = (r.candidate_name || "").toLowerCase();
+                        return hasSingleCampaign
+                            ? cName.includes(ballotName.toLowerCase())
+                            : ballotNames.some(b => cName.includes(b));
+                    });
+
+                    if (myPos === 0) return 'green'; // 1º Lugar
+                    if (myPos === 1 || myPos === 2) return 'yellow'; // 2º ou 3º Lugar
+                    return 'red'; // 4º ou menos
                 };
 
                 // D. Merge
@@ -293,7 +306,7 @@ export function ElectoralMapFull({ campaignId, campaigns }: ElectoralMapFullProp
                     const totalVotes = loc.votes_count || 0;
                     const myVotes = myVotesMap[loc.id] || 0;
                     const myShare = totalVotes > 0 ? (myVotes / totalVotes) * 100 : 0;
-                    const color = getPerformanceColor(myVotes, totalVotes);
+                    const color = getPerformanceColor(loc.id, myVotes, totalVotes, myVotesData || []);
 
                     return {
                         id: loc.id,
@@ -347,8 +360,7 @@ export function ElectoralMapFull({ campaignId, campaigns }: ElectoralMapFullProp
         if (!selectedLocation) return;
         setIsGeneratingAction(true);
         try {
-            const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-            const response = await fetch(`${apiUrl}/api/campaign/${campaignId}/location/${selectedLocation.id}/tactical_action`, {
+            const response = await fetch(`/api/campaign/${campaignId}/location/${selectedLocation.id}/tactical_action`, {
                 method: 'POST',
                 headers: {
                     'ngrok-skip-browser-warning': 'true',
@@ -382,10 +394,9 @@ export function ElectoralMapFull({ campaignId, campaigns }: ElectoralMapFullProp
         const timeoutId = setTimeout(() => controller.abort(), 12000); // 12s timeout
 
         try {
-            const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-            const res = await fetch(`${apiUrl}/api/campaign/${campaignId}/map/tactical`, {
+            const res = await fetch(`/api/campaign/${campaignId}/map/tactical`, {
                 signal: controller.signal,
-                headers: { 'ngrok-skip-browser-warning': 'true' }
+                headers: { 'Content-Type': 'application/json' }
             });
             clearTimeout(timeoutId);
 
@@ -447,14 +458,13 @@ export function ElectoralMapFull({ campaignId, campaigns }: ElectoralMapFullProp
         setMicroStrategy("");
 
         try {
-            const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
             const body = {
                 neighborhood: selectedLocation.address || 'Geral', // Usando endereço como proxy de bairro se necessário
                 location_id: selectedLocation.id,
                 location_name: selectedLocation.name
             };
 
-            const res = await fetch(`${apiUrl}/api/campaign/${campaignId}/social/micro-strategy`, {
+            const res = await fetch(`/api/campaign/${campaignId}/social/micro-strategy`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -481,14 +491,13 @@ export function ElectoralMapFull({ campaignId, campaigns }: ElectoralMapFullProp
         setMicroStrategy("");
 
         try {
-            const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
             const body = {
                 neighborhood: selectedMention.inferred_neighborhood || 'Geral',
                 location_id: selectedLocation?.id,
                 location_name: selectedLocation?.name
             };
 
-            const res = await fetch(`${apiUrl}/api/campaign/${campaignId}/social/micro-strategy`, {
+            const res = await fetch(`/api/campaign/${campaignId}/social/micro-strategy`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -514,7 +523,6 @@ export function ElectoralMapFull({ campaignId, campaigns }: ElectoralMapFullProp
         setIsDelegatingMicro(true);
 
         try {
-            const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
             const body = {
                 mention_id: selectedMention.id,
                 diagnostico: microStrategy.diagnostico,
@@ -523,7 +531,7 @@ export function ElectoralMapFull({ campaignId, campaigns }: ElectoralMapFullProp
                 tarefa_delega: microStrategy.tarefa_delega
             };
 
-            const res = await fetch(`${apiUrl}/api/campaign/${campaignId}/social/delegate-task`, {
+            const res = await fetch(`/api/campaign/${campaignId}/social/delegate-task`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -576,18 +584,17 @@ export function ElectoralMapFull({ campaignId, campaigns }: ElectoralMapFullProp
         }
         setIsSavingNote(true);
         try {
-            const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
             let res;
             if (selectedNote) {
                 // Update
-                res = await fetch(`${apiUrl}/api/campaign/${campaignId}/map_notes/${selectedNote.id}`, {
+                res = await fetch(`/api/campaign/${campaignId}/map_notes/${selectedNote.id}`, {
                     method: 'PATCH',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(noteForm)
                 });
             } else {
                 // Create
-                res = await fetch(`${apiUrl}/api/campaign/${campaignId}/map_notes`, {
+                res = await fetch(`/api/campaign/${campaignId}/map_notes`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(noteForm)
@@ -612,8 +619,7 @@ export function ElectoralMapFull({ campaignId, campaigns }: ElectoralMapFullProp
         if (!confirm("Tem certeza que deseja excluir esta nota?")) return;
 
         try {
-            const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-            await fetch(`${apiUrl}/api/campaign/${campaignId}/map_notes/${selectedNote.id}`, {
+            await fetch(`/api/campaign/${campaignId}/map_notes/${selectedNote.id}`, {
                 method: 'DELETE',
                 headers: { "ngrok-skip-browser-warning": "true" }
             });

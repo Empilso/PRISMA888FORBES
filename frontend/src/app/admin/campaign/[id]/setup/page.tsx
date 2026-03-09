@@ -871,11 +871,9 @@ export default function CampaignSetupPage() {
   // 📡 Fetch Social Radar Stats
   const fetchSocialStats = async () => {
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-      const res = await fetch(
-        `/api/campaign/${campaignId}/social/stats`,
-        { headers: { "ngrok-skip-browser-warning": "true" } }
-      );
+      const res = await fetch(`/api/campaign/${campaignId}/social/stats`, {
+        headers: { 'Content-Type': 'application/json' }
+      });
       if (res.ok) {
         const data = await res.json();
         setSocialStats(data);
@@ -887,12 +885,10 @@ export default function CampaignSetupPage() {
 
   const fetchEnterpriseRadarHealth = async () => {
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-
       // 1. Fetch Engine Status Ping
       setEngineStatus({ status: 'checking' });
       const engineRes = await fetch(`/api/admin/services/engine/test`, {
-        headers: { underdog_skip_browser_warning: "true" }
+        headers: { 'Content-Type': 'application/json' }
       }).catch(() => null);
 
       if (engineRes && engineRes.ok) {
@@ -909,7 +905,7 @@ export default function CampaignSetupPage() {
 
       // 2. Fetch Radar Breakdown
       const breakdownRes = await fetch(`/api/campaign/${campaignId}/social/stats/breakdown`, {
-        headers: { underdog_skip_browser_warning: "true" }
+        headers: { 'Content-Type': 'application/json' }
       }).catch(() => null);
 
       if (breakdownRes && breakdownRes.ok) {
@@ -1066,11 +1062,10 @@ export default function CampaignSetupPage() {
       const csvDoc = documents.find((d) => d.file_type === "csv");
       if (csvDoc && locationsCount === 0) {
         console.log("📊 [PROCESS] Processando CSV:", csvDoc.file_url);
-        const csvResponse = await fetch(`/api/ingest/locations`, {
+        const csvResponse = await fetch(`${backendUrl}/api/ingest/locations`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "ngrok-skip-browser-warning": "true"
           },
           body: JSON.stringify({
             campaign_id: campaignId,
@@ -1089,11 +1084,10 @@ export default function CampaignSetupPage() {
       const pdfDoc = documents.find((d) => d.file_type === "pdf");
       if (pdfDoc && chunksCount === 0) {
         console.log("📄 [PROCESS] Processando PDF:", pdfDoc.file_url);
-        const pdfResponse = await fetch(`/api/ingest/pdf`, {
+        const pdfResponse = await fetch(`${backendUrl}/api/ingest/pdf`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "ngrok-skip-browser-warning": "true"
           },
           body: JSON.stringify({
             campaign_id: campaignId,
