@@ -16,10 +16,7 @@ import {
     X,
     Loader2,
     Search,
-    Radar,
     Plus,
-    Trash2,
-    Instagram
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,14 +28,13 @@ import { useToast } from "@/components/ui/use-toast";
 import { createCampaign } from "@/app/actions/create-campaign";
 import { updateCampaign } from "@/app/actions/update-campaign";
 import { createClient } from "@/lib/supabase/client";
+import { fetchExistingCsvs } from "@/app/actions/fetch-existing-csvs";
 
 // 🗓️ MATRIZ ELEITORAL - Mapeamento Cargo → Data da Eleição
 const ELECTION_RULES: Record<string, { date: string; type: 'municipal' | 'geral' }> = {
-    // Eleições Municipais (1º domingo de outubro de 2028)
     'Prefeito': { date: '2028-10-01', type: 'municipal' },
     'Vice-Prefeito': { date: '2028-10-01', type: 'municipal' },
     'Vereador': { date: '2028-10-01', type: 'municipal' },
-    // Eleições Gerais (1º domingo de outubro de 2026)
     'Presidente': { date: '2026-10-04', type: 'geral' },
     'Governador': { date: '2026-10-04', type: 'geral' },
     'Senador': { date: '2026-10-04', type: 'geral' },
@@ -78,19 +74,23 @@ function CandidateForm() {
             partido: "",
             organization_id: "",
             cidade: "",
-            electionDate: "2026-10-04" // Próxima eleição geral (Padrão)
+            electionDate: "2026-10-04"
         }
     });
 
     const [csvFile, setCsvFile] = useState<File | null>(null);
+    const [existingCsvs, setExistingCsvs] = useState<{ id: string, name: string, url: string, city: string }[]>([]);
+    const [selectedExistingCsv, setSelectedExistingCsv] = useState<string | null>(null);
     const [pdfFile, setPdfFile] = useState<File | null>(null);
     const [organizations, setOrganizations] = useState<Organization[]>([]);
     const [isLoadingOrgs, setIsLoadingOrgs] = useState(false);
+    const [isLoadingCsvs, setIsLoadingCsvs] = useState(false);
 
-    // Watch cargo para atualizar data automaticamente
     const cargoAtual = watch("cargo");
+    const cidadeAtual = watch("cidade");
+    const orgAtual = watch("organization_id");
 
-    // 🎯 Atualiza automaticamente a data da eleição quando o cargo muda
+    // 🎯 Efeito 1: Data da Eleição
     useEffect(() => {
         if (cargoAtual && ELECTION_RULES[cargoAtual] && !isEditing) {
             const rule = ELECTION_RULES[cargoAtual];
@@ -98,17 +98,15 @@ function CandidateForm() {
         }
     }, [cargoAtual, setValue, isEditing]);
 
-    // Pre-fill City from URL if provided (New Logic)
+    // 🎯 Efeito 2: Pre-fill City from URL
     useEffect(() => {
         const cityParam = searchParams.get("city");
         if (cityParam && !isEditing) {
-            // Capitalize first letter logic or raw
-            // Assuming the param is the Name (e.g. "Sorocaba")
             setValue("cidade", cityParam);
         }
     }, [searchParams, isEditing, setValue]);
 
-    // 📡 Fetch Organizations for Selector
+    // 🎯 Efeito 3: Buscar Organizações
     useEffect(() => {
         const fetchOrgs = async () => {
             setIsLoadingOrgs(true);
@@ -131,46 +129,66 @@ function CandidateForm() {
         fetchOrgs();
     }, [supabase]);
 
-    // Fetch data if editing (via Server Action com admin client)
+    // 🎯 Efeito 4: Buscar TODOS os CSVs da Organização (Drop Down Global)
     useEffect(() => {
-        if (isEditing) {
+        const loadExistingCsvs = async () => {
+            if (!orgAtual || isEditing) {
+                setExistingCsvs([]);
+                return;
+            }
+
+            setIsLoadingCsvs(true);
+            try {
+                const result = await fetchExistingCsvs(orgAtual);
+                if (result.success && result.data) {
+                    setExistingCsvs(result.data as any);
+                } else {
+                    setExistingCsvs([]);
+                }
+            } catch (error) {
+                console.error("Erro ao carregar CSVs existentes", error);
+                setExistingCsvs([]);
+            } finally {
+                setIsLoadingCsvs(false);
+            }
+        };
+
+        loadExistingCsvs();
+    }, [orgAtual, isEditing]);
+
+    // 🎯 Efeito 5: Carregar dados para edição
+    useEffect(() => {
+        if (isEditing && campaignId) {
             const fetchData = async () => {
                 setIsFetching(true);
                 try {
                     const { fetchCampaignForEdit } = await import("@/app/actions/fetch-campaign");
-                    const result = await fetchCampaignForEdit(campaignId!);
+                    const result = await fetchCampaignForEdit(campaignId);
 
-                    if (!result.success) {
-                        throw new Error(result.error);
-                    }
+                    if (!result.success) throw new Error(result.error);
 
                     const { campaign, profile } = result;
-
-                    // Populate Form — Dados da Campanha
                     setValue("nome", campaign!.candidate_name);
                     setValue("nomeUrna", campaign!.ballot_name);
                     setValue("cidade", campaign!.city);
                     setValue("cargo", campaign!.role);
                     setValue("partido", campaign!.party);
-                    // IMPORTANTE: Sincronizar organization_id se existir
-                    if (campaign!.organization_id) {
-                        setValue("organization_id", campaign!.organization_id);
+                    if ((campaign as any).organization_id) {
+                        setValue("organization_id", (campaign as any).organization_id);
                     }
                     setValue("numero", campaign!.number);
                     setValue("electionDate", campaign!.election_date);
 
-                    // Profile (email, cpf, telefone)
                     if (profile) {
                         if (profile.email) setValue("email", profile.email);
                         if (profile.cpf) setValue("cpf", profile.cpf);
                         if (profile.phone) setValue("telefone", profile.phone);
                     }
-
                 } catch (error) {
                     console.error("Erro ao carregar dados:", error);
                     toast({
                         title: "Erro",
-                        description: "Falha ao carregar dados do candidato.",
+                        description: "Falha ao carregar dados.",
                         variant: "destructive"
                     });
                 } finally {
@@ -181,86 +199,75 @@ function CandidateForm() {
         }
     }, [campaignId, isEditing, setValue, toast]);
 
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: 'csv' | 'pdf') => {
+        if (e.target.files && e.target.files[0]) {
+            if (type === 'csv') {
+                setCsvFile(e.target.files[0]);
+                setSelectedExistingCsv(null);
+            } else {
+                setPdfFile(e.target.files[0]);
+            }
+        }
+    };
+
+    const copyToClipboard = (text: string) => {
+        navigator.clipboard.writeText(text);
+        toast({ title: "Copiado!", description: "Informação copiada." });
+    };
+
     const onSubmit = async (data: any) => {
         setIsLoading(true);
         try {
             const formData = new FormData();
-
-            // BUG 1 FIX: No modo edição, NÃO incluir login/password
             const excludeOnEdit = ['login', 'password'];
+
             Object.keys(data).forEach(key => {
                 if (isEditing && excludeOnEdit.includes(key)) return;
                 formData.append(key, data[key]);
             });
 
-            // Adicionar arquivos
-            if (csvFile) formData.append("csvFile", csvFile);
+            if (selectedExistingCsv) {
+                formData.append("existingCsvUrl", selectedExistingCsv);
+                const existingFile = existingCsvs.find(f => f.url === selectedExistingCsv);
+                if (existingFile) formData.append("existingCsvName", existingFile.name);
+            } else if (csvFile) {
+                formData.append("csvFile", csvFile);
+            }
+
             if (pdfFile) formData.append("pdfFile", pdfFile);
 
             let result;
-
             if (isEditing) {
-                toast({ title: "Atualizando...", description: "Salvando alterações." });
                 result = await updateCampaign(campaignId!, formData);
             } else {
-                toast({ title: "Criando...", description: "Configurando infraestrutura." });
                 result = await createCampaign(formData);
             }
 
             if (result.success) {
                 toast({
                     title: "Sucesso!",
-                    description: isEditing ? "Dados atualizados." : "Candidato criado com sucesso. Redirecionando para configuração...",
-                    variant: "default",
+                    description: isEditing ? "Dados atualizados." : "Candidato registrado com sucesso.",
                 });
-
-                // Determina o ID para redirecionamento
                 const targetId = isEditing ? campaignId : (result as any).campaignId;
-
-                setTimeout(() => {
-                    if (targetId) {
-                        router.push(`/admin/campaign/${targetId}/setup`);
-                    } else {
-                        router.push("/admin/candidatos");
-                    }
-                }, 1500);
+                router.push(`/admin/campaign/${targetId}/setup`);
             } else {
-                toast({
-                    title: "Erro",
-                    description: result.error || "Falha na operação.",
-                    variant: "destructive",
-                });
+                throw new Error(result.error);
             }
-        } catch (error) {
-            console.error(error);
+        } catch (error: any) {
+            console.error("Erro ao salvar:", error);
             toast({
-                title: "Erro Inesperado",
-                description: "Ocorreu um erro ao processar sua solicitação.",
-                variant: "destructive",
+                title: "Erro",
+                description: error.message || "Falha ao salvar.",
+                variant: "destructive"
             });
         } finally {
             setIsLoading(false);
         }
     };
 
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: 'csv' | 'pdf') => {
-        if (e.target.files && e.target.files[0]) {
-            if (type === 'csv') setCsvFile(e.target.files[0]);
-            else setPdfFile(e.target.files[0]);
-        }
-    };
-
-    const copyToClipboard = (text: string) => {
-        navigator.clipboard.writeText(text);
-        toast({
-            title: "Copiado!",
-            description: "Texto copiado para a área de transferência.",
-        });
-    };
-
     if (isFetching) {
         return (
-            <div className="flex items-center justify-center h-screen">
+            <div className="flex items-center justify-center h-screen bg-gray-50">
                 <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
             </div>
         );
@@ -268,317 +275,249 @@ function CandidateForm() {
 
     return (
         <div className="max-w-6xl mx-auto p-8 space-y-6">
-            {/* HEADER */}
             <div className="mb-6">
-                <h1 className="text-2xl font-semibold text-[var(--text-primary)]">
-                    {isEditing ? `✏️ Editando: ${watch("nomeUrna") || watch("nome") || "Candidato"}` : "Adicionar Candidato"}
+                <h1 className="text-2xl font-bold text-gray-900">
+                    {isEditing ? "✏️ Editar Candidato" : "Adicionar Candidato"}
                 </h1>
-                <p className="text-sm text-[var(--text-secondary)] mt-1">
-                    {isEditing ? "Atualize os dados da campanha e do candidato" : "Complete o cadastro e carregue os dados eleitorais"}
+                <p className="text-sm text-gray-500 mt-1">
+                    Complete os dados e carregue as bases necessárias
                 </p>
             </div>
 
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-
-                {/* CARD 1: ARQUIVOS */}
-                <Card className="border border-[var(--border-default)]">
-                    <CardHeader className="pb-3">
-                        <CardTitle className="text-xs font-semibold uppercase text-gray-500 tracking-wide">
-                            ARQUIVOS {isEditing && "(Envie apenas se quiser substituir)"}
+                {/* 1. DADOS DE IDENTIFICAÇÃO */}
+                <Card className="border-gray-200 shadow-sm">
+                    <CardHeader className="pb-3 border-b bg-gray-50/50">
+                        <CardTitle className="text-xs font-bold uppercase text-gray-500 tracking-widest flex items-center gap-2">
+                            <User className="h-4 w-4" /> Identificação
                         </CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-4">
-                        <div className="grid grid-cols-2 gap-4">
+                    <CardContent className="pt-6 grid grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                            <Label className="text-xs font-bold text-gray-700">Nome Completo</Label>
+                            <Input {...register("nome")} placeholder="Nome do Candidato" className="h-11 rounded-xl" />
+                        </div>
+                        <div className="space-y-2">
+                            <Label className="text-xs font-bold text-gray-700">Nome na Urna *</Label>
+                            <Input {...register("nomeUrna")} placeholder="Ex: JOÃO DA FARMÁCIA" className="h-11 rounded-xl border-amber-200 bg-amber-50/30" />
+                            <p className="text-[10px] text-amber-600">Essencial para o cruzamento de dados no mapa.</p>
+                        </div>
+                        <div className="space-y-2">
+                            <Label className="text-xs font-bold text-gray-700">E-mail</Label>
+                            <Input {...register("email")} placeholder="contato@prisma888.com" className="h-11 rounded-xl" />
+                        </div>
+                        <div className="space-y-2">
+                            <Label className="text-xs font-bold text-gray-700">CPF</Label>
+                            <Input {...register("cpf")} placeholder="000.000.000-00" className="h-11 rounded-xl" />
+                        </div>
+                    </CardContent>
+                </Card>
+
+                {/* 2. GESTÃO DE ARQUIVOS (DROPDOWN DE BASES EXISTENTES) */}
+                <Card className="border-gray-200 shadow-sm">
+                    <CardHeader className="pb-3 border-b bg-gray-50/50">
+                        <CardTitle className="text-xs font-bold uppercase text-gray-500 tracking-widest flex items-center gap-2">
+                            <Upload className="h-4 w-4" /> Gestão de Arquivos Eleitorais
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent className="pt-6 space-y-6">
+                        <div className="grid grid-cols-2 gap-8">
                             {/* CSV */}
-                            <div className="space-y-2">
-                                <label className="text-xs text-gray-600">Dados Eleitorais (CSV)</label>
-                                <div className="relative">
+                            <div className="space-y-4">
+                                <div className="flex items-center justify-between">
+                                    <Label className="text-sm font-semibold">Base de Votação (CSV)</Label>
+                                    {isLoadingCsvs && <Loader2 className="h-3 w-3 animate-spin text-blue-500" />}
+                                </div>
+
+                                {existingCsvs.length > 0 && !isEditing && (
+                                    <div className="space-y-2 p-4 bg-blue-50/50 border border-blue-100 rounded-xl">
+                                        <Label className="text-[10px] uppercase font-black text-blue-700 flex items-center gap-1">
+                                            <Cloud className="h-3.5 w-3.5" /> Reutilizar Base Existente
+                                        </Label>
+                                        <Select
+                                            value={selectedExistingCsv || "none"}
+                                            onValueChange={(val) => {
+                                                if (val === "none") {
+                                                    setSelectedExistingCsv(null);
+                                                } else {
+                                                    setSelectedExistingCsv(val);
+                                                    setCsvFile(null);
+                                                }
+                                            }}
+                                        >
+                                            <SelectTrigger className="h-11 border-blue-300 bg-white text-blue-700 font-bold shadow-sm">
+                                                <SelectValue placeholder="Selecione uma base pronta..." />
+                                            </SelectTrigger>
+                                            <SelectContent className="z-[100]">
+                                                <SelectItem value="none">-- Fazer novo upload manual --</SelectItem>
+                                                {existingCsvs.map((file: any, idx) => (
+                                                    <SelectItem key={idx} value={file.file_url}>
+                                                        {file.label}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        <p className="text-[9px] text-blue-500 italic">* Reutilize bases de outras campanhas para economizar tempo.</p>
+                                    </div>
+                                )}
+
+                                <div className="relative group">
                                     <input
                                         type="file"
                                         accept=".csv"
-                                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
                                         onChange={(e) => handleFileChange(e, 'csv')}
                                     />
-                                    <Button
-                                        type="button"
-                                        className={`w-full h-12 font-medium gap-2 ${csvFile ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700'} text-white`}
-                                    >
+                                    <div className={`w-full h-14 border-2 border-dashed rounded-xl flex items-center justify-center gap-3 transition-colors ${csvFile || selectedExistingCsv
+                                        ? 'bg-green-50 border-green-200 text-green-700'
+                                        : 'bg-gray-50 border-gray-200 text-gray-500 group-hover:bg-gray-100 group-hover:border-gray-300'
+                                        }`}>
                                         <Upload className="h-5 w-5" />
-                                        {csvFile ? `CSV Selecionado: ${csvFile.name}` : "Adicionar CSV"}
-                                    </Button>
+                                        <span className="text-sm font-medium">
+                                            {csvFile ? `Arquivo: ${csvFile.name}` :
+                                                selectedExistingCsv ? "Base Selecionada ✓" :
+                                                    "Sincronizar Novo CSV"}
+                                        </span>
+                                    </div>
+                                    {(csvFile || selectedExistingCsv) && (
+                                        <button
+                                            type="button"
+                                            onClick={() => { setCsvFile(null); setSelectedExistingCsv(null); }}
+                                            className="absolute -right-2 -top-2 bg-red-500 text-white rounded-full p-1.5 shadow-lg z-30 hover:bg-red-600"
+                                        >
+                                            <X className="h-3.5 w-3.5" />
+                                        </button>
+                                    )}
                                 </div>
                             </div>
 
                             {/* PDF */}
-                            <div className="space-y-2">
-                                <label className="text-xs text-gray-600">Plano de Governo (PDF)</label>
-                                <div className="relative">
+                            <div className="space-y-4">
+                                <Label className="text-sm font-semibold">Plano de Governo (PDF)</Label>
+                                <div className="relative group">
                                     <input
                                         type="file"
                                         accept=".pdf"
-                                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
                                         onChange={(e) => handleFileChange(e, 'pdf')}
                                     />
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        className={`w-full h-12 border-gray-300 font-medium gap-2 ${pdfFile ? 'bg-green-50 text-green-700 border-green-200' : 'text-gray-700'}`}
-                                    >
+                                    <div className={`w-full h-14 border-2 border-dashed rounded-xl flex items-center justify-center gap-3 transition-colors ${pdfFile
+                                        ? 'bg-green-50 border-green-200 text-green-700'
+                                        : 'bg-gray-50 border-gray-200 text-gray-500 group-hover:bg-gray-100 group-hover:border-gray-300'
+                                        }`}>
                                         <FileText className="h-5 w-5" />
-                                        {pdfFile ? `PDF Selecionado: ${pdfFile.name}` : "Adicionar PDF"}
-                                    </Button>
+                                        <span className="text-sm font-medium">
+                                            {pdfFile ? `PDF: ${pdfFile.name}` : "Carregar Plano (.pdf)"}
+                                        </span>
+                                    </div>
+                                    {pdfFile && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setPdfFile(null)}
+                                            className="absolute -right-2 -top-2 bg-red-500 text-white rounded-full p-1.5 shadow-lg z-30 hover:bg-red-600"
+                                        >
+                                            <X className="h-3.5 w-3.5" />
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                         </div>
                     </CardContent>
                 </Card>
 
-                {/* CARD 2: INFORMAÇÕES PESSOAIS */}
-                <Card className="border border-[var(--border-default)]">
-                    <CardHeader className="pb-3 flex flex-row items-center gap-2">
-                        <User className="h-4 w-4 text-blue-600" />
-                        <CardTitle className="text-sm font-semibold text-[var(--text-primary)]">
-                            Informações Pessoais
+                {/* 3. CAMPANHA */}
+                <Card className="border-gray-200 shadow-sm">
+                    <CardHeader className="pb-3 border-b bg-gray-50/50">
+                        <CardTitle className="text-xs font-bold uppercase text-gray-500 tracking-widest flex items-center gap-2">
+                            <MapPin className="h-4 w-4" /> Localidade e Cargos
                         </CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-4">
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-1.5">
-                                <Label className="text-xs text-[var(--text-secondary)]">Nome Completo *</Label>
-                                <Input
-                                    placeholder="Ex: João Silva"
-                                    className="h-10"
-                                    {...register("nome", { required: true })}
-                                />
+                    <CardContent className="pt-6 space-y-6">
+                        <div className="grid grid-cols-3 gap-6">
+                            <div className="space-y-2">
+                                <Label className="text-xs font-bold text-gray-700">Cidade *</Label>
+                                <Input {...register("cidade")} placeholder="Ex: Sorocaba" className="h-11 rounded-xl" />
                             </div>
-                            <div className="space-y-1.5">
-                                <Label className="text-xs text-[var(--text-secondary)]">Nome Oficial na Urna (Igual TSE) *</Label>
-                                <div className="flex gap-2">
-                                    <Input
-                                        placeholder="Ex: JOÃO DA SILVA JUNIOR"
-                                        className="h-10 flex-1"
-                                        {...register("nomeUrna", {
-                                            required: true,
-                                            onChange: (e) => e.target.value = e.target.value.toUpperCase() // Força uppercase visual
-                                        })}
-                                    />
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        size="icon"
-                                        className="h-10 w-10 shrink-0"
-                                        title="Consultar no DivulgaCand (TSE)"
-                                        onClick={() => window.open('https://divulgacandcontas.tse.jus.br/divulga/', '_blank')}
-                                    >
-                                        <Search className="h-4 w-4 text-blue-600" />
-                                    </Button>
-                                </div>
-                                <Alert className="bg-amber-50 border-amber-200 py-2 mt-1">
-                                    <div className="flex items-start gap-2">
-                                        <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5" />
-                                        <p className="text-[11px] text-amber-900 leading-tight">
-                                            <strong>Atenção Crítica:</strong> Este nome deve ser IDÊNTICO, letra por letra, ao registrado no TSE. Se estiver diferente, o mapa de calor não conseguirá identificar os votos do candidato.
-                                        </p>
-                                    </div>
-                                </Alert>
-                            </div>
-                        </div>
-                        <div className="grid grid-cols-3 gap-4">
-                            <div className="space-y-1.5">
-                                <Label className="text-xs text-[var(--text-secondary)]">CPF</Label>
-                                <Input
-                                    placeholder="000.000.000-00"
-                                    className="h-10 border-gray-300"
-                                    {...register("cpf")}
-                                />
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label className="text-xs text-[var(--text-secondary)]">Email</Label>
-                                <Input
-                                    type="email"
-                                    placeholder="email@example.com"
-                                    className="h-10 border-gray-300"
-                                    {...register("email", { required: !isEditing })}
-                                />
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label className="text-xs text-[var(--text-secondary)]">Telefone</Label>
-                                <Input
-                                    placeholder="(00) 00000-0000"
-                                    className="h-10 border-gray-300"
-                                    {...register("telefone")}
-                                />
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
-
-                {/* CARD 3: CREDENCIAIS DE ACESSO */}
-                {!isEditing && (
-                    <Card className="border border-[var(--border-default)]">
-                        <CardHeader className="pb-3 flex flex-row items-center gap-2">
-                            <Key className="h-4 w-4 text-purple-600" />
-                            <CardTitle className="text-sm font-semibold text-gray-700">
-                                Credenciais de Acesso do Candidato
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-1.5">
-                                    <Label className="text-xs text-[var(--text-secondary)]">Login (gerado automaticamente)</Label>
-                                    <div className="relative">
-                                        <Input
-                                            className="h-10 pr-10 bg-[var(--bg-tertiary)] font-mono text-sm"
-                                            readOnly
-                                            {...register("login")}
-                                        />
-                                        <button
-                                            type="button"
-                                            onClick={() => copyToClipboard(watch("login"))}
-                                            className="absolute right-2 top-2.5 text-gray-400 hover:text-gray-600"
-                                        >
-                                            <Copy className="h-4 w-4" />
-                                        </button>
-                                    </div>
-                                </div>
-                                <div className="space-y-1.5">
-                                    <Label className="text-xs text-[var(--text-secondary)]">Senha (gerado automaticamente)</Label>
-                                    <div className="relative">
-                                        <Input
-                                            className="h-10 pr-10 bg-[var(--bg-tertiary)] font-mono text-sm"
-                                            readOnly
-                                            {...register("password")}
-                                        />
-                                        <button
-                                            type="button"
-                                            onClick={() => copyToClipboard(watch("password"))}
-                                            className="absolute right-2 top-2.5 text-gray-400 hover:text-gray-600"
-                                        >
-                                            <Copy className="h-4 w-4" />
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <Alert className="bg-purple-50 border-purple-200">
-                                <AlertCircle className="h-4 w-4 text-purple-600" />
-                                <AlertDescription className="text-xs text-purple-900 ml-2">
-                                    <span className="font-semibold">Importante:</span> Essas credenciais serão as usadas pelo candidato para acessar o sistema.
-                                </AlertDescription>
-                            </Alert>
-                        </CardContent>
-                    </Card>
-                )}
-
-                {/* CARD 4: INFORMAÇÕES ELEITORAIS */}
-                <Card className="border border-[var(--border-default)]">
-                    <CardHeader className="pb-3 flex flex-row items-center gap-2">
-                        <MapPin className="h-4 w-4 text-green-600" />
-                        <CardTitle className="text-sm font-semibold text-gray-700">
-                            Informações Eleitorais
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-1.5">
-                                <Label className="text-xs text-[var(--text-secondary)]">Cargo *</Label>
+                            <div className="space-y-2">
+                                <Label className="text-xs font-bold text-gray-700">Cargo *</Label>
                                 <Select onValueChange={(v) => setValue("cargo", v)} value={watch("cargo")}>
-                                    <SelectTrigger className="h-10 border-gray-300">
-                                        <SelectValue placeholder="Selecione o cargo..." />
+                                    <SelectTrigger className="h-11 rounded-xl">
+                                        <SelectValue placeholder="Selecione..." />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectGroup>
-                                            <SelectLabel className="text-xs font-semibold text-blue-600">🏘️ Municipais (2028)</SelectLabel>
-                                            <SelectItem value="Prefeito">Prefeito</SelectItem>
-                                            <SelectItem value="Vice-Prefeito">Vice-Prefeito</SelectItem>
-                                            <SelectItem value="Vereador">Vereador</SelectItem>
-                                        </SelectGroup>
-                                        <SelectGroup>
-                                            <SelectLabel className="text-xs font-semibold text-green-600">🇧🇷 Gerais (2026)</SelectLabel>
-                                            <SelectItem value="Presidente">Presidente</SelectItem>
-                                            <SelectItem value="Governador">Governador</SelectItem>
-                                            <SelectItem value="Senador">Senador</SelectItem>
-                                            <SelectItem value="Deputado Federal">Deputado Federal</SelectItem>
-                                            <SelectItem value="Deputado Estadual">Deputado Estadual</SelectItem>
-                                            <SelectItem value="Deputado Distrital">Deputado Distrital</SelectItem>
-                                        </SelectGroup>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label className="text-xs text-[var(--text-secondary)]">Número *</Label>
-                                <Input
-                                    type="number"
-                                    placeholder="Ex: 15"
-                                    className="h-10 border-gray-300"
-                                    {...register("numero")}
-                                />
-                            </div>
-                        </div>
-                        <div className="grid grid-cols-3 gap-4">
-                            <div className="space-y-1.5">
-                                <Label className="text-xs text-[var(--text-secondary)]">Partido (Org) *</Label>
-                                <Select
-                                    onValueChange={(v) => {
-                                        const org = organizations.find(o => o.id === v);
-                                        setValue("organization_id", v);
-                                        setValue("partido", org?.name || "");
-                                    }}
-                                    value={watch("organization_id")}
-                                >
-                                    <SelectTrigger className="h-10 border-gray-300">
-                                        <SelectValue placeholder={isLoadingOrgs ? "Carregando..." : "Selecione o Partido..."} />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {organizations.map((org) => (
-                                            <SelectItem key={org.id} value={org.id}>
-                                                {org.name}
-                                            </SelectItem>
+                                        {Object.keys(ELECTION_RULES).map(cargo => (
+                                            <SelectItem key={cargo} value={cargo}>{cargo}</SelectItem>
                                         ))}
                                     </SelectContent>
                                 </Select>
                             </div>
-                            <div className="space-y-1.5">
-                                <Label className="text-xs text-[var(--text-secondary)]">Cidade *</Label>
-                                <Input
-                                    placeholder="Ex: Itupiranga"
-                                    className="h-10 border-gray-300"
-                                    {...register("cidade", { required: true })}
-                                />
+                            <div className="space-y-2">
+                                <Label className="text-xs font-bold text-gray-700">Número *</Label>
+                                <Input {...register("numero")} placeholder="Ex: 45000" className="h-11 rounded-xl" />
                             </div>
-                            <div className="space-y-1.5">
-                                <Label className="text-xs text-gray-600 flex items-center gap-1">
-                                    <Calendar className="h-3.5 w-3.5" />
-                                    Data da Eleição *
-                                </Label>
-                                <Input
-                                    type="date"
-                                    className="h-10 border-gray-300"
-                                    {...register("electionDate", { required: true })}
-                                />
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-6">
+                            <div className="space-y-2">
+                                <Label className="text-xs font-bold text-gray-700">Partido / Organização</Label>
+                                <Select onValueChange={(v) => setValue("organization_id", v)} value={watch("organization_id")}>
+                                    <SelectTrigger className="h-11 rounded-xl">
+                                        <SelectValue placeholder="Selecione..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {organizations.map(org => (
+                                            <SelectItem key={org.id} value={org.id}>{org.name}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-2">
+                                <Label className="text-xs font-bold text-gray-700">Data da Eleição</Label>
+                                <Input {...register("electionDate")} type="date" className="h-11 rounded-xl" />
                             </div>
                         </div>
                     </CardContent>
                 </Card>
 
-                {/* FOOTER */}
-                <div className="flex items-center gap-3 pt-2">
-                    <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => router.back()}
-                        className="border-[var(--border-default)] text-[var(--text-primary)] h-11 px-6"
-                        disabled={isLoading}
-                    >
+                {/* 4. CREDENCIAIS */}
+                {!isEditing && (
+                    <Card className="border-gray-200 border-dashed bg-gray-50/50">
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-[10px] font-bold uppercase text-gray-400 tracking-tighter flex items-center gap-1">
+                                <Key className="h-3 w-3" /> Acesso do Candidato (Sugestão)
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="grid grid-cols-2 gap-6 pb-4">
+                            <div className="flex gap-2 items-end">
+                                <div className="flex-1 space-y-1">
+                                    <Label className="text-[10px] text-gray-500">Login</Label>
+                                    <Input {...register("login")} readOnly className="h-9 text-xs bg-white font-mono" />
+                                </div>
+                                <Button type="button" variant="outline" size="icon" className="h-9 w-9" onClick={() => copyToClipboard(watch("login"))}>
+                                    <Copy className="h-3.5 w-3.5" />
+                                </Button>
+                            </div>
+                            <div className="flex gap-2 items-end">
+                                <div className="flex-1 space-y-1">
+                                    <Label className="text-[10px] text-gray-500">Senha</Label>
+                                    <Input {...register("password")} readOnly className="h-9 text-xs bg-white font-mono" />
+                                </div>
+                                <Button type="button" variant="outline" size="icon" className="h-9 w-9" onClick={() => copyToClipboard(watch("password"))}>
+                                    <Copy className="h-3.5 w-3.5" />
+                                </Button>
+                            </div>
+                        </CardContent>
+                    </Card>
+                )}
+
+                {/* BOTÕES DE AÇÃO */}
+                <div className="flex justify-end items-center gap-4 pt-4 border-t">
+                    <Button type="button" variant="ghost" className="text-gray-500" onClick={() => router.back()} disabled={isLoading}>
                         Cancelar
                     </Button>
-                    <Button
-                        type="submit"
-                        className="flex-1 bg-blue-600 hover:bg-blue-700 text-white h-11 font-medium gap-2"
-                        disabled={isLoading}
-                    >
-                        {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
-                        {isLoading ? (isEditing ? "Atualizando..." : "Criando Campanha...") : (isEditing ? "Salvar Alterações" : "Salvar Candidato")}
+                    <Button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white min-w-[200px] h-12 rounded-xl shadow-lg font-bold" disabled={isLoading}>
+                        {isLoading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : null}
+                        {isEditing ? "Salvar Alterações" : "Criar Candidato & Iniciar Setup"}
                     </Button>
                 </div>
             </form>
@@ -586,9 +525,9 @@ function CandidateForm() {
     );
 }
 
-export default function NovoCandidatoPage() {
+export default function NewCandidatePage() {
     return (
-        <Suspense fallback={<div className="p-8">Carregando formulário...</div>}>
+        <Suspense fallback={<div className="p-12 text-center text-gray-500 font-medium">Carregando interface premium...</div>}>
             <CandidateForm />
         </Suspense>
     );

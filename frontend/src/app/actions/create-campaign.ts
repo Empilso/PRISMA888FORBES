@@ -35,6 +35,8 @@ export async function createCampaign(formData: FormData) {
         const electionDate = formData.get("electionDate") as string;
         const socialLinksRaw = formData.get("socialLinks") as string;
         const organizationId = formData.get("organization_id") as string;
+        const existingCsvUrl = formData.get("existingCsvUrl") as string;
+        const existingCsvName = formData.get("existingCsvName") as string;
 
         const csvFile = formData.get("csvFile") as File;
         const pdfFile = formData.get("pdfFile") as File;
@@ -45,7 +47,10 @@ export async function createCampaign(formData: FormData) {
         let csvUrl = null;
         let pdfUrl = null;
 
-        if (csvFile && csvFile.size > 0) {
+        if (existingCsvUrl) {
+            csvUrl = existingCsvUrl;
+            console.log("♻️ Usando base de dados CSV existente:", existingCsvUrl);
+        } else if (csvFile && csvFile.size > 0) {
             const csvPath = `campaigns/${Date.now()}_${csvFile.name}`;
             const { data: csvData, error: csvError } = await supabaseAdmin.storage
                 .from("campaign-files")
@@ -190,7 +195,7 @@ export async function createCampaign(formData: FormData) {
         if (csvUrl) {
             await supabaseAdmin.from("documents").insert({
                 campaign_id: campaign.id,
-                filename: csvFile.name,
+                filename: existingCsvName || (existingCsvUrl ? "Base de Dados Vinculada" : (csvFile?.name || "base_votos.csv")),
                 file_url: csvUrl,
                 file_type: "csv",
                 category: "electoral_data"

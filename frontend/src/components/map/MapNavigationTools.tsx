@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Layers, StickyNote, Radar } from "lucide-react";
+import { Layers, StickyNote, Radar, Grid3X3, Loader2 } from "lucide-react";
 
 interface MapNavigationToolsProps {
     showControls: boolean;
@@ -11,6 +11,9 @@ interface MapNavigationToolsProps {
     showSocialRadar: boolean;
     onToggleSocialRadar: () => void;
     loadingSocial: boolean;
+    showIbgeLayer?: boolean;
+    onToggleIbgeLayer?: () => void;
+    loadingIbge?: boolean;
 }
 
 export function MapNavigationTools({
@@ -20,7 +23,10 @@ export function MapNavigationTools({
     setIsNoteMode,
     showSocialRadar,
     onToggleSocialRadar,
-    loadingSocial
+    loadingSocial,
+    showIbgeLayer = false,
+    onToggleIbgeLayer,
+    loadingIbge = false
 }: MapNavigationToolsProps) {
     return (
         <div className="absolute top-1/2 -translate-y-1/2 left-6 z-50 flex flex-col gap-2 p-2 bg-white/90 backdrop-blur-md dark:bg-slate-950/90 rounded-2xl shadow-xl border border-slate-200/50">
@@ -64,6 +70,26 @@ export function MapNavigationTools({
                         <Radar className="h-5 w-5" />
                     </Button>
                 </div>
+
+                {/* Geography Group */}
+                {onToggleIbgeLayer && (
+                    <div className="flex flex-col gap-2 pt-3 border-t border-slate-200/50">
+                        <Button
+                            variant={showIbgeLayer ? "default" : "ghost"}
+                            size="icon"
+                            className={`h-10 w-10 rounded-xl transition-all ${showIbgeLayer ? "bg-indigo-600 text-white shadow-md shadow-indigo-500/20" : "hover:bg-slate-100 text-slate-600"}`}
+                            onClick={onToggleIbgeLayer}
+                            disabled={loadingIbge}
+                            title="Malha IBGE (Bairros)"
+                        >
+                            {loadingIbge ? (
+                                <Loader2 className="h-5 w-5 animate-spin" />
+                            ) : (
+                                <Grid3X3 className="h-5 w-5" />
+                            )}
+                        </Button>
+                    </div>
+                )}
             </div>
         </div>
     );

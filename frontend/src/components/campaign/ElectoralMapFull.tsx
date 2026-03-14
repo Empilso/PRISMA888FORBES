@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { SocialRadarLayer, SocialMention } from "@/components/map/SocialRadarLayer";
+import { IbgeBairrosLayer } from "@/components/campaign/IbgeBairrosLayer";
 import { MapNavigationTools } from "@/components/map/MapNavigationTools";
 import { SocialMentionSheet } from "@/components/map/SocialMentionSheet";
 
@@ -93,6 +94,35 @@ export function ElectoralMapFull({ campaignId, campaigns }: ElectoralMapFullProp
     const [selectedMention, setSelectedMention] = useState<SocialMention | null>(null);
     const [isMentionSheetOpen, setIsMentionSheetOpen] = useState(false);
     // REMOVIDO: isThermometerExpanded (movido para o header global)
+
+    // Malha IBGE State
+    const [showIbgeLayer, setShowIbgeLayer] = useState(false);
+    const [ibgeData, setIbgeData] = useState<any>(null);
+    const [loadingIbge, setLoadingIbge] = useState(false);
+
+    const handleToggleIbgeLayer = async () => {
+        if (!showIbgeLayer && !ibgeData) {
+            setLoadingIbge(true);
+            try {
+                // Código IBGE de Senhor do Bonfim: 2929107
+                console.log("[Layer IBGE] Buscando dados para 2929107...");
+                const res = await fetch('/api/maps/bairros/2929107');
+                if (res.ok) {
+                    const data = await res.json();
+                    console.log("[Layer IBGE] Dados recebidos:", data?.features?.length, "bairros");
+                    setIbgeData(data);
+                } else {
+                    console.error("[Layer IBGE] Erro na resposta da API:", res.status);
+                }
+            } catch (error) {
+                console.error("Erro ao carregar malha IBGE", error);
+                toast({ title: "Erro", description: "Não foi possível carregar os bairros.", variant: "destructive" });
+            } finally {
+                setLoadingIbge(false);
+            }
+        }
+        setShowIbgeLayer(!showIbgeLayer);
+    };
 
     // Filters for Social Radar
     const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(['instagram', 'tiktok']);
@@ -644,6 +674,9 @@ export function ElectoralMapFull({ campaignId, campaigns }: ElectoralMapFullProp
                 showSocialRadar={showSocialRadar}
                 onToggleSocialRadar={handleToggleSocialRadar}
                 loadingSocial={loadingSocial}
+                showIbgeLayer={showIbgeLayer}
+                onToggleIbgeLayer={handleToggleIbgeLayer}
+                loadingIbge={loadingIbge}
             />
 
             {/* Float Social Stats e Filtros se o Radar estiver Activo */}
@@ -795,6 +828,9 @@ export function ElectoralMapFull({ campaignId, campaigns }: ElectoralMapFullProp
                                 setIsMentionSheetOpen(true);
                             }}
                         />
+                    )}
+                    {showIbgeLayer && ibgeData && (
+                        <IbgeBairrosLayer data={ibgeData} />
                     )}
                 </MapComponent>
             </div>
