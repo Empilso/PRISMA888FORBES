@@ -21,6 +21,13 @@ interface NavItem {
 
 export function AdminBottomNav() {
     const pathname = usePathname();
+    const [mounted, setMounted] = React.useState(false);
+
+    React.useEffect(() => {
+        setMounted(true);
+    }, []);
+
+    if (!mounted) return null;
 
     const items: NavItem[] = [
         {
@@ -51,7 +58,10 @@ export function AdminBottomNav() {
     ];
 
     return (
-        <nav className="md:hidden fixed bottom-0 left-0 right-0 z-[60] px-4 pb-6 pt-2 pointer-events-none">
+        <nav
+            className="md:hidden fixed bottom-0 left-0 right-0 z-[60] px-4 pb-6 pt-2 pointer-events-none"
+            suppressHydrationWarning
+        >
             <div className="mx-auto max-w-md w-full h-16 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border border-slate-200/50 dark:border-slate-800/50 shadow-[0_-8px_30px_rgba(0,0,0,0.08)] dark:shadow-[0_-8px_30px_rgba(0,0,0,0.2)] rounded-[2rem] flex items-center justify-around px-2 pointer-events-auto ring-1 ring-black/[0.03] dark:ring-white/[0.03]">
                 {items.map((item) => {
                     const isActive = pathname === item.href || (item.href !== "/admin" && pathname?.startsWith(item.href));

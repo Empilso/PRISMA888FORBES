@@ -77,7 +77,7 @@ export function AdminSidebar() {
             title: "Radar de Promessas",
             items: [
                 {
-                    name: "Gestão Municipal",
+                    name: "RADAR!",
                     href: "/admin/territorios",
                     icon: Buildings
                 }

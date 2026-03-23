@@ -145,6 +145,7 @@ from src.api.financial.tse import router as tse_router
 from src.api.core.knowledge import router as knowledge_router
 from src.api.core.organizations import router as organizations_router
 from src.api.social.social_radar import router as social_radar_router
+from src.api.core.amendments import router as amendments_router
 
 app = FastAPI()
 
@@ -175,6 +176,7 @@ app.include_router(radar_premium_router)
 app.include_router(tse_router)
 app.include_router(organizations_router)
 app.include_router(social_radar_router)
+app.include_router(amendments_router)
 from src.api.core.admin import router as admin_router
 app.include_router(admin_router)
 

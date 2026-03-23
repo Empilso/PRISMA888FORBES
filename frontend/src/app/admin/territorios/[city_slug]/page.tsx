@@ -19,6 +19,7 @@ import { AnomaliasTab } from "@/components/fiscal-analytics/AnomaliasTab";
 import { ReceitasTab } from "@/components/fiscal-analytics/ReceitasTab";
 import { LicitacoesTab } from "@/components/fiscal-analytics/LicitacoesTab";
 import { ProgramasTab } from "@/components/fiscal-analytics/ProgramasTab";
+import EmendasCityTab from "@/components/radar/EmendasCityTab"; // Nova tab de Emendas
 
 interface City {
     id: string;
@@ -223,11 +224,30 @@ export default function CityDashboard() {
                     {/* Compact Header: Tabs + Metrics */}
                     <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 mb-8 border-b border-slate-100 pb-6">
                         <TabsList className="bg-slate-100/80 p-1.5 rounded-full ring-1 ring-slate-200/50">
-                            <TabsTrigger value="fiscal" className="rounded-full px-6 py-2 text-sm font-semibold transition-all data-[state=active]:bg-white data-[state=active]:shadow-lg data-[state=active]:text-[var(--primary)]">
-                                <TrendingUp className="w-4 h-4 mr-2" /> Fiscal
+                            <TabsTrigger
+                                value="fiscal"
+                                className="px-6 py-3 rounded-full data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-emerald-600 font-bold tracking-tight text-slate-500 transition-all hover:text-slate-900 border border-transparent data-[state=active]:border-slate-200"
+                            >
+                                <TrendingUp className="w-4 h-4 inline-block mr-2" /> Fiscal
                             </TabsTrigger>
-                            <TabsTrigger value="equipe" className="rounded-full px-6 py-2 text-sm font-semibold transition-all data-[state=active]:bg-white data-[state=active]:shadow-lg data-[state=active]:text-[var(--primary)]">
-                                <Users className="w-4 h-4 mr-2" /> Equipe
+                            <TabsTrigger
+                                value="programas"
+                                className="px-6 py-3 rounded-full data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-indigo-600 font-bold tracking-tight text-slate-500 transition-all hover:text-slate-900 border border-transparent data-[state=active]:border-slate-200"
+                            >
+                                Programas e Governo
+                            </TabsTrigger>
+                            <TabsTrigger
+                                value="emendas"
+                                className="px-6 py-3 rounded-full data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-amber-600 font-bold tracking-tight text-slate-500 transition-all hover:text-slate-900 border border-transparent data-[state=active]:border-slate-200"
+                            >
+                                Emendas Recebidas
+                            </TabsTrigger>
+                            <TabsTrigger
+                                value="equipe"
+                                className="px-6 py-3 rounded-full data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-amber-600 font-bold tracking-tight text-slate-500 transition-all hover:text-slate-900 border border-transparent data-[state=active]:border-slate-200"
+                            >
+                                <User className="w-4 h-4 inline-block mr-2" />
+                                Equipe & Políticos
                             </TabsTrigger>
                         </TabsList>
 
@@ -278,9 +298,6 @@ export default function CityDashboard() {
                                 <TabsTrigger value="licitacoes" className="text-xs">
                                     📋 Licitações
                                 </TabsTrigger>
-                                <TabsTrigger value="programas" className="text-xs">
-                                    📚 Programas
-                                </TabsTrigger>
                             </TabsList>
 
                             {/* Visão Geral */}
@@ -312,16 +329,25 @@ export default function CityDashboard() {
                             <TabsContent value="licitacoes">
                                 <LicitacoesTab citySlug={city_slug} />
                             </TabsContent>
-
-                            {/* Programas */}
-                            <TabsContent value="programas">
-                                <ProgramasTab citySlug={city_slug} />
-                            </TabsContent>
                         </Tabs>
                     </TabsContent>
 
+                    {/* TAB: Programas */}
+                    <TabsContent value="programas" className="mt-8 m-0 p-0 outline-none animate-in fade-in slide-in-from-bottom-4 duration-500">
+                        <div className="w-full">
+                            <ProgramasTab citySlug={city.slug} />
+                        </div>
+                    </TabsContent>
+
+                    {/* TAB: Emendas */}
+                    <TabsContent value="emendas" className="mt-8 m-0 p-0 outline-none animate-in fade-in slide-in-from-bottom-4 duration-500">
+                        <div className="w-full">
+                            <EmendasCityTab cityId={city.id} citySlug={city.slug} />
+                        </div>
+                    </TabsContent>
+
                     {/* TAB 2: EQUIPE (Politicians) */}
-                    <TabsContent value="equipe" className="mt-0">
+                    <TabsContent value="equipe" className="mt-8 m-0 p-0 outline-none animate-in fade-in slide-in-from-bottom-4 duration-500">
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                             {/* Mayor Card */}
                             <div>

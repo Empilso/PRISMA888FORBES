@@ -1,0 +1,227 @@
+=== PONTO 2: TESTE REAL ECOFESTIVAL ===
+{
+  "contratos": [
+    "633/2025"
+  ],
+  "notas_fiscais": [
+    "17"
+  ],
+  "processos": [
+    "032.1313.2025.0005698-23",
+    "032.1313.2025.0005698-23."
+  ],
+  "empenhos": [],
+  "cnpjs": [],
+  "cpfs": [],
+  "licitacoes": [],
+  "convenios": [],
+  "atos_oficiais": [],
+  "datas_citadas": [
+    "20 de julho de 2025",
+    "18 a 20 de julho de 2025"
+  ],
+  "valores_citados": [],
+  "pessoas": [
+    "Ref patrocínio III ECOFESTIVAL DO CAFÉ"
+  ],
+  "organizacoes": [
+    "MORGADOS"
+  ],
+  "locais_ner": [
+    "Processo"
+  ],
+  "municipios_ba": [
+    "Jaguarari"
+  ],
+  "obras_eventos": [
+    "III ECOFESTIVAL DO CAFÉ DA SERRA DOS MORGADOS"
+  ],
+  "texto_original": "Ref patrocínio III ECOFESTIVAL DO CAFÉ DA SERRA DOS MORGADOS nos dias 18 a 20 de julho de 2025 em Jaguarari-Ba conf Contrato nº 633/2025. NF nº 17, Processo nº 032.1313.2025.0005698-23.",
+  "total_entidades": 11,
+  "extraido_em": "2026-03-16T10:28:12.952672"
+}
+
+=== PONTO 5: TESTE SPACY NER ===
+Entidades detectadas: [{'text': 'XPTO Construtora Ltda', 'label': 'ORG'}, {'text': 'João Silva', 'label': 'PER'}]
+
+=== PONTOS 3 E 4: EVIDÊNCIA E CONTAGEM BANCO ===
+Contagem amendment_payments populados: 218
+Contagem parliamentary_amendments populados: 89
+
+AMOSTRA DE 5 REGISTROS (amendment_payments):
+[
+  {
+    "id": "73026553-08af-4290-8907-ad2eb1912b3c",
+    "entidades_extraidas": {
+      "cpfs": [],
+      "cnpjs": [],
+      "pessoas": [],
+      "empenhos": [],
+      "contratos": [],
+      "convenios": [],
+      "processos": [],
+      "licitacoes": [],
+      "locais_ner": [],
+      "extraido_em": "2026-03-16T09:33:05.722612",
+      "organizacoes": [],
+      "atos_oficiais": [],
+      "datas_citadas": [
+        "27/12/2018",
+        "25/01/2019",
+        "12/03/2019"
+      ],
+      "municipios_ba": [
+        "Feira de Santana",
+        "Santana"
+      ],
+      "notas_fiscais": [],
+      "obras_eventos": [
+        "BOLETIM DE MEDIÇÃO DE EXECUÇÃO DE SERVIÇOS DE MANUTENÇÃO CIVIL DO COLÉGIO ESTADUAL TEOTONIO VILELA",
+        "MUNICÍPIO DE FEIRA DE SANTANA",
+        "ORDEM DE SERVIÇO",
+        "TERMO DE ADESÃO CONTRATO"
+      ],
+      "texto_original": "PROCESSO SEI 10928-13 - 1º BOLETIM DE MEDIÇÃO DE EXECUÇÃO DE SERVIÇOS DE MANUTENÇÃO CIVIL DO COLÉGIO ESTADUAL TEOTONIO VILELA, MUNICÍPIO DE FEIRA DE SANTANA, ORDEM DE SERVIÇO 222/2018, TERMO DE ADESÃO CONTRATO 112/18, APS 89/2018. PERÍODO 27/12/2018 A 25/01/2019. DATA MEDIÇÃO 12/03/2019. NF487.",
+      "total_entidades": 9,
+      "valores_citados": []
+    }
+  },
+  {
+    "id": "2e168180-53d1-4236-9639-b21913d8b9a1",
+    "entidades_extraidas": {
+      "cpfs": [],
+      "cnpjs": [],
+      "pessoas": [],
+      "empenhos": [],
+      "contratos": [],
+      "convenios": [],
+      "processos": [
+        "0023422-10/2019"
+      ],
+      "licitacoes": [],
+      "locais_ner": [],
+      "extraido_em": "2026-03-16T09:33:06.863164",
+      "organizacoes": [],
+      "atos_oficiais": [],
+      "datas_citadas": [
+        "26/03/2019"
+      ],
+      "municipios_ba": [
+        "Feira de Santana",
+        "Santana"
+      ],
+      "notas_fiscais": [
+        "00000494"
+      ],
+      "obras_eventos": [
+        "FEIRA DE SANTANA",
+        "BOLETIM DE MEDIÇÃO",
+        "E NOTA FISCAL"
+      ],
+      "texto_original": "PROCESSO Nº 0023422-10/2019, Prestação de Serviços de Engenharia, no Colegio Estadual Teotonio Vilela, Municipio de FEIRA DE SANTANA, Codigo MEC 29097665, Termo de Adesao ao Credenciamento Nº0112/2018, Edital de Credenciamento 004/2018, O.S 222/2018, APS Nº00089/2018, BOLETIM DE MEDIÇÃO Nº03, PERÍODO: 25/02 A 26/03/2019 E NOTA FISCAL Nº00000494.",
+      "total_entidades": 8,
+      "valores_citados": []
+    }
+  },
+  {
+    "id": "06c8f2c5-ea2b-4ee8-8941-3e4fc6e604da",
+    "entidades_extraidas": {
+      "cpfs": [],
+      "cnpjs": [],
+      "pessoas": [],
+      "empenhos": [],
+      "contratos": [],
+      "convenios": [],
+      "processos": [
+        "0023422-10/2019"
+      ],
+      "licitacoes": [],
+      "locais_ner": [],
+      "extraido_em": "2026-03-16T09:33:07.727582",
+      "organizacoes": [],
+      "atos_oficiais": [],
+      "datas_citadas": [
+        "26/03/2019"
+      ],
+      "municipios_ba": [
+        "Feira de Santana",
+        "Santana"
+      ],
+      "notas_fiscais": [
+        "00000494"
+      ],
+      "obras_eventos": [
+        "FEIRA DE SANTANA",
+        "BOLETIM DE MEDIÇÃO",
+        "E NOTA FISCAL"
+      ],
+      "texto_original": "PROCESSO Nº 0023422-10/2019, Prestação de Serviços de Engenharia, no Colegio Estadual Teotonio Vilela, Municipio de FEIRA DE SANTANA, Codigo MEC 29097665, Termo de Adesao ao Credenciamento Nº0112/2018, Edital de Credenciamento 004/2018, O.S 222/2018, APS Nº00089/2018, BOLETIM DE MEDIÇÃO Nº03, PERÍODO: 25/02 A 26/03/2019 E NOTA FISCAL Nº00000494.",
+      "total_entidades": 8,
+      "valores_citados": []
+    }
+  },
+  {
+    "id": "762089b1-17d6-414b-b3eb-95786001b492",
+    "entidades_extraidas": {
+      "cpfs": [],
+      "cnpjs": [],
+      "pessoas": [],
+      "empenhos": [],
+      "contratos": [],
+      "convenios": [],
+      "processos": [],
+      "licitacoes": [],
+      "locais_ner": [],
+      "extraido_em": "2026-03-16T09:33:08.334249",
+      "organizacoes": [],
+      "atos_oficiais": [],
+      "datas_citadas": [
+        "27/12/2018",
+        "25/01/2019",
+        "12/03/2019"
+      ],
+      "municipios_ba": [
+        "Feira de Santana",
+        "Santana"
+      ],
+      "notas_fiscais": [],
+      "obras_eventos": [
+        "BOLETIM DE MEDIÇÃO DE EXECUÇÃO DE SERVIÇOS DE MANUTENÇÃO CIVIL DO COLÉGIO ESTADUAL TEOTONIO VILELA",
+        "MUNICÍPIO DE FEIRA DE SANTANA",
+        "ORDEM DE SERVIÇO",
+        "TERMO DE ADESÃO CONTRATO"
+      ],
+      "texto_original": "PROCESSO SEI 10928-13 - 1º BOLETIM DE MEDIÇÃO DE EXECUÇÃO DE SERVIÇOS DE MANUTENÇÃO CIVIL DO COLÉGIO ESTADUAL TEOTONIO VILELA, MUNICÍPIO DE FEIRA DE SANTANA, ORDEM DE SERVIÇO 222/2018, TERMO DE ADESÃO CONTRATO 112/18, APS 89/2018. PERÍODO 27/12/2018 A 25/01/2019. DATA MEDIÇÃO 12/03/2019. NF487.",
+      "total_entidades": 9,
+      "valores_citados": []
+    }
+  },
+  {
+    "id": "9ec4cf71-146b-4516-8a40-d3fb1d07d783",
+    "entidades_extraidas": {
+      "cpfs": [],
+      "cnpjs": [],
+      "pessoas": [],
+      "empenhos": [],
+      "contratos": [],
+      "convenios": [],
+      "processos": [
+        "011.8297.2025.0076859-23"
+      ],
+      "licitacoes": [],
+      "locais_ner": [],
+      "extraido_em": "2026-03-16T09:33:09.202169",
+      "organizacoes": [],
+      "atos_oficiais": [],
+      "datas_citadas": [],
+      "municipios_ba": [
+        "Serrolândia"
+      ],
+      "notas_fiscais": [],
+      "obras_eventos": [],
+      "texto_original": "Emenda Of.87/2025 - Dep. Bobô, para a realização de ações socioeducacionais de Cultura Corporal e Esporte no Currículo da Educação\r\nBásica no Colégio Estadual de Tempo Integral de Serrolândia. sei: 011.8297.2025.0076859-23. município de Serrolândia.",
+      "total_entidades": 2,
+      "valores_citados": []
+    }
+  }
+]

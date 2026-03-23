@@ -1,0 +1,336 @@
+🧪 Testando extração via RadarCrew...
+Error saving log: {'message': 'invalid input syntax for type uuid: "test-campaign"', 'code': '22P02', 'hint': None, 'details': None}
+╭─────────── Crew Execution Started ────────────╮
+│                                               │
+│  Crew Execution Started                       │
+│  Name: crew                                   │
+│  ID: 5e84de29-667a-4ea7-9951-f8f557bfae26     │
+│  Tool Args:                                   │
+│                                               │
+│                                               │
+╰───────────────────────────────────────────────╯
+
+🚀 Crew: crew
+└── 📋 Task: cc59225c-706d-40b3-b507-f3da509698bf
+    Status: Executing Task...╭────────────── 🤖 Agent Started ───────────────╮
+│                                               │
+│  Agent: Political Data Structurer             │
+│                                               │
+│  Task:                                        │
+│              Você é um analista de dados      │
+│  políticos especialista em estruturação de    │
+│  Planos de Governo.                           │
+│  Sua tarefa é analisar o texto bruto de um    │
+│  plano de governo e extrair APENAS as         │
+│  promessas concretas.                         │
+│                                               │
+│  Regras:                                      │
+│  1. Ignore introduções, biografias,           │
+│  agradecimentos e diagnósticos.               │
+│  2. Foque em verbos de ação no futuro:        │
+│  'vamos construir', 'implementaremos',        │
+│  'criaremos'.                                 │
+│  3. Classifique cada promessa em              │
+│  macro-áreas: Saúde, Educação,                │
+│  Infraestrutura, Segurança, Assistência       │
+│  Social, Economia, Habitação, Transporte,     │
+│  Meio Ambiente, Cultura, Esporte,             │
+│  Governança.                                  │
+│  4. Sempre que houver menção geográfica       │
+│  (bairro, cidade, zona), extraia no campo     │
+│  `local`.                                     │
+│  5. Não invente dados; se algo não estiver    │
+│  claro, deixe o campo vazio.                  │
+│  6. RETORNE APENAS O JSON ÚNICO, SEM          │
+│  MARKDOWN, SEM BLOCOS DE CÓDIGO.              │
+│                                               │
+│  Formato de saída (obrigatório, em JSON):     │
+│  [                                            │
+│    {                                          │
+│      "resumo_promessa": "...",                │
+│      "categoria": "...",                      │
+│      "verbos_chave": ["..."],                 │
+│      "entidades_citadas": ["..."],            │
+│      "local": "...",                          │
+│      "origem": "PLANO_GOVERNO",               │
+│      "trecho_original": "..."                 │
+│    }                                          │
+│  ]                                            │
+│                                               │
+│              ANALYZE THE FOLLOWING TEXT AND   │
+│  EXTRACT PROMISES FROM THE GOVERNMENT PLAN.   │
+│                                               │
+│              OUTPUT FORMAT MUST BE A VALID    │
+│  JSON ARRAY OF OBJECTS.                       │
+│              EACH OBJECT MUST HAVE EXACTLY    │
+│  THESE KEYS:                                  │
+│              - "resumo_promessa": A clear,    │
+│  concise summary of the promise (in           │
+│  Portuguese).                                 │
+│              - "categoria": One of [Saúde,    │
+│  Educação, Segurança, Infraestrutura, Meio    │
+│  Ambiente, Economia, Transporte, Social,      │
+│  Cultura, Esporte, Habitação].                │
+│              - "trecho_original": The exact   │
+│  text snippet from the document where this    │
+│  promise appears.                             │
+│                                               │
+│              DOCUMENT TEXT:                   │
+│                                               │
+│      PLANO DE GOVERNO - CANDIDATO TESTE       │
+│                                               │
+│      SAÚDE:                                   │
+│      1. Prometo construir 3 novas UPAs na     │
+│  zona norte.                                  │
+│      2. Vamos contratar mais 50 médicos para  │
+│  a rede básica.                               │
+│                                               │
+│      EDUCAÇÃO:                                │
+│      3. Criação do programa 'Escola Viva'     │
+│  com tempo integral.                          │
+│      4. Reforma de todas as creches           │
+│  municipais.                                  │
+│                                               │
+│      INFRAESTRUTURA:                          │
+│      5. Asfaltamento de 100% das ruas do      │
+│  bairro Centro.                               │
+│                                               │
+│                                               │
+│              (Text truncated to fit context   │
+│  if necessary)                                │
+│                                               │
+│                                               │
+╰───────────────────────────────────────────────╯
+
+
+Error saving log: {'message': 'invalid input syntax for type uuid: "test-campaign"', 'code': '22P02', 'hint': None, 'details': None}
+🚀 Crew: crew
+└── 📋 Task: cc59225c-706d-40b3-b507-f3da509698bf
+    Status: Executing Task...╭──────────── ✅ Agent Final Answer ────────────╮
+│                                               │
+│  Agent: Political Data Structurer             │
+│                                               │
+│  Final Answer:                                │
+│  [                                            │
+│    {                                          │
+│      "resumo_promessa": "Construir 3 novas    │
+│  UPAs na zona norte.",                        │
+│      "categoria": "Saúde",                    │
+│      "verbos_chave": ["construir"],           │
+│      "entidades_citadas": ["UPAs"],           │
+│      "local": "zona norte",                   │
+│      "origem": "PLANO_GOVERNO",               │
+│      "trecho_original": "Prometo construir 3  │
+│  novas UPAs na zona norte."                   │
+│    },                                         │
+│    {                                          │
+│      "resumo_promessa": "Contratar mais 50    │
+│  médicos para a rede básica.",                │
+│      "categoria": "Saúde",                    │
+│      "verbos_chave": ["contratar"],           │
+│      "entidades_citadas": ["médicos"],        │
+│      "local": "",                             │
+│      "origem": "PLANO_GOVERNO",               │
+│      "trecho_original": "Vamos contratar      │
+│  mais 50 médicos para a rede básica."         │
+│    },                                         │
+│    {                                          │
+│      "resumo_promessa": "Criar o programa     │
+│  'Escola Viva' com tempo integral.",          │
+│      "categoria": "Educação",                 │
+│      "verbos_chave": ["criação"],             │
+│      "entidades_citadas": ["programa 'Escola  │
+│  Viva'"],                                     │
+│      "local": "",                             │
+│      "origem": "PLANO_GOVERNO",               │
+│      "trecho_original": "Criação do programa  │
+│  'Escola Viva' com tempo integral."           │
+│    },                                         │
+│    {                                          │
+│      "resumo_promessa": "Reformar todas as    │
+│  creches municipais.",                        │
+│      "categoria": "Educação",                 │
+│      "verbos_chave": ["reforma"],             │
+│      "entidades_citadas": ["creches           │
+│  municipais"],                                │
+│      "local": "",                             │
+│      "origem": "PLANO_GOVERNO",               │
+│      "trecho_original": "Reforma de todas as  │
+│  creches municipais."                         │
+│    },                                         │
+│    {                                          │
+│      "resumo_promessa": "Asfaltar 100% das    │
+│  ruas do bairro Centro.",                     │
+│      "categoria": "Infraestrutura",           │
+│      "verbos_chave": ["asfaltamento"],        │
+│      "entidades_citadas": ["ruas"],           │
+│      "local": "bairro Centro",                │
+│      "origem": "PLANO_GOVERNO",               │
+│      "trecho_original": "Asfaltamento de      │
+│  100% das ruas do bairro Centro."             │
+│    }                                          │
+│  ]                                            │
+│                                               │
+╰───────────────────────────────────────────────╯
+
+╭─────────────── Task Completion ───────────────╮
+│                                               │
+│  Task Completed                               │
+│  Name: cc59225c-706d-40b3-b507-f3da509698bf   │
+│  Agent: Political Data Structurer             │
+│  Tool Args:                                   │
+│                                               │
+│                                               │
+╰───────────────────────────────────────────────╯
+
+
+✅ Resultado bruto:
+[
+  {
+    "resumo_promessa": "Construir 3 novas UPAs na zona norte.",
+    "categoria": "Saúde",
+    "verbos_chave": [
+      "construir"
+    ],
+    "entidades_citadas": [
+      "UPAs"
+    ],
+    "local": "zona norte",
+    "origem": "PLANO_GOVERNO",
+    "trecho_original": "Prometo construir 3 novas UPAs na zona norte."
+  },
+  {
+    "resumo_promessa": "Contratar mais 50 médicos para a rede básica.",
+    "categoria": "Saúde",
+    "verbos_chave": [
+      "contratar"
+    ],
+    "entidades_citadas": [
+      "médicos"
+    ],
+    "local": "",
+    "origem": "PLANO_GOVERNO",
+    "trecho_original": "Vamos contratar mais 50 médicos para a rede básica."
+  },
+  {
+    "resumo_promessa": "Criar o programa 'Escola Viva' com tempo integral.",
+    "categoria": "Educação",
+    "verbos_chave": [
+      "criação"
+    ],
+    "entidades_citadas": [
+      "programa 'Escola Viva'"
+    ],
+    "local": "",
+    "origem": "PLANO_GOVERNO",
+    "trecho_original": "Criação do programa 'Escola Viva' com tempo integral."
+  },
+  {
+    "resumo_promessa": "Reformar todas as creches municipais.",
+    "categoria": "Educação",
+    "verbos_chave": [
+      "reforma"
+    ],
+    "entidades_citadas": [
+      "creches municipais"
+    ],
+    "local": "",
+    "origem": "PLANO_GOVERNO",
+    "trecho_original": "Reforma de todas as creches municipais."
+  },
+  {
+    "resumo_promessa": "Asfaltar 100% das ruas do bairro Centro.",
+    "categoria": "Infraestrutura",
+    "verbos_chave": [
+      "asfaltamento"
+    ],
+    "entidades_citadas": [
+      "ruas"
+    ],
+    "local": "bairro Centro",
+    "origem": "PLANO_GOVERNO",
+    "trecho_original": "Asfaltamento de 100% das ruas do bairro Centro."
+  }
+]
+
+✅ Schema Validado!
+╭─────────────── Crew Completion ───────────────╮
+│                                               │
+│  Crew Execution Completed                     │
+│  Name: crew                                   │
+│  ID: 5e84de29-667a-4ea7-9951-f8f557bfae26     │
+│  Tool Args:                                   │
+│  Final Output: [                              │
+│    {                                          │
+│      "resumo_promessa": "Construir 3 novas    │
+│  UPAs na zona norte.",                        │
+│      "categoria": "Saúde",                    │
+│      "verbos_chave": ["construir"],           │
+│      "entidades_citadas": ["UPAs"],           │
+│      "local": "zona norte",                   │
+│      "origem": "PLANO_GOVERNO",               │
+│      "trecho_original": "Prometo construir 3  │
+│  novas UPAs na zona norte."                   │
+│    },                                         │
+│    {                                          │
+│      "resumo_promessa": "Contratar mais 50    │
+│  médicos para a rede básica.",                │
+│      "categoria": "Saúde",                    │
+│      "verbos_chave": ["contratar"],           │
+│      "entidades_citadas": ["médicos"],        │
+│      "local": "",                             │
+│      "origem": "PLANO_GOVERNO",               │
+│      "trecho_original": "Vamos contratar      │
+│  mais 50 médicos para a rede básica."         │
+│    },                                         │
+│    {                                          │
+│      "resumo_promessa": "Criar o programa     │
+│  'Escola Viva' com tempo integral.",          │
+│      "categoria": "Educação",                 │
+│      "verbos_chave": ["criação"],             │
+│      "entidades_citadas": ["programa 'Escola  │
+│  Viva'"],                                     │
+│      "local": "",                             │
+│      "origem": "PLANO_GOVERNO",               │
+│      "trecho_original": "Criação do programa  │
+│  'Escola Viva' com tempo integral."           │
+│    },                                         │
+│    {                                          │
+│      "resumo_promessa": "Reformar todas as    │
+│  creches municipais.",                        │
+│      "categoria": "Educação",                 │
+│      "verbos_chave": ["reforma"],             │
+│      "entidades_citadas": ["creches           │
+│  municipais"],                                │
+│      "local": "",                             │
+│      "origem": "PLANO_GOVERNO",               │
+│      "trecho_original": "Reforma de todas as  │
+│  creches municipais."                         │
+│    },                                         │
+│    {                                          │
+│      "resumo_promessa": "Asfaltar 100% das    │
+│  ruas do bairro Centro.",                     │
+│      "categoria": "Infraestrutura",           │
+│      "verbos_chave": ["asfaltamento"],        │
+│      "entidades_citadas": ["ruas"],           │
+│      "local": "bairro Centro",                │
+│      "origem": "PLANO_GOVERNO",               │
+│      "trecho_original": "Asfaltamento de      │
+│  100% das ruas do bairro Centro."             │
+│    }                                          │
+│  ]                                            │
+│                                               │
+│                                               │
+╰───────────────────────────────────────────────╯
+
+╭─────────────── Tracing Status ────────────────╮
+│                                               │
+│  Info: Tracing is disabled.                   │
+│                                               │
+│  To enable tracing, do any one of these:      │
+│  • Set tracing=True in your Crew/Flow code    │
+│  • Set CREWAI_TRACING_ENABLED=true in your    │
+│  project's .env file                          │
+│  • Run: crewai traces enable                  │
+│                                               │
+╰───────────────────────────────────────────────╯
