@@ -7,11 +7,12 @@ import { Badge } from "@/components/ui/badge";
 import { createDadosClient } from "@/lib/supabase/dados";
 import { FunnelChart, Funnel, LabelList, Tooltip, ResponsiveContainer } from "recharts";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import Image from "next/image";
 
 export default function EmendasBADashboard({ filterName }: { filterName?: string }) {
-  const [items, setItems] = useState([]);
+  const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  
+
   const isBobo = filterName?.toLowerCase().includes("bobo");
 
   useEffect(() => {
@@ -19,13 +20,23 @@ export default function EmendasBADashboard({ filterName }: { filterName?: string
       try {
         setLoading(true);
         const supabase = createDadosClient();
-        let query = supabase.from("alba_emendas_master").select("*");
-        
+
+        // JOIN com parlamentares para puxar foto_url e nome_urna
+        let query = supabase
+          .from("alba_emendas_master")
+          .select(`
+            id, ano, orgao, funcao, municipio,
+            valor_orcado_atual, valor_empenhado, valor_pago,
+            percentual_pago, percentual_empenhado,
+            parlamentar_nome, parlamentar_id,
+            parlamentares ( nome_urna, foto_url, sigla_partido, slug )
+          `);
+
         if (filterName) {
           if (isBobo) {
-             query = query.or("parlamentar_nome.ilike.%Bob%,parlamentar_nome.ilike.%Bira%,parlamentar_nome.ilike.%Coroa%");
+            query = query.or("parlamentar_nome.ilike.%Bob%,parlamentar_nome.ilike.%Bira%,parlamentar_nome.ilike.%Coroa%");
           } else {
-             query = query.ilike("parlamentar_nome", `%${filterName}%`);
+            query = query.ilike("parlamentar_nome", `%${filterName}%`);
           }
         }
 
@@ -41,14 +52,14 @@ export default function EmendasBADashboard({ filterName }: { filterName?: string
     fetchData();
   }, [filterName]);
 
-  const totalOrcado = items.reduce((acc, curr) => acc + (Number(curr.valor_orcado_atual) || 0), 0);
-  const totalEmpenhado = items.reduce((acc, curr) => acc + (Number(curr.valor_empenhado) || 0), 0);
-  const totalPago = items.reduce((acc, curr) => acc + (Number(curr.valor_pago) || 0), 0);
+  const totalOrcado    = items.reduce((acc, curr) => acc + (Number(curr.valor_orcado_atual) || 0), 0);
+  const totalEmpenhado = items.reduce((acc, curr) => acc + (Number(curr.valor_empenhado)    || 0), 0);
+  const totalPago      = items.reduce((acc, curr) => acc + (Number(curr.valor_pago)         || 0), 0);
 
   const funnelData = [
-    { name: "Projetos", value: items.length, fill: "#8884d8" },
-    { name: "Empenhadas", value: items.filter(e => (Number(e.valor_empenhado) > 0)).length, fill: "#83a6ed" },
-    { name: "Pagas", value: items.filter(e => (Number(e.valor_pago) > 0)).length, fill: "#8dd1e1" },
+    { name: "Projetos",   value: items.length,                                               fill: "#8884d8" },
+    { name: "Empenhadas", value: items.filter(e => Number(e.valor_empenhado) > 0).length,    fill: "#83a6ed" },
+    { name: "Pagas",      value: items.filter(e => Number(e.valor_pago)      > 0).length,    fill: "#8dd1e1" },
   ];
 
   if (loading) return (
@@ -60,6 +71,8 @@ export default function EmendasBADashboard({ filterName }: { filterName?: string
 
   return (
     <div className="w-full p-4 md:p-8 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 min-h-[600px]">
+
+      {/* HEADER */}
       <div className="flex justify-between items-end">
         <div>
           <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight">
@@ -70,6 +83,7 @@ export default function EmendasBADashboard({ filterName }: { filterName?: string
         <Badge variant="outline" className="text-primary border-primary px-4 py-1 uppercase font-bold text-[10px]">Portal Transparência BA</Badge>
       </div>
 
+      {/* CARDS DE TOTAIS */}
       <div className="grid gap-6 md:grid-cols-3">
         <Card className="p-6 bg-white border-0 shadow-sm ring-1 ring-slate-100">
           <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">Investimento Total</div>
@@ -85,12 +99,14 @@ export default function EmendasBADashboard({ filterName }: { filterName?: string
         </Card>
       </div>
 
+      {/* TABS */}
       <Tabs defaultValue="painel" className="w-full">
         <TabsList className="mb-8 bg-slate-100/50 p-1 rounded-xl">
           <TabsTrigger value="painel" className="font-bold px-8">Gráficos</TabsTrigger>
           <TabsTrigger value="tabela" className="font-bold px-8">Listagem</TabsTrigger>
         </TabsList>
 
+        {/* TAB GRÁFICOS */}
         <TabsContent value="painel" className="space-y-8">
           <div className="grid gap-6 lg:grid-cols-2">
             <Card className="p-6 shadow-sm border-0 ring-1 ring-slate-100 h-[400px]">
@@ -100,7 +116,6 @@ export default function EmendasBADashboard({ filterName }: { filterName?: string
                   <FunnelChart>
                     <Tooltip />
                     <Funnel dataKey="value" data={funnelData} isAnimationActive>
-                      {/* REMOVIDO CONTENT CUSTOMIZADO QUE CAUSAVA O ERRO NaN NO ATRIBUTO X */}
                       <LabelList position="right" fill="#64748b" stroke="none" dataKey="name" />
                     </Funnel>
                   </FunnelChart>
@@ -135,30 +150,83 @@ export default function EmendasBADashboard({ filterName }: { filterName?: string
           </div>
         </TabsContent>
 
+        {/* TAB LISTAGEM — agora com deputado linkado */}
         <TabsContent value="tabela">
           <Card className="shadow-sm border-0 ring-1 ring-slate-100 h-[600px] flex flex-col overflow-hidden">
             <div className="overflow-auto bg-white">
               <Table>
                 <TableHeader className="bg-slate-50/50">
                   <TableRow>
+                    <TableHead className="font-bold text-slate-500">Deputado</TableHead>
                     <TableHead className="font-bold text-slate-500">Ano</TableHead>
                     <TableHead className="font-bold text-slate-500">Órgão / Função</TableHead>
+                    <TableHead className="font-bold text-slate-500 text-right">% Pago</TableHead>
                     <TableHead className="font-bold text-slate-500 text-right">Pago (R$)</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {items.slice(0, 200).map((e: any) => (
-                    <TableRow key={e.id}>
-                      <TableCell className="font-bold text-slate-400">{e.ano}</TableCell>
-                      <TableCell>
-                        <div className="font-bold text-slate-700 text-xs truncate max-w-[300px]">{e.orgao}</div>
-                        <div className="text-[10px] text-slate-400 italic truncate max-w-[250px]">{e.funcao}</div>
-                      </TableCell>
-                      <TableCell className="text-right font-mono text-[11px] font-extrabold text-emerald-600">
-                        {(Number(e.valor_pago) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {items.slice(0, 200).map((e: any) => {
+                    const dep = e.parlamentares;
+                    const nome = dep?.nome_urna || e.parlamentar_nome || "—";
+                    const foto = dep?.foto_url || null;
+                    const partido = dep?.sigla_partido || "";
+                    const pct = Number(e.percentual_pago) || 0;
+
+                    return (
+                      <TableRow key={e.id}>
+                        {/* DEPUTADO — foto + nome + partido */}
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            {foto ? (
+                              <Image
+                                src={foto}
+                                alt={nome}
+                                width={28}
+                                height={28}
+                                className="rounded-full object-cover ring-1 ring-slate-200"
+                              />
+                            ) : (
+                              <div className="w-7 h-7 rounded-full bg-slate-200 flex items-center justify-center text-[9px] font-bold text-slate-500">
+                                {nome.charAt(0)}
+                              </div>
+                            )}
+                            <div>
+                              <div className="font-bold text-slate-700 text-[11px] truncate max-w-[140px]">{nome}</div>
+                              {partido && <div className="text-[9px] text-slate-400 uppercase">{partido}</div>}
+                            </div>
+                          </div>
+                        </TableCell>
+
+                        <TableCell className="font-bold text-slate-400 text-[11px]">{e.ano}</TableCell>
+
+                        <TableCell>
+                          <div className="font-bold text-slate-700 text-xs truncate max-w-[220px]">{e.orgao}</div>
+                          <div className="text-[10px] text-slate-400 italic truncate max-w-[200px]">{e.funcao}</div>
+                        </TableCell>
+
+                        {/* PERCENTUAL PAGO — barra visual */}
+                        <TableCell className="text-right">
+                          <div className="flex flex-col items-end gap-1">
+                            <span className={`font-mono text-[11px] font-extrabold ${
+                              pct >= 80 ? "text-emerald-600" : pct >= 40 ? "text-amber-500" : "text-red-400"
+                            }`}>{pct.toFixed(1)}%</span>
+                            <div className="w-16 h-1 bg-slate-100 rounded-full overflow-hidden">
+                              <div
+                                className={`h-full rounded-full ${
+                                  pct >= 80 ? "bg-emerald-500" : pct >= 40 ? "bg-amber-400" : "bg-red-400"
+                                }`}
+                                style={{ width: `${Math.min(pct, 100)}%` }}
+                              />
+                            </div>
+                          </div>
+                        </TableCell>
+
+                        <TableCell className="text-right font-mono text-[11px] font-extrabold text-emerald-600">
+                          {(Number(e.valor_pago) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>
