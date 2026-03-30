@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState } from "react";
@@ -71,9 +70,20 @@ function getItemLabel(item: any): string {
     if (typeof item === "string") return item;
     return item.label || item.cargo || item.curso || item.titulo || item.nome || item.descricao || JSON.stringify(item);
 }
+
+// FIX: agora lê 'sub' (padrão Zidane/Supabase) além dos campos legados
 function getItemSub(item: any): string | null {
     if (!item || typeof item === "string") return null;
-    return item.instituicao || item.periodo || item.ano || item.local || null;
+    return item.sub || item.instituicao || item.periodo || item.ano || item.local || null;
+}
+
+// Limpa valores de profissão que são lixo do scraper
+function sanitizeProfissao(val: string | null | undefined): string {
+    if (!val) return "—";
+    // Remove valores que claramente são labels capturados errado pelo scraper
+    const lixo = ["nascimento:", "naturalidade:", "partido:", "gabinete:", "email:", "telefone:"];
+    if (lixo.some(l => val.toLowerCase().trim().startsWith(l))) return "—";
+    return val.trim() || "—";
 }
 
 export default function VisaoGeralTab({ nome, onNavigateToTab, verbasSummary, albaData }: VisaoGeralTabProps) {
@@ -83,7 +93,7 @@ export default function VisaoGeralTab({ nome, onNavigateToTab, verbasSummary, al
         return <div className="p-8 text-center text-slate-400">Carregando dados estruturados...</div>;
     }
 
-    // ── Dados estruturados do Supabase (Padrão Bobô) ──
+    // ── Dados estruturados do Supabase (Padrão Zidane) ──
     const formacaoAcademica:    any[] = Array.isArray(albaData.formacao_academica)    ? albaData.formacao_academica    : [];
     const carreiraPolitica:     any[] = Array.isArray(albaData.carreira_politica)     ? albaData.carreira_politica     : [];
     const liderancaComissoes:   any[] = Array.isArray(albaData.lideranca_e_comissoes) ? albaData.lideranca_e_comissoes : [];
@@ -108,7 +118,7 @@ export default function VisaoGeralTab({ nome, onNavigateToTab, verbasSummary, al
             },
             { label: "Naturalidade",  valor: albaData.municipio_nascimento ? `${albaData.municipio_nascimento} - ${albaData.uf_nascimento || "BA"}` : "—" },
             { label: "Partido",       valor: `${albaData.partido_nome || ""} (${albaData.sigla_partido || ""})`.trim() || "—" },
-            { label: "Profissão",     valor: albaData.profissao || "—" },
+            { label: "Profissão",     valor: sanitizeProfissao(albaData.profissao) },
             { label: "Gabinete",      valor: albaData.gabinete_endereco || "—" },
         ],
         telefones: (Array.isArray(albaData.telefones) ? albaData.telefones : []).flatMap((t: string) => t.split(/[/;]/).map((s: string) => s.trim()).filter(Boolean)),
@@ -209,7 +219,7 @@ export default function VisaoGeralTab({ nome, onNavigateToTab, verbasSummary, al
             t: "PROFISSÃO",
             icon: <Briefcase className="w-3.5 h-3.5" />,
             items: albaData.atividade_profissional ? [albaData.atividade_profissional] : [],
-            fallback: albaData.profissao || albaData.biografia_completa?.match(/Atividade Profissional[^]*?(?=Mandato|Atividade Parlamentar|$)/i)?.[0]?.replace(/Atividade Profissional:?/i, "").trim() || null,
+            fallback: sanitizeProfissao(albaData.profissao) !== "—" ? sanitizeProfissao(albaData.profissao) : (albaData.biografia_completa?.match(/Atividade Profissional[^]*?(?=Mandato|Atividade Parlamentar|$)/i)?.[0]?.replace(/Atividade Profissional:?/i, "").trim() || null),
         },
         {
             t: "HISTÓRICO ELEITORAL",
@@ -272,7 +282,6 @@ export default function VisaoGeralTab({ nome, onNavigateToTab, verbasSummary, al
                                     {quadrantes.map((q, idx) => {
                                         const hasItems = q.items.length > 0;
                                         const hasFallback = !!q.fallback;
-                                        const vazio = !hasItems && !hasFallback;
                                         return (
                                             <div key={idx} className="col-span-1 bg-white/40 p-4 rounded-2xl border border-slate-50">
                                                 <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest mb-2 flex items-center gap-1.5">
