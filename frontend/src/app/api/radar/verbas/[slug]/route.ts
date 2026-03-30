@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createDadosClient } from "@/lib/supabase/dados";
 
-// ─── Handler GET ───────────────────────────────────────────────────────────────
+// Detecta se a string é um UUID (prisma_id) ou slug
+function isUUID(value: string): boolean {
+  return /^[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}$/i.test(value)
+    || /^[0-9a-f]{32}$/i.test(value); // UUID sem hífens (formato que vem do frontend)
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: { slug: string } }
@@ -9,7 +14,6 @@ export async function GET(
   const { slug } = params;
   const { searchParams } = new URL(request.url);
 
-  // Query params opcionais
   const ano        = searchParams.get("ano");
   const mes        = searchParams.get("mes");
   const categoria  = searchParams.get("categoria");
@@ -20,21 +24,22 @@ export async function GET(
 
   const supabase = createDadosClient();
 
-  // ─── 1. Resolve parlamentar pelo slug ────────────────────────────────────
+  // ─── 1. Resolve parlamentar — aceita UUID (prisma_id) ou slug ──────────────
+  const campo = isUUID(slug) ? "prisma_id" : "slug";
   const { data: parl, error: parlError } = await supabase
     .from("parlamentares")
     .select("prisma_id, nome_urna, nome_civil, foto_url, sigla_partido, slug")
-    .eq("slug", slug)
+    .eq(campo, slug)
     .single();
 
   if (parlError || !parl) {
     return NextResponse.json(
-      { error: `Deputado não encontrado para slug: ${slug}` },
+      { error: `Deputado não encontrado: ${slug}` },
       { status: 404 }
     );
   }
 
-  // ─── 2. Monta query base de despesas ─────────────────────────────────────
+  // ─── 2. Query base de despesas por parlamentar_id ───────────────────────
   let query = supabase
     .from("despesas_gabinete")
     .select(`
@@ -49,7 +54,6 @@ export async function GET(
     .eq("parlamentar_id", parl.prisma_id)
     .order("competencia_date", { ascending: false });
 
-  // Filtros opcionais
   if (ano)       query = query.eq("competencia_ano", parseInt(ano));
   if (mes)       query = query.eq("competencia_mes", parseInt(mes));
   if (categoria && categoria !== "all") query = query.eq("categoria_slug", categoria);
@@ -59,34 +63,29 @@ export async function GET(
     );
   }
 
-  // ─── 3. Busca TODOS os registros para KPIs (sem paginação) ───────────────
+  // ─── 3. Busca todos os registros para cálculo de KPIs ──────────────────
   const { data: todos, error: todosError } = await query.range(0, 9999);
 
   if (todosError) {
     return NextResponse.json({ error: todosError.message }, { status: 500 });
   }
 
-  const registros = todos || [];
+  const registros     = todos || [];
   const totalFiltered = registros.length;
 
-  // ─── 4. KPIs ─────────────────────────────────────────────────────────────
-  const totalGasto       = registros.reduce((s, r) => s + (Number(r.valor)         || 0), 0);
-  const totalGlosado     = registros.reduce((s, r) => s + (Number(r.valor_glosado) || 0), 0);
-  const totalNotas       = totalFiltered;
+  // ─── 4. KPIs ─────────────────────────────────────────────────────
+  const totalGasto        = registros.reduce((s, r) => s + (Number(r.valor)         || 0), 0);
+  const totalGlosado      = registros.reduce((s, r) => s + (Number(r.valor_glosado) || 0), 0);
   const totalFornecedores = new Set(registros.map(r => r.cnpj_fornecedor).filter(Boolean)).size;
 
-  // Distribuição por categoria
   const catMap = registros.reduce<Record<string, number>>((acc, r) => {
     const cat = r.categoria_portal?.trim() || "Outros";
     acc[cat] = (acc[cat] || 0) + (Number(r.valor) || 0);
     return acc;
   }, {});
-  const categorias = Object.entries(catMap)
-    .sort(([, a], [, b]) => b - a)
-    .map(([name, value]) => ({ name, value }));
+  const categorias     = Object.entries(catMap).sort(([, a], [, b]) => b - a).map(([name, value]) => ({ name, value }));
   const categoriaMaior = categorias[0]?.name ?? "—";
 
-  // Top fornecedores
   const fornMap = registros.reduce<Record<string, { valor: number; nome: string; cnpj: string }>>(
     (acc, r) => {
       const key = r.cnpj_fornecedor || "sem-cnpj";
@@ -95,40 +94,29 @@ export async function GET(
       return acc;
     }, {}
   );
-  const topFornecedores = Object.values(fornMap)
-    .sort((a, b) => b.valor - a.valor)
-    .slice(0, 10);
+  const topFornecedores = Object.values(fornMap).sort((a, b) => b.valor - a.valor).slice(0, 10);
 
-  // Gastos mensais
   const mesMap = registros.reduce<Record<string, number>>((acc, r) => {
     const label = r.competencia_date
-      ? r.competencia_date.substring(0, 7)   // "2024-03"
+      ? r.competencia_date.substring(0, 7)
       : `${r.competencia_ano}-${String(r.competencia_mes).padStart(2, "0")}`;
     acc[label] = (acc[label] || 0) + (Number(r.valor) || 0);
     return acc;
   }, {});
-  const gastosMensais = Object.entries(mesMap)
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([mes, valor]) => ({ mes, valor }));
+  const gastosMensais = Object.entries(mesMap).sort(([a], [b]) => a.localeCompare(b)).map(([mes, valor]) => ({ mes, valor }));
 
-  // Anos disponíveis
-  const anos = [...new Set(registros.map(r => r.competencia_ano).filter(Boolean))]
-    .sort((a, b) => b - a);
+  const anos                = [...new Set(registros.map(r => r.competencia_ano).filter(Boolean))].sort((a, b) => b - a);
+  const categoriasDisponiveis = [...new Set(registros.map(r => r.categoria_slug).filter(Boolean))];
 
-  // Categorias disponíveis
-  const categoriasDisponiveis = [...new Set(
-    registros.map(r => r.categoria_slug).filter(Boolean)
-  )];
-
-  // ─── 5. Modo KPIs — retorna só métricas ──────────────────────────────────
+  // ─── 5. Modo KPIs ──────────────────────────────────────────────────
   if (modoKpis) {
     return NextResponse.json({
-      deputado:            parl.nome_urna || parl.nome_civil,
-      foto_url:            parl.foto_url,
-      sigla_partido:       parl.sigla_partido,
+      deputado:             parl.nome_urna || parl.nome_civil,
+      foto_url:             parl.foto_url,
+      sigla_partido:        parl.sigla_partido,
       totalGasto,
       totalGlosado,
-      totalNotas,
+      totalNotas:           totalFiltered,
       totalFornecedores,
       categoriaMaior,
       categorias,
@@ -139,7 +127,7 @@ export async function GET(
     });
   }
 
-  // ─── 6. Tabela paginada ───────────────────────────────────────────────────
+  // ─── 6. Tabela paginada ────────────────────────────────────────────
   const paginado = registros
     .slice(page * pageSize, (page + 1) * pageSize)
     .map(r => ({
@@ -165,7 +153,6 @@ export async function GET(
     deputado:       parl.nome_urna || parl.nome_civil,
     foto_url:       parl.foto_url,
     sigla_partido:  parl.sigla_partido,
-    // KPIs
     totalGasto,
     totalGlosado,
     totalNotas:     totalFiltered,
@@ -176,7 +163,6 @@ export async function GET(
     gastosMensais,
     anos,
     categoriasDisponiveis,
-    // Tabela
     pagina:         page,
     pageSize,
     totalRegistros: totalFiltered,
