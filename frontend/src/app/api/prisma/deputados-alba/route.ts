@@ -7,28 +7,19 @@ const supabaseKey = process.env.DADOS_PRISMA_SERVICE_ROLE_KEY as string
 
 const supabase = createClient(supabaseUrl, supabaseKey)
 
-const generateSlug = (nome: string) => {
-    return nome
-        .toLowerCase()
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .replace(/[^\w\s-]/g, "")
-        .replace(/\s+/g, "-")
-        .trim();
-};
-
 export async function GET() {
     try {
         const { data, error } = await supabase
             .from('parlamentares')
-            .select('prisma_id, id_alba, nome_urna, nome_civil, sigla_partido, foto_url, uf, esfera, status, mandatos_count, qualidade_score, email')
+            .select('prisma_id, id_alba, nome_urna, nome_civil, sigla_partido, foto_url, uf, esfera, casa, status, mandatos_count, qualidade_score, email, legislaturas')
             .order('nome_urna', { ascending: true })
 
         if (error) throw error
 
+        // slug = prisma_id (hash MD5 estável, não depende do nome)
         const enriched = (data || []).map(d => ({
             ...d,
-            slug: `${generateSlug(d.nome_urna)}-deputado-ba`
+            slug: d.prisma_id,
         }))
 
         return NextResponse.json({
