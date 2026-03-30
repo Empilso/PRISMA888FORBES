@@ -4,25 +4,25 @@ import React from "react";
 import Link from "next/link";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import {
     CheckCircle2,
     AlertCircle,
     ChevronRight,
-    Building2,
-    Briefcase
+    MapPin,
+    Briefcase,
+    ExternalLink
 } from "lucide-react";
-import { cn } from "@/lib/utils";
 
 export interface CandidateProps {
     id: string;
+    slug?: string;
+    prisma_id?: string;
     name: string;
     partido: string | null;
     city: string;
     office: string;
-    avatarUrl?: string; // Optional
-    hasFiscalData: boolean; // The key flag
+    avatarUrl?: string;
+    hasFiscalData: boolean;
 }
 
 interface CandidateRowProps {
@@ -30,89 +30,93 @@ interface CandidateRowProps {
 }
 
 export function CandidateRow({ candidate }: CandidateRowProps) {
+    // FIX: usa slug primeiro, fallback prisma_id, fallback id
+    const profileSlug = candidate.slug || candidate.prisma_id || candidate.id;
+
+    const getInitials = (name: string) =>
+        name.split(" ").filter(Boolean).slice(0, 2).map(n => n[0]).join("").toUpperCase();
+
     return (
-        <Card className="group overflow-hidden border-slate-200 hover:border-indigo-300 hover:shadow-md transition-all duration-300 bg-white">
-            <div className="p-4 flex flex-col md:flex-row md:items-center gap-4">
+        <div className="group relative bg-white border border-slate-100 hover:border-indigo-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center gap-4 transition-all duration-200 hover:shadow-md hover:shadow-indigo-50">
 
-                {/* 1. Avatar & Name */}
-                <div className="flex items-center gap-4 flex-1">
-                    <Avatar className="h-14 w-14 border-2 border-white shadow-sm group-hover:scale-105 transition-transform">
-                        <AvatarImage src={candidate.avatarUrl} alt={candidate.name} />
-                        <AvatarFallback className="bg-slate-100 text-slate-400 font-bold">
-                            {candidate.name.substring(0, 2).toUpperCase()}
-                        </AvatarFallback>
-                    </Avatar>
+            {/* Linha de destaque hover */}
+            <div className="absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl bg-indigo-500 opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
 
-                    <div>
-                        <h3 className="font-bold text-slate-800 text-lg leading-tight group-hover:text-indigo-700 transition-colors">
-                            {candidate.name}
-                        </h3>
-                        <div className="flex items-center gap-2 mt-1 text-xs text-slate-500 font-medium">
-                            <Badge variant="secondary" className="px-1.5 py-0 h-5 font-normal bg-slate-100 text-slate-600 border-slate-200">
-                                {candidate.partido || "S/P"}
-                            </Badge>
-                            <span className="flex items-center gap-1">
-                                <Briefcase className="w-3 h-3" />
-                                {candidate.office}
-                            </span>
-                        </div>
+            {/* 1. Avatar + Info */}
+            <div className="flex items-center gap-4 flex-1 min-w-0">
+                <Avatar className="h-12 w-12 border-2 border-white shadow ring-2 ring-slate-100 group-hover:ring-indigo-200 transition-all shrink-0">
+                    <AvatarImage
+                        src={candidate.avatarUrl}
+                        alt={candidate.name}
+                        onError={(e) => {
+                            (e.target as HTMLImageElement).src =
+                                `https://ui-avatars.com/api/?name=${encodeURIComponent(candidate.name)}&background=6366f1&color=fff&bold=true`;
+                        }}
+                    />
+                    <AvatarFallback className="bg-indigo-100 text-indigo-700 font-bold text-sm">
+                        {getInitials(candidate.name)}
+                    </AvatarFallback>
+                </Avatar>
+
+                <div className="min-w-0">
+                    <h3 className="font-bold text-slate-900 text-[15px] leading-tight truncate group-hover:text-indigo-700 transition-colors">
+                        {candidate.name}
+                    </h3>
+                    <div className="flex items-center flex-wrap gap-2 mt-1.5">
+                        <Badge className="bg-slate-100 text-slate-600 border-0 text-[11px] font-bold px-2 py-0 h-5 hover:bg-slate-100">
+                            {candidate.partido || "S/P"}
+                        </Badge>
+                        <span className="flex items-center gap-1 text-[11px] text-slate-400 font-medium">
+                            <Briefcase className="w-3 h-3" />
+                            {candidate.office}
+                        </span>
+                        <span className="flex items-center gap-1 text-[11px] text-slate-400 font-medium">
+                            <MapPin className="w-3 h-3 text-red-400" />
+                            {candidate.city}
+                        </span>
                     </div>
                 </div>
-
-                {/* 2. City & Status */}
-                <div className="flex flex-col md:items-end gap-1 md:w-64">
-                    <div className="flex items-center gap-1.5 text-sm text-slate-600 font-medium">
-                        <Building2 className="w-3.5 h-3.5 text-slate-400" />
-                        {candidate.city}
-                    </div>
-
-                    {candidate.hasFiscalData ? (
-                        <div className="flex items-center gap-1.5 text-emerald-600 text-xs font-bold bg-emerald-50 px-2 py-1 rounded-full border border-emerald-100">
-                            <CheckCircle2 className="w-3.5 h-3.5" />
-                            DADOS FISCAIS PRONTOS
-                        </div>
-                    ) : (
-                        <div className="flex items-center gap-1.5 text-slate-400 text-xs font-medium bg-slate-50 px-2 py-1 rounded-full border border-slate-100">
-                            <AlertCircle className="w-3.5 h-3.5" />
-                            Aguardando Importação
-                        </div>
-                    )}
-                </div>
-
-                {/* 3. Action */}
-                <div className="md:border-l md:border-slate-100 md:pl-4">
-                    <Button
-                        asChild={candidate.hasFiscalData}
-                        disabled={!candidate.hasFiscalData}
-                        size="sm"
-                        className={cn(
-                            "w-full md:w-auto font-medium transition-all shadow-sm",
-                            candidate.hasFiscalData
-                                ? "bg-indigo-600 hover:bg-indigo-700 text-white hover:shadow-indigo-200"
-                                : "bg-slate-100 text-slate-400 border border-slate-200"
-                        )}
-                    >
-                        {candidate.hasFiscalData ? (
-                            <Link href={`/admin/radar/${candidate.id}`}>
-                                Ver Detalhes
-                                <ChevronRight className="w-4 h-4 ml-2 opacity-80" />
-                            </Link>
-                        ) : (
-                            <span className="cursor-not-allowed">
-                                Indisponível
-                            </span>
-                        )}
-                    </Button>
-                </div>
-
             </div>
 
-            {/* Progress Bar (Visual Flair) */}
+            {/* 2. Status */}
+            <div className="shrink-0">
+                {candidate.hasFiscalData ? (
+                    <div className="flex items-center gap-1.5 text-emerald-700 text-[11px] font-bold bg-emerald-50 px-3 py-1.5 rounded-full border border-emerald-100">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        DADOS PRONTOS
+                    </div>
+                ) : (
+                    <div className="flex items-center gap-1.5 text-slate-400 text-[11px] font-medium bg-slate-50 px-3 py-1.5 rounded-full border border-slate-100">
+                        <AlertCircle className="w-3.5 h-3.5" />
+                        Pendente
+                    </div>
+                )}
+            </div>
+
+            {/* 3. Botão Transparência - FIX: link relativo sem localhost */}
+            <div className="shrink-0">
+                {candidate.hasFiscalData ? (
+                    <Link
+                        href={`/admin/radar/${profileSlug}`}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-[13px] font-bold rounded-xl transition-all shadow-sm hover:shadow-md hover:shadow-indigo-200"
+                    >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        Transparência
+                        <ChevronRight className="w-3.5 h-3.5 opacity-70" />
+                    </Link>
+                ) : (
+                    <span className="inline-flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-400 text-[13px] font-semibold rounded-xl cursor-not-allowed">
+                        Indisponível
+                    </span>
+                )}
+            </div>
+
+            {/* Barra gradiente base no hover */}
             {candidate.hasFiscalData && (
-                <div className="h-1 w-full bg-slate-100">
-                    <div className="h-full bg-gradient-to-r from-emerald-500 to-teal-500 w-full animate-in slide-in-from-left duration-1000" />
+                <div className="absolute bottom-0 left-0 right-0 h-[2px] rounded-b-2xl overflow-hidden">
+                    <div className="h-full bg-gradient-to-r from-indigo-500 via-violet-500 to-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                 </div>
             )}
-        </Card>
+        </div>
     );
 }
