@@ -14,8 +14,8 @@ const nextConfig = {
         const backendUrl = process.env.BACKEND_URL || 'http://localhost:8000';
         return [
             {
-                // Proxy para o backend, EXCETO rotas que sabemos que são locais (como /api/maps)
-                source: '/api/:path((?!maps).*)',
+                // Proxy para o backend, EXCETO rotas que sabemos que são locais (como /api/maps e /api/radar)
+                source: '/api/:path((?!maps|radar).*)',
                 destination: `${backendUrl}/api/:path`,
             },
         ];

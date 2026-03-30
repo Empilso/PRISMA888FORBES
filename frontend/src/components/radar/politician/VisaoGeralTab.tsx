@@ -1,296 +1,473 @@
+
 "use client";
 
-import React, { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { createClient } from "@/lib/supabase/client";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip as RechartsTooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend } from "recharts";
-import { DollarSign, WalletCards, ArrowDownToLine, CheckCircle2, BookOpen, Mail, Info } from "lucide-react";
-import { formatCompactCurrency, formatCurrency } from "@/lib/fiscal-analytics";
+import React, { useState } from "react";
+import {
+    ChevronDown, Award, Phone, Mail, MapPin, Eye,
+    TrendingUp, TrendingDown, GraduationCap, Briefcase, Star, Shield
+} from "lucide-react";
+import {
+    AreaChart, Area, XAxis, CartesianGrid,
+    Tooltip, ResponsiveContainer
+} from "recharts";
 
 interface VisaoGeralTabProps {
     politicianId: string;
+    nome: string;
     biografia?: string;
     email?: string;
-    nome?: string; // Nome para filtrar alba_verbas
+    onNavigateToTab?: (tabId: string) => void;
+    verbasSummary?: any;
+    albaData?: any;
 }
 
-const AREA_COLORS: Record<string, string> = {
-    "Saúde": "#10B981",
-    "Educação": "#3B82F6",
-    "Infraestrutura": "#F59E0B",
-    "Cidadania": "#8B5CF6",
-    "Segurança": "#EF4444",
-    "Agricultura": "#84CC16",
-    "Turismo": "#EC4899",
-    "Cultura": "#06B6D4",
-    "Esporte": "#F97316",
-    "Meio Ambiente": "#14B8A6",
+// Sparkline helper
+function Sparkline({ data, color }: { data: number[]; color: string }) {
+    const max = Math.max(...data), min = Math.min(...data);
+    const pts = data.map((v, i) => {
+        const x = (i / (data.length - 1)) * 52;
+        const y = 20 - ((v - min) / (max - min || 1)) * 18;
+        return `${x},${y}`;
+    }).join(" ");
+    const last = data[data.length - 1], prev = data[data.length - 2];
+    const trend = last > prev ? "up" : last < prev ? "down" : "flat";
+    return (
+        <div className="flex items-end gap-1.5">
+            <svg width="52" height="20" viewBox="0 0 52 20" fill="none">
+                <polyline points={pts} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            {trend === "up" && <TrendingUp className="w-3 h-3 text-emerald-500" />}
+            {trend === "down" && <TrendingDown className="w-3 h-3 text-red-400" />}
+        </div>
+    );
+}
+
+// Portal data - Configuração Enterprise (Zero Mocks)
+const PORTAIS = [
+    { id: "verbas-old",        icon: "🏛️", label: "Verbas Gabinete",   total: "R$ 0,00", meta: "Sincronização Pendente", bar: null, alert: 0, ativo: false, trend: null, acento: "#D97706", bg: "#FFFBEB", fg: "#92400E" },
+    { id: "emendas-ba-painel", icon: "📊", label: "Emendas BA Painel", total: "R$ 0,00", meta: "Sincronização Pendente", bar: null, alert: 0, ativo: false, trend: null, acento: "#16A34A", bg: "#F0FDF4", fg: "#15803D" },
+    { id: "emendas-ba-dados",  icon: "📦", label: "Emendas BA Dados",  total: "R$ 0,00", meta: "Sincronização Pendente", bar: null, alert: 0, ativo: false, trend: null, acento: "#0D9488", bg: "#F0FDFA", fg: "#0F766E" },
+    { id: "seplan-loa",        icon: "📄", label: "SEPLAN LOA",        total: "R$ 0,00", meta: "Sincronização Pendente", bar: null, alert: 0, ativo: false, trend: null, acento: "#0284C7", bg: "#F0F9FF", fg: "#0369A1" },
+    { id: "portal-federal",    icon: "🇧🇷", label: "Portal Federal",   total: "R$ 0,00", meta: "Sincronização Pendente", bar: null, alert: 0, ativo: false, trend: null, acento: "#2563EB", bg: "#EFF6FF", fg: "#1D4ED8" },
+    { id: "empresas-rf",       icon: "🏢", label: "Empresas RF",       total: "—",       meta: "Sincronização Pendente", bar: null, alert: 0, ativo: false, trend: null, acento: "#B45309", bg: "#FFFBEB", fg: "#92400E" },
+    { id: "tcm-ba",            icon: "⚖️", label: "TCM-BA",           total: "R$ 0,00", meta: "Sincronização Pendente", bar: null, alert: 0, ativo: false, trend: null, acento: "#DC2626", bg: "#FEF2F2", fg: "#991B1B" },
+    { id: "rastreabilidade",   icon: "🔗", label: "Rastreabilidade",   total: "—",       meta: "Sincronização Pendente", bar: null, alert: 0, ativo: false, trend: null, acento: "#2563EB", bg: "#EFF6FF", fg: "#1E40AF" },
+];
+
+const ALERTAS: any[] = [];
+const EVOLUCAO: any[] = [];
+
+const glass = {
+    background: "rgba(255,255,255,0.85)",
+    backdropFilter: "blur(20px)",
+    WebkitBackdropFilter: "blur(20px)",
+    border: "1px solid rgba(255,255,255,0.6)",
+    boxShadow: "0 4px 32px rgba(0,0,0,0.04), 0 1px 4px rgba(0,0,0,0.03)",
 };
 
-export default function VisaoGeralTab({ politicianId, biografia, email, nome }: VisaoGeralTabProps) {
-    const { data: analytics, isLoading } = useQuery({
-        queryKey: ["politicianAlbaAnalytics", nome],
-        queryFn: async () => {
-            if (!nome) return null;
+// Helpers para lidar com item de array que pode ser string ou objeto
+function getItemLabel(item: any): string {
+    if (!item) return "";
+    if (typeof item === "string") return item;
+    return item.label || item.cargo || item.curso || item.titulo || item.nome || item.descricao || JSON.stringify(item);
+}
+function getItemSub(item: any): string | null {
+    if (!item || typeof item === "string") return null;
+    return item.instituicao || item.periodo || item.ano || item.local || null;
+}
 
-            const { createDadosClient } = await import("@/lib/supabase/dados");
-            const supabase = createDadosClient();
+export default function VisaoGeralTab({ nome, onNavigateToTab, verbasSummary, albaData }: VisaoGeralTabProps) {
+    const [bioExpandida, setBioExpandida] = useState(false);
 
-            const { data, error } = await supabase
-                .from("alba_verbas")
-                .select("*")
-                .ilike("deputado", `%${nome}%`);
-
-            if (error) throw error;
-            if (!data || data.length === 0) return null;
-
-            // Agregação dos dados da alba_verbas
-            const totalPago = data.reduce((sum, item) => sum + (Number(item.valor) || 0), 0);
-            const totalOrcado = totalPago; // Usando valor como base na falta de orçado explícito
-            const totalEmpenhado = totalPago;
-            const totalLiquidado = totalPago;
-
-            // Por área (usando a coluna 'categoria')
-            const areas: Record<string, number> = {};
-            data.forEach(item => {
-                const area = item.categoria || "Outros";
-                areas[area] = (areas[area] || 0) + (Number(item.valor) || 0);
-            });
-            const por_area = Object.entries(areas).map(([area, value]) => ({ area, orcado: value }));
-
-            // Por ano/mês
-            const anual: Record<number, { empenhado: number, pago: number }> = {};
-            data.forEach(item => {
-                const ano = Number(item.ano) || 2024;
-                if (!anual[ano]) anual[ano] = { empenhado: 0, pago: 0 };
-                anual[ano].pago += (Number(item.valor) || 0);
-                anual[ano].empenhado += (Number(item.valor) || 0);
-            });
-            const por_ano = Object.entries(anual).map(([ano, vals]) => ({
-                ano: String(ano),
-                empenhado: vals.empenhado,
-                pago: vals.pago
-            }));
-
-            return {
-                totalOrcado,
-                totalEmpenhado,
-                totalLiquidado,
-                totalPago,
-                por_ano,
-                por_area
-            };
-        },
-        staleTime: 1000 * 60 * 30,
-    });
-
-    if (isLoading) {
-        return <div className="p-20 text-center text-slate-400">Carregando painel analítico...</div>;
+    if (!albaData) {
+        return <div className="p-8 text-center text-slate-400">Carregando dados estruturados...</div>;
     }
 
-    // Mesmo sem analytics (emendas), queremos mostrar a biografia
-    const hasAnalytics = analytics && analytics.totalOrcado > 0;
+    // ── Dados estruturados do Supabase (Padrão Bobô) ──
+    const formacaoAcademica:    any[] = Array.isArray(albaData.formacao_academica)    ? albaData.formacao_academica    : [];
+    const carreiraPolitica:     any[] = Array.isArray(albaData.carreira_politica)     ? albaData.carreira_politica     : [];
+    const liderancaComissoes:   any[] = Array.isArray(albaData.lideranca_e_comissoes) ? albaData.lideranca_e_comissoes : [];
+    const condecoracoes:        any[] = Array.isArray(albaData.condecoracoes)         ? albaData.condecoracoes         : [];
+    const tagsEstrategicas:     any[] = Array.isArray(albaData.tags_estrategicas)     ? albaData.tags_estrategicas     : [];
+
+    // Fallback: se os campos estruturados chegarem vazios, ainda usamos biografia_completa para resumo
+    const bioResumo = albaData.biografia_resumo || albaData.nome_urna || nome || "Biografia em processamento pelo Radar...";
+
+    const d = {
+        nomeEleitoral:  albaData.nome_urna || nome,
+        partido:        albaData.sigla_partido,
+        municipioBase:  albaData.uf || "BA",
+        mandatos:       Array.isArray(albaData.mandatos) ? albaData.mandatos : [],
+        dadosPessoais: [
+            { label: "Nome Completo", valor: albaData.nome_civil || "—" },
+            {
+                label: "Nascimento",
+                valor: albaData.data_nascimento
+                    ? albaData.data_nascimento.split("T")[0].split("-").reverse().join("/")
+                    : "—"
+            },
+            { label: "Naturalidade",  valor: albaData.municipio_nascimento ? `${albaData.municipio_nascimento} - ${albaData.uf_nascimento || "BA"}` : "—" },
+            { label: "Partido",       valor: `${albaData.partido_nome || ""} (${albaData.sigla_partido || ""})`.trim() || "—" },
+            { label: "Profissão",     valor: albaData.profissao || "—" },
+            { label: "Gabinete",      valor: albaData.gabinete_endereco || "—" },
+        ],
+        telefones: (Array.isArray(albaData.telefones) ? albaData.telefones : []).flatMap((t: string) => t.split(/[/;]/).map((s: string) => s.trim()).filter(Boolean)),
+        emailContato:   albaData.email || "—",
+        mandatosCount:  albaData.mandatos_count || (Array.isArray(albaData.mandatos) ? albaData.mandatos.length : 0),
+        qualidadeScore: (Number(albaData.qualidade_score) <= 1 ? (Number(albaData.qualidade_score) || 0) * 100 : Number(albaData.qualidade_score) || 0).toFixed(0),
+    };
+
+    // ── Merge de portais com dados reais (verbasSummary) ──
+    const portais = PORTAIS.map(p => {
+        if (p.id === "verbas-old" && verbasSummary) {
+            return {
+                ...p,
+                total: new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(verbasSummary.totalGasto),
+                meta: `${verbasSummary.totalNotas} registros`,
+                alert: verbasSummary.alertasForenses?.reduce((s: number, a: any) => s + a.count, 0) || 0,
+            };
+        }
+        return p;
+    });
+
+    // ── Timeline: prioriza carreira_politica estruturada, fallback para mandatos ──
+    type TimelineItem = {
+        labelYear: string;
+        text: string;
+        isEleito: boolean;
+        colorBg: string;
+        colorBorder: string;
+        colorDot: string;
+        startYear: number;
+        destaque: boolean;
+    };
+
+    const buildTimelineFromArray = (arr: any[]): TimelineItem[] =>
+        arr.map((m: any) => {
+            const label = getItemLabel(m);
+            const sub   = getItemSub(m);
+            const anoMatch = (sub || label).match(/\b(19|20)\d{2}(-(19|20)\d{2})?\b/);
+            const anoStr   = anoMatch ? anoMatch[0] : "";
+            const isEleito = /(eleito|reeleito|suplente|mandato|deputad)/i.test(label);
+            return {
+                labelYear:   anoStr || (sub || "—"),
+                text:        label,
+                isEleito,
+                colorBg:     isEleito ? "rgba(59,130,246,0.04)" : "white",
+                colorBorder: isEleito ? "rgba(59,130,246,0.15)" : "rgba(241,245,249,1)",
+                colorDot:    isEleito ? "#3B82F6" : "#E2E8F0",
+                startYear:   anoStr ? parseInt(anoStr.substring(0, 4)) : 0,
+                destaque:    false,
+            };
+        }).sort((a, b) => b.startYear - a.startYear);
+
+    const buildTimelineFromMandatos = (arr: any[]): TimelineItem[] =>
+        arr.flatMap((m: any) => {
+            const rawText = m.descricao || m.cargo || m.texto || m.legislatura || m.periodo || m;
+            if (typeof rawText !== "string") return [];
+            return rawText.split(/(?<=[.;!])\s+/).map((s: string) => s.trim()).filter((s: string) => s.length > 5).map((sentence: string) => {
+                const anoMatch = sentence.match(/\b(19|20)\d{2}(-(19|20)\d{2})?\b/);
+                const anoStr   = anoMatch ? anoMatch[0] : "";
+                let cleanSentence = sentence;
+                if (anoMatch && cleanSentence.startsWith(anoMatch[0])) {
+                    cleanSentence = cleanSentence.substring(anoMatch[0].length).replace(/^[-;, ]+/, "").trim();
+                }
+                const isEleito = /(eleito|reeleito|suplente|mandato)/i.test(cleanSentence);
+                return {
+                    labelYear:   anoStr || "—",
+                    text:        cleanSentence,
+                    isEleito,
+                    colorBg:     isEleito ? "rgba(59,130,246,0.04)" : "white",
+                    colorBorder: isEleito ? "rgba(59,130,246,0.15)" : "rgba(241,245,249,1)",
+                    colorDot:    isEleito ? "#3B82F6" : "#E2E8F0",
+                    startYear:   anoStr ? parseInt(anoStr.substring(0, 4)) : 0,
+                    destaque:    false,
+                };
+            });
+        });
+
+    const rawTimeline = carreiraPolitica.length > 0
+        ? buildTimelineFromArray(carreiraPolitica)
+        : buildTimelineFromMandatos(d.mandatos);
+
+    const timelineItems = rawTimeline
+        .filter((item: TimelineItem, index: number, self: TimelineItem[]) =>
+            index === self.findIndex((t: TimelineItem) =>
+                t.labelYear === item.labelYear && (t.text.includes(item.text) || item.text.includes(t.text))
+            )
+        );
+
+    // ── 4 Quadrantes: usa dados estruturados, sem parseBio ──
+    const quadrantes = [
+        {
+            t: "FORMAÇÃO",
+            icon: <GraduationCap className="w-3.5 h-3.5" />,
+            items: formacaoAcademica,
+            fallback: albaData.biografia_completa?.match(/Forma[çc][aã]o[^]*?(?=Atividade|Mandato|$)/i)?.[0]?.replace(/Forma[çc][aã]o[\s\w]*:?/i, "").trim() || null,
+        },
+        {
+            t: "PROFISSÃO",
+            icon: <Briefcase className="w-3.5 h-3.5" />,
+            items: albaData.atividade_profissional ? [albaData.atividade_profissional] : [],
+            fallback: albaData.profissao || albaData.biografia_completa?.match(/Atividade Profissional[^]*?(?=Mandato|Atividade Parlamentar|$)/i)?.[0]?.replace(/Atividade Profissional:?/i, "").trim() || null,
+        },
+        {
+            t: "HISTÓRICO ELEITORAL",
+            icon: <Star className="w-3.5 h-3.5" />,
+            items: carreiraPolitica.length > 0 ? carreiraPolitica.slice(0, 4) : [],
+            fallback: albaData.biografia_completa?.match(/Mandato Eletivo[^]*?(?=Atividade Parlamentar|$)/i)?.[0]?.replace(/Mandato Eletivo:?/i, "").split(/[.;]/)[0]?.trim() || null,
+        },
+        {
+            t: "MESA DIRETORA E COMISSÕES",
+            icon: <Shield className="w-3.5 h-3.5" />,
+            items: liderancaComissoes,
+            fallback: albaData.biografia_completa?.match(/Atividade Parlamentar[^]*/i)?.[0]?.replace(/Atividade Parlamentar:?/i, "").trim() || null,
+        },
+    ];
 
     return (
-        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            {/* Biografia e Contatos (ALBA) */}
-            {biografia && (
-                <Card className="border-0 shadow-sm ring-1 ring-slate-100 bg-white overflow-hidden">
-                    <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-4">
-                        <CardTitle className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                            <BookOpen className="w-5 h-5 text-indigo-500" />
-                            Perfil Parlamentar
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent className="p-6">
-                        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-                            <div className="lg:col-span-3">
-                                <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-                                    <Info className="w-3.5 h-3.5" />
-                                    Biografia e Trajetória
-                                </h4>
-                                <div className="text-sm text-slate-600 leading-relaxed whitespace-pre-wrap max-h-[300px] overflow-y-auto pr-4 scrollbar-thin scrollbar-thumb-slate-200">
-                                    {biografia}
-                                </div>
+        <div className="space-y-4 pb-6" style={{ background: "radial-gradient(ellipse at 50% 0%, rgba(99,102,241,0.05) 0%, transparent 50%)" }}>
+
+            {/* ══ HERO ══ */}
+            <div className="rounded-3xl overflow-hidden" style={glass}>
+                <div className="px-6 py-2 border-b flex items-center justify-between" style={{ borderColor: "rgba(0,0,0,0.04)", background: "rgba(255,255,255,0.5)" }}>
+                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-[0.2em]">Portfólio de Inteligência Parlamentar</p>
+                    <div className="flex items-center gap-1.5 text-[9px] font-bold text-emerald-600 uppercase tracking-widest">
+                        <span className="relative flex h-1.5 w-1.5">
+                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                        </span>
+                        Radar Ativo
+                    </div>
+                </div>
+
+                <div className="p-6">
+                    <div className="flex flex-col md:flex-row gap-6 items-start">
+                        <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-3 mb-1">
+                                <h1 className="text-[24px] font-black tracking-tighter" style={{ color: "#0F172A" }}>{d.nomeEleitoral}</h1>
+                                <span className="border text-[10px] font-black px-2 py-0.5 rounded-full" style={{ background: "#F1F5F9", borderColor: "#E2E8F0", color: "#475569" }}>{d.partido}</span>
+                                <span className="text-[11px] font-medium text-slate-400 flex items-center gap-1"><MapPin className="w-3 h-3" /> {d.municipioBase}</span>
                             </div>
-                            <div className="lg:col-span-1 space-y-6">
-                                <div>
-                                    <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3">Contato Oficial</h4>
-                                    <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 space-y-3">
-                                        {email && (
-                                            <div className="flex items-center gap-3">
-                                                <div className="p-2 rounded-full bg-white shadow-sm">
-                                                    <Mail className="w-4 h-4 text-indigo-500" />
-                                                </div>
-                                                <div className="flex flex-col">
-                                                    <span className="text-[10px] font-bold text-slate-400 uppercase">E-mail Gabinete</span>
-                                                    <a href={`mailto:${email}`} className="text-xs font-bold text-slate-700 hover:text-indigo-600 transition-colors break-all">
-                                                        {email}
-                                                    </a>
-                                                </div>
+
+                            {/* Tags Estratégicas como Badges premium */}
+                            {tagsEstrategicas.length > 0 && (
+                                <div className="flex flex-wrap gap-1.5 mb-3">
+                                    {tagsEstrategicas.slice(0, 8).map((tag: any, i: number) => (
+                                        <span key={i} className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-600 border border-indigo-100">
+                                            {typeof tag === "string" ? tag : tag.label || tag.tag || String(tag)}
+                                        </span>
+                                    ))}
+                                </div>
+                            )}
+
+                            <p className="text-[14px] leading-relaxed text-slate-600 mb-2 max-w-2xl text-justify">{bioResumo}</p>
+
+                            <button onClick={() => setBioExpandida(!bioExpandida)} className="text-[12px] font-bold text-indigo-500 hover:text-indigo-700 flex items-center gap-1 mt-2">
+                                {bioExpandida ? "Recolher dossiê" : "Ver dossiê completo"} <ChevronDown className={`w-3 h-3 transition-transform ${bioExpandida ? "rotate-180" : ""}`} />
+                            </button>
+
+                            {bioExpandida && (
+                                <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-5 pt-5 border-t border-slate-50">
+                                    {quadrantes.map((q, idx) => {
+                                        const hasItems = q.items.length > 0;
+                                        const hasFallback = !!q.fallback;
+                                        const vazio = !hasItems && !hasFallback;
+                                        return (
+                                            <div key={idx} className="col-span-1 bg-white/40 p-4 rounded-2xl border border-slate-50">
+                                                <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                                                    <span className="text-indigo-400">{q.icon}</span> {q.t}
+                                                </p>
+                                                {hasItems ? (
+                                                    <ul className="space-y-1.5">
+                                                        {q.items.slice(0, 5).map((item: any, ii: number) => {
+                                                            const label = getItemLabel(item);
+                                                            const sub   = getItemSub(item);
+                                                            return (
+                                                                <li key={ii} className="text-[12px] leading-snug text-slate-700">
+                                                                    <span className="font-semibold">{label}</span>
+                                                                    {sub && <span className="text-slate-400 font-normal"> · {sub}</span>}
+                                                                </li>
+                                                            );
+                                                        })}
+                                                    </ul>
+                                                ) : hasFallback ? (
+                                                    <p className="text-[12px] leading-relaxed text-slate-600 text-justify">{q.fallback}</p>
+                                                ) : (
+                                                    <p className="text-[12px] text-slate-300 italic">Informação não disponível.</p>
+                                                )}
                                             </div>
-                                        )}
-                                        <div className="pt-2">
-                                            <Badge variant="outline" className="text-[9px] font-black uppercase bg-indigo-50/50 text-indigo-700 border-indigo-100">
-                                                Assembleia Legislativa da Bahia
-                                            </Badge>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Stats Slim */}
+                        <div className="flex gap-2 shrink-0">
+                            {[
+                                { val: d.mandatosCount, label: "mandatos", color: "#6366F1" },
+                                { val: d.qualidadeScore + "%",  label: "score",    color: "#10B981" },
+                                { val: d.telefones.length,      label: "contatos", color: "#F59E0B" },
+                            ].map(s => (
+                                <div key={s.label} className="w-20 py-2.5 rounded-2xl border bg-white/50 text-center" style={{ borderColor: "rgba(0,0,0,0.03)" }}>
+                                    <p className="font-mono text-[20px] font-black leading-none" style={{ color: s.color }}>{s.val}</p>
+                                    <p className="text-[8px] font-bold uppercase tracking-widest mt-1 text-slate-400">{s.label}</p>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* ══ PAINEL DE PORTAIS ══ */}
+            <div className="rounded-3xl p-6" style={glass}>
+                <div className="flex items-end justify-between mb-4">
+                    <h3 className="text-[15px] font-black text-slate-900 uppercase tracking-tight">Painel de Inteligência</h3>
+                    <div className="flex items-center gap-3">
+                        <span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">10 Canais Monitorados</span>
+                        <div className="h-1 w-20 bg-slate-100 rounded-full overflow-hidden"><div className="h-full bg-emerald-400 w-1/3" /></div>
+                    </div>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-2.5">
+                    {portais.map((p) => (
+                        <div key={p.id} className="rounded-2xl border p-3 transition-all relative overflow-hidden group border-slate-100/50"
+                             style={{ backgroundColor: p.ativo ? "rgba(255,255,255,0.9)" : "rgba(248,250,252,0.5)", opacity: p.ativo ? 1 : 0.6 }}>
+                            {p.ativo && <div className="absolute top-0 right-0 w-12 h-12 -mr-6 -mt-6 rounded-full opacity-10" style={{ backgroundColor: p.acento }} />}
+                            <div className="flex justify-between items-start mb-2">
+                                <span className="text-[14px]">{p.icon}</span>
+                                {p.alert > 0 && <span className="text-[8px] font-black text-white px-1.5 py-0.5 rounded-full" style={{ backgroundColor: p.acento }}>{p.alert}</span>}
+                            </div>
+                            <p className="text-[8px] font-black uppercase tracking-widest mb-1" style={{ color: p.ativo ? p.acento : "#94A3B8" }}>{p.label}</p>
+                            <p className="text-[15px] font-mono font-black" style={{ color: p.ativo ? "#1E293B" : "#CBD5E1" }}>{p.total}</p>
+                            {p.trend && p.ativo && <div className="mt-2"><Sparkline data={p.trend as number[]} color={p.acento} /></div>}
+                        </div>
+                    ))}
+                </div>
+            </div>
+
+            {/* ══ TIMELINE + SIDEBAR ══ */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+                <div className="lg:col-span-7 space-y-4">
+                    {/* CARREIRA ALBA TIMELINE */}
+                    <div className="rounded-3xl p-6" style={glass}>
+                        <h3 className="text-[14px] font-black text-slate-900 uppercase tracking-tighter mb-5">Carreira ALBA</h3>
+                        <div className="relative pl-5">
+                            <div className="absolute left-[9px] top-1 bottom-4 w-px bg-slate-100" />
+                            <div className="space-y-4">
+                                {timelineItems.length > 0 ? timelineItems.map((item: any, i: number) => (
+                                    <div key={i} className="flex gap-4 items-start relative group">
+                                        <div className="absolute -left-[23px] mt-1.5 w-[13px] h-[13px] rounded-full border-[3px] border-white shadow-sm transition-colors z-10"
+                                             style={{ backgroundColor: item.colorDot }}>
+                                            {item.isEleito && <span className="absolute inset-0 animate-ping rounded-full bg-blue-400 opacity-40" />}
+                                        </div>
+                                        <div className="flex-1 p-3.5 rounded-2xl border transition-all hover:bg-slate-50 hover:shadow-sm"
+                                             style={{ background: item.colorBg, borderColor: item.colorBorder }}>
+                                            <div className="flex items-center gap-2 mb-1.5">
+                                                <span className={`text-[11px] font-black px-2 py-0.5 rounded-lg border shadow-sm ${item.isEleito ? "bg-blue-50 text-blue-600 border-blue-100" : "bg-slate-50 text-slate-500 border-slate-200"}`}>
+                                                    {item.labelYear}
+                                                </span>
+                                            </div>
+                                            <p className="text-[13px] text-slate-600 leading-relaxed">{item.text}</p>
                                         </div>
                                     </div>
-                                </div>
+                                )) : (
+                                    <p className="text-[11px] text-slate-300 italic">Nenhum histórico de mandatos registrado.</p>
+                                )}
                             </div>
                         </div>
-                    </CardContent>
-                </Card>
-            )}
-
-            {hasAnalytics && (
-                <>
-                    {/* KPIs - 4 Cards */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                        <Card className="border-0 shadow-sm hover:shadow-xl transition-all duration-500 bg-white group ring-1 ring-slate-100 overflow-hidden relative">
-                            <CardHeader className="pb-2">
-                                <CardTitle className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                                    <DollarSign className="w-4 h-4 text-emerald-500" />
-                                    Total Orçado
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <p className="text-3xl font-extrabold text-emerald-600 tracking-tight group-hover:scale-105 transition-transform origin-left duration-300">
-                                    {formatCompactCurrency(analytics?.totalOrcado || 0)}
-                                </p>
-                            </CardContent>
-                            <WalletCards className="w-16 h-16 text-emerald-600 absolute bottom-0 right-0 -mb-4 -mr-4 opacity-5 group-hover:scale-110 transition-transform duration-500" />
-                        </Card>
-
-                        <Card className="border-0 shadow-sm hover:shadow-xl transition-all duration-500 bg-white group ring-1 ring-slate-100 overflow-hidden relative">
-                            <CardHeader className="pb-2">
-                                <CardTitle className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                                    <ArrowDownToLine className="w-4 h-4 text-amber-500" />
-                                    Total Empenhado
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <p className="text-3xl font-extrabold text-amber-600 tracking-tight group-hover:scale-105 transition-transform origin-left duration-300">
-                                    {formatCompactCurrency(analytics?.totalEmpenhado || 0)}
-                                </p>
-                            </CardContent>
-                            <ArrowDownToLine className="w-16 h-16 text-amber-600 absolute bottom-0 right-0 -mb-4 -mr-4 opacity-5 group-hover:scale-110 transition-transform duration-500" />
-                        </Card>
-
-                        <Card className="border-0 shadow-sm hover:shadow-xl transition-all duration-500 bg-white group ring-1 ring-slate-100 overflow-hidden relative">
-                            <CardHeader className="pb-2">
-                                <CardTitle className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                                    <CheckCircle2 className="w-4 h-4 text-indigo-500" />
-                                    Total Liquidado
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <p className="text-3xl font-extrabold text-indigo-600 tracking-tight group-hover:scale-105 transition-transform origin-left duration-300">
-                                    {formatCompactCurrency(analytics?.totalLiquidado || 0)}
-                                </p>
-                            </CardContent>
-                            <CheckCircle2 className="w-16 h-16 text-indigo-600 absolute bottom-0 right-0 -mb-4 -mr-4 opacity-5 group-hover:scale-110 transition-transform duration-500" />
-                        </Card>
-
-                        <Card className="border-0 shadow-sm hover:shadow-xl transition-all duration-500 bg-white group ring-1 ring-slate-100 overflow-hidden relative">
-                            <CardHeader className="pb-2">
-                                <CardTitle className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                                    <DollarSign className="w-4 h-4 text-blue-500" />
-                                    Total Pago
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <p className="text-3xl font-extrabold text-blue-600 tracking-tight group-hover:scale-105 transition-transform origin-left duration-300">
-                                    {formatCompactCurrency(analytics?.totalPago || 0)}
-                                </p>
-                            </CardContent>
-                            <DollarSign className="w-16 h-16 text-blue-600 absolute bottom-0 right-0 -mb-4 -mr-4 opacity-5 group-hover:scale-110 transition-transform duration-500" />
-                        </Card>
                     </div>
 
-                    {/* Gráficos */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-8">
-                        {/* Comparativo Anual */}
-                        <Card className="col-span-1 border-0 shadow-sm ring-1 ring-slate-100 bg-white">
-                            <CardHeader className="pb-2">
-                                <CardTitle className="text-lg font-bold text-slate-800 tracking-tight">Evolução do Empenho vs Pago</CardTitle>
-                            </CardHeader>
-                            <CardContent className="p-6 pt-4">
-                                <div style={{ width: "100%", height: 350, minHeight: 350 }}>
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <BarChart data={analytics?.por_ano || []}>
-                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                            <XAxis
-                                                dataKey="ano"
-                                                axisLine={false}
-                                                tickLine={false}
-                                                tick={{ fill: "#94a3b8", fontSize: 12, fontWeight: 600 }}
-                                                dy={10}
-                                            />
-                                            <YAxis
-                                                axisLine={false}
-                                                tickLine={false}
-                                                tickFormatter={(v) => `R$ ${(v / 1000000).toFixed(0)}M`}
-                                                tick={{ fill: "#94a3b8", fontSize: 11, fontWeight: 600 }}
-                                                dx={-10}
-                                            />
-                                            <RechartsTooltip
-                                                cursor={{ fill: '#f8fafc' }}
-                                                contentStyle={{ borderRadius: 12, border: "none", boxShadow: "0 10px 15px -3px rgb(0 0 0 / 0.1)" }}
-                                                formatter={(v: any) => formatCurrency(v as number)}
-                                            />
-                                            <Legend wrapperStyle={{ paddingTop: "20px", fontSize: "12px", fontWeight: "bold", color: "#64748b" }} />
-                                            <Bar dataKey="empenhado" name="Empenhado" fill="#F59E0B" radius={[4, 4, 0, 0]} />
-                                            <Bar dataKey="pago" name="Pago" fill="#3B82F6" radius={[4, 4, 0, 0]} />
-                                        </BarChart>
-                                    </ResponsiveContainer>
-                                </div>
-                            </CardContent>
-                        </Card>
+                    {/* ALERTAS - Oculto se vazio */}
+                    {ALERTAS.length > 0 && (
+                        <div className="rounded-3xl p-6" style={glass}>
+                            <h3 className="text-[14px] font-black text-slate-900 uppercase tracking-tighter mb-4">Vetores Críticos</h3>
+                            <div className="space-y-2">
+                                {ALERTAS.map((a: any, i: number) => (
+                                    <div key={i} className="flex items-center gap-3 p-2 rounded-xl border border-slate-100/50 bg-white/40 hover:bg-white transition-all">
+                                        <div className="w-1 h-8 rounded-full" style={{ backgroundColor: a.borderCor }} />
+                                        <div className="flex-1">
+                                            <p className="text-[12px] font-bold text-slate-800 flex items-center gap-2">
+                                                {a.desc} <span className="text-[8px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-400">{a.portal}</span>
+                                            </p>
+                                            <p className="text-[10px] text-slate-400">{a.sub}</p>
+                                        </div>
+                                        <button className="p-1.5 rounded-lg hover:bg-slate-50"><Eye className="w-3.5 h-3.5 text-slate-300" /></button>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
 
-                        {/* Por Área */}
-                        <Card className="col-span-1 border-0 shadow-sm ring-1 ring-slate-100 bg-white">
-                            <CardHeader className="pb-2">
-                                <CardTitle className="text-lg font-bold text-slate-800 tracking-tight">Distribuição Temática (Orçado)</CardTitle>
-                            </CardHeader>
-                            <CardContent className="p-6 pt-4">
-                                <div style={{ width: "100%", height: 350, minHeight: 350 }}>
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <PieChart>
-                                            <Pie
-                                                data={analytics?.por_area || []}
-                                                dataKey="orcado"
-                                                nameKey="area"
-                                                cx="50%" cy="50%"
-                                                innerRadius={70} outerRadius={110}
-                                                paddingAngle={4}
-                                            >
-                                                {(analytics?.por_area || []).map((entry: any) => (
-                                                    <Cell key={entry.area} fill={AREA_COLORS[entry.area] || "#94a3b8"} />
-                                                ))}
-                                            </Pie>
-                                            <RechartsTooltip
-                                                contentStyle={{ borderRadius: 12, border: "none", boxShadow: "0 10px 15px -3px rgb(0 0 0 / 0.1)" }}
-                                                formatter={(v: any) => formatCurrency(v as number)}
-                                            />
-                                        </PieChart>
-                                    </ResponsiveContainer>
+                <div className="lg:col-span-5 space-y-4">
+                    {/* DOSSIÊ DETALHADO */}
+                    <div className="rounded-3xl p-6" style={glass}>
+                        <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-4">Dossiê Detalhado</p>
+                        <div className="space-y-3">
+                            {d.dadosPessoais.map(item => (
+                                <div key={item.label} className="flex justify-between items-baseline border-b border-slate-50 pb-2 last:border-0">
+                                    <span className="text-[10px] font-bold text-slate-300 uppercase">{item.label}</span>
+                                    <span className="text-[12px] font-black text-slate-700 text-right max-w-[180px]">{item.valor}</span>
                                 </div>
-                                <div className="flex flex-wrap justify-center gap-3 mt-2">
-                                    {(analytics?.por_area || []).map((area: any) => (
-                                        <div key={area.area} className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
-                                            <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: AREA_COLORS[area.area] || "#94a3b8" }} />
-                                            {area.area}
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* HONRARIAS & CONTATOS */}
+                    <div className="rounded-3xl p-6" style={glass}>
+                        <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-4">Honrarias & Contatos</p>
+                        <div className="space-y-4">
+                            {/* Condecorações da Crew Zidane */}
+                            {condecoracoes.length > 0 && (
+                                <div className="space-y-1.5 mb-3">
+                                    {condecoracoes.slice(0, 5).map((c: any, i: number) => (
+                                        <div key={i} className="flex items-start gap-2 text-[11px] text-slate-600 bg-amber-50 border border-amber-100 px-3 py-1.5 rounded-xl">
+                                            <Award className="w-3 h-3 text-amber-400 mt-0.5 shrink-0" />
+                                            <span>{getItemLabel(c)}</span>
                                         </div>
                                     ))}
                                 </div>
-                            </CardContent>
-                        </Card>
+                            )}
+                            <div className="pt-2 border-t border-slate-50 space-y-2">
+                                <div className="flex items-center gap-2 text-[12px] font-bold text-indigo-600 bg-indigo-50 px-3 py-2 rounded-xl">
+                                    <Mail className="w-3.5 h-3.5" /> {d.emailContato}
+                                </div>
+                                <div className="grid grid-cols-1 gap-2">
+                                    {d.telefones.map((t: string) => (
+                                        <div key={t} className="text-[11px] font-mono font-bold text-slate-500 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-100 flex items-center gap-1.5">
+                                            <Phone className="w-3 h-3 opacity-30" /> {t}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                </>
+                </div>
+            </div>
+
+            {/* EVOLUÇÃO (Chart) - Oculto se vazio */}
+            {EVOLUCAO.length > 0 && (
+                <div className="rounded-3xl p-6" style={glass}>
+                    <div className="flex justify-between items-center mb-6">
+                        <h3 className="text-[14px] font-black text-slate-900 uppercase tracking-tighter">Evolução de Vetores Financeiros</h3>
+                    </div>
+                    <ResponsiveContainer width="100%" height={200}>
+                        <AreaChart data={EVOLUCAO} margin={{ top: 0, right: 10, left: 10, bottom: 0 }}>
+                            <defs>
+                                <linearGradient id="gIndigo" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#6366F1" stopOpacity={0.1}/><stop offset="95%" stopColor="#6366F1" stopOpacity={0}/></linearGradient>
+                                <linearGradient id="gEmerald" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10B981" stopOpacity={0.1}/><stop offset="95%" stopColor="#10B981" stopOpacity={0}/></linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="2 4" stroke="#F1F5F9" vertical={false} />
+                            <XAxis dataKey="ano" tick={{ fontSize: 10, fill: "#94A3B8", fontWeight: 700 }} axisLine={false} tickLine={false} />
+                            <Tooltip />
+                            <Area dataKey="estaduais" stroke="#10B981" strokeWidth={2} fill="url(#gEmerald)" type="monotone" dot={false} />
+                            <Area dataKey="federais"  stroke="#6366F1" strokeWidth={1.5} fill="url(#gIndigo)" type="monotone" dot={false} strokeDasharray="4 4" />
+                        </AreaChart>
+                    </ResponsiveContainer>
+                </div>
             )}
+
         </div>
     );
 }

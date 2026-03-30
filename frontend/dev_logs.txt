@@ -1,0 +1,305 @@
+
+> sheepstack-frontend@0.1.0 dev
+> next dev --turbo
+
+   ▲ Next.js 15.3.6 (Turbopack)
+   - Local:        http://localhost:3000
+   - Network:      http://10.0.0.102:3000
+   - Environments: .env.local, .env
+
+ ✓ Starting...
+ ○ Compiling middleware ...
+ ✓ Compiled middleware in 1395ms
+ ✓ Ready in 4.9s
+ ○ Compiling /admin/radar/[slug] ...
+ ✓ Compiled /admin/radar/[slug] in 25.3s
+ GET /admin/radar/bobo-deputado-ba 200 in 28712ms
+ ○ Compiling /api/radar/verbas/[slug] ...
+ ✓ Compiled /api/radar/verbas/[slug] in 1969ms
+Error: Route "/api/radar/verbas/[slug]" used `params.slug`. `params` should be awaited before using its properties. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at GET (src/app/api/radar/verbas/[slug]/route.ts:83:12)
+  81 |     { params }: { params: { slug: string } }
+  82 | ) {
+> 83 |     const { slug } = params;
+     |            ^
+  84 |     const { searchParams } = new URL(request.url);
+  85 |
+  86 |     // Query params opcionais
+ GET /api/radar/verbas/bobo-deputado-ba?modo=kpis 200 in 4699ms
+Error: Route "/api/radar/verbas/[slug]" used `params.slug`. `params` should be awaited before using its properties. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at GET (src/app/api/radar/verbas/[slug]/route.ts:83:12)
+  81 |     { params }: { params: { slug: string } }
+  82 | ) {
+> 83 |     const { slug } = params;
+     |            ^
+  84 |     const { searchParams } = new URL(request.url);
+  85 |
+  86 |     // Query params opcionais
+ GET /api/radar/verbas/bobo-deputado-ba?modo=kpis 200 in 465ms
+ ○ Compiling /_not-found/page ...
+ ✓ Compiled /_not-found/page in 3.5s
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 3710ms
+Error: Route "/api/radar/verbas/[slug]" used `params.slug`. `params` should be awaited before using its properties. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at GET (src/app/api/radar/verbas/[slug]/route.ts:83:12)
+  81 |     { params }: { params: { slug: string } }
+  82 | ) {
+> 83 |     const { slug } = params;
+     |            ^
+  84 |     const { searchParams } = new URL(request.url);
+  85 |
+  86 |     // Query params opcionais
+ GET /api/radar/verbas/bobo-deputado-ba?page=0&pageSize=25 200 in 393ms
+Error: Route "/api/radar/verbas/[slug]" used `params.slug`. `params` should be awaited before using its properties. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at GET (src/app/api/radar/verbas/[slug]/route.ts:83:12)
+  81 |     { params }: { params: { slug: string } }
+  82 | ) {
+> 83 |     const { slug } = params;
+     |            ^
+  84 |     const { searchParams } = new URL(request.url);
+  85 |
+  86 |     // Query params opcionais
+ GET /api/radar/verbas/bobo-deputado-ba?page=0&pageSize=25 200 in 297ms
+Error: Route "/api/radar/verbas/[slug]" used `params.slug`. `params` should be awaited before using its properties. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at GET (src/app/api/radar/verbas/[slug]/route.ts:83:12)
+  81 |     { params }: { params: { slug: string } }
+  82 | ) {
+> 83 |     const { slug } = params;
+     |            ^
+  84 |     const { searchParams } = new URL(request.url);
+  85 |
+  86 |     // Query params opcionais
+ GET /api/radar/verbas/bobo-deputado-ba?page=1&pageSize=25 200 in 458ms
+Error: Route "/api/radar/verbas/[slug]" used `params.slug`. `params` should be awaited before using its properties. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at GET (src/app/api/radar/verbas/[slug]/route.ts:83:12)
+  81 |     { params }: { params: { slug: string } }
+  82 | ) {
+> 83 |     const { slug } = params;
+     |            ^
+  84 |     const { searchParams } = new URL(request.url);
+  85 |
+  86 |     // Query params opcionais
+ GET /api/radar/verbas/bobo-deputado-ba?modo=kpis 200 in 942ms
+Error: Route "/api/radar/verbas/[slug]" used `params.slug`. `params` should be awaited before using its properties. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at GET (src/app/api/radar/verbas/[slug]/route.ts:83:12)
+  81 |     { params }: { params: { slug: string } }
+  82 | ) {
+> 83 |     const { slug } = params;
+     |            ^
+  84 |     const { searchParams } = new URL(request.url);
+  85 |
+  86 |     // Query params opcionais
+ GET /api/radar/verbas/bobo-deputado-ba?modo=kpis 200 in 441ms
+Error: Route "/api/radar/verbas/[slug]" used `params.slug`. `params` should be awaited before using its properties. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at GET (src/app/api/radar/verbas/[slug]/route.ts:83:12)
+  81 |     { params }: { params: { slug: string } }
+  82 | ) {
+> 83 |     const { slug } = params;
+     |            ^
+  84 |     const { searchParams } = new URL(request.url);
+  85 |
+  86 |     // Query params opcionais
+ GET /api/radar/verbas/bobo-deputado-ba?modo=kpis 200 in 398ms
+Error: Route "/api/radar/verbas/[slug]" used `params.slug`. `params` should be awaited before using its properties. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at GET (src/app/api/radar/verbas/[slug]/route.ts:83:12)
+  81 |     { params }: { params: { slug: string } }
+  82 | ) {
+> 83 |     const { slug } = params;
+     |            ^
+  84 |     const { searchParams } = new URL(request.url);
+  85 |
+  86 |     // Query params opcionais
+ GET /api/radar/verbas/bobo-deputado-ba?modo=kpis 200 in 239ms
+Error: Route "/api/radar/verbas/[slug]" used `params.slug`. `params` should be awaited before using its properties. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at GET (src/app/api/radar/verbas/[slug]/route.ts:83:12)
+  81 |     { params }: { params: { slug: string } }
+  82 | ) {
+> 83 |     const { slug } = params;
+     |            ^
+  84 |     const { searchParams } = new URL(request.url);
+  85 |
+  86 |     // Query params opcionais
+ GET /api/radar/verbas/bobo-deputado-ba?page=0&pageSize=25 200 in 426ms
+Error: Route "/api/radar/verbas/[slug]" used `params.slug`. `params` should be awaited before using its properties. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at GET (src/app/api/radar/verbas/[slug]/route.ts:83:12)
+  81 |     { params }: { params: { slug: string } }
+  82 | ) {
+> 83 |     const { slug } = params;
+     |            ^
+  84 |     const { searchParams } = new URL(request.url);
+  85 |
+  86 |     // Query params opcionais
+ GET /api/radar/verbas/bobo-deputado-ba?page=0&pageSize=25 200 in 347ms
+Error: Route "/api/radar/verbas/[slug]" used `params.slug`. `params` should be awaited before using its properties. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at GET (src/app/api/radar/verbas/[slug]/route.ts:83:12)
+  81 |     { params }: { params: { slug: string } }
+  82 | ) {
+> 83 |     const { slug } = params;
+     |            ^
+  84 |     const { searchParams } = new URL(request.url);
+  85 |
+  86 |     // Query params opcionais
+ GET /api/radar/verbas/bobo-deputado-ba?modo=kpis 200 in 409ms
+Error: Route "/api/radar/verbas/[slug]" used `params.slug`. `params` should be awaited before using its properties. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at GET (src/app/api/radar/verbas/[slug]/route.ts:83:12)
+  81 |     { params }: { params: { slug: string } }
+  82 | ) {
+> 83 |     const { slug } = params;
+     |            ^
+  84 |     const { searchParams } = new URL(request.url);
+  85 |
+  86 |     // Query params opcionais
+ GET /api/radar/verbas/bobo-deputado-ba?modo=kpis 200 in 279ms
+ ✓ Compiled in 818ms
+Error: Route "/api/radar/verbas/[slug]" used `params.slug`. `params` should be awaited before using its properties. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at GET (src/app/api/radar/verbas/[slug]/route.ts:83:12)
+  81 |     { params }: { params: { slug: string } }
+  82 | ) {
+> 83 |     const { slug } = params;
+     |            ^
+  84 |     const { searchParams } = new URL(request.url);
+  85 |
+  86 |     // Query params opcionais
+ GET /api/radar/verbas/bobo-deputado-ba?modo=kpis 200 in 1266ms
+ ✓ Compiled in 1286ms
+ ✓ Compiled in 1414ms
+Error: Route "/api/radar/verbas/[slug]" used `params.slug`. `params` should be awaited before using its properties. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at GET (src/app/api/radar/verbas/[slug]/route.ts:83:12)
+  81 |     { params }: { params: { slug: string } }
+  82 | ) {
+> 83 |     const { slug } = params;
+     |            ^
+  84 |     const { searchParams } = new URL(request.url);
+  85 |
+  86 |     // Query params opcionais
+ GET /api/radar/verbas/bobo-deputado-ba?modo=kpis 200 in 389ms
+Error: Route "/api/radar/verbas/[slug]" used `params.slug`. `params` should be awaited before using its properties. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at GET (src/app/api/radar/verbas/[slug]/route.ts:83:12)
+  81 |     { params }: { params: { slug: string } }
+  82 | ) {
+> 83 |     const { slug } = params;
+     |            ^
+  84 |     const { searchParams } = new URL(request.url);
+  85 |
+  86 |     // Query params opcionais
+ GET /api/radar/verbas/bobo-deputado-ba?modo=kpis 200 in 312ms
+ ✓ Compiled in 1434ms
+ ✓ Compiled in 934ms
+ ✓ Compiled /admin/radar/[slug] in 313ms
+ GET /admin/radar/bobo-deputado-ba 200 in 1113ms
+ GET /admin/radar/bobo-deputado-ba 200 in 1893ms
+Error: Route "/api/radar/verbas/[slug]" used `params.slug`. `params` should be awaited before using its properties. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at GET (src/app/api/radar/verbas/[slug]/route.ts:83:12)
+  81 |     { params }: { params: { slug: string } }
+  82 | ) {
+> 83 |     const { slug } = params;
+     |            ^
+  84 |     const { searchParams } = new URL(request.url);
+  85 |
+  86 |     // Query params opcionais
+ GET /api/radar/verbas/bobo-deputado-ba?page=0&pageSize=25 200 in 685ms
+Error: Route "/api/radar/verbas/[slug]" used `params.slug`. `params` should be awaited before using its properties. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at GET (src/app/api/radar/verbas/[slug]/route.ts:83:12)
+  81 |     { params }: { params: { slug: string } }
+  82 | ) {
+> 83 |     const { slug } = params;
+     |            ^
+  84 |     const { searchParams } = new URL(request.url);
+  85 |
+  86 |     // Query params opcionais
+ GET /api/radar/verbas/bobo-deputado-ba?page=0&pageSize=25 200 in 720ms
+Error: Route "/api/radar/verbas/[slug]" used `params.slug`. `params` should be awaited before using its properties. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at GET (src/app/api/radar/verbas/[slug]/route.ts:83:12)
+  81 |     { params }: { params: { slug: string } }
+  82 | ) {
+> 83 |     const { slug } = params;
+     |            ^
+  84 |     const { searchParams } = new URL(request.url);
+  85 |
+  86 |     // Query params opcionais
+ GET /api/radar/verbas/bobo-deputado-ba?modo=kpis 200 in 641ms
+Error: Route "/api/radar/verbas/[slug]" used `params.slug`. `params` should be awaited before using its properties. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at GET (src/app/api/radar/verbas/[slug]/route.ts:83:12)
+  81 |     { params }: { params: { slug: string } }
+  82 | ) {
+> 83 |     const { slug } = params;
+     |            ^
+  84 |     const { searchParams } = new URL(request.url);
+  85 |
+  86 |     // Query params opcionais
+ GET /api/radar/verbas/bobo-deputado-ba?page=0&pageSize=25 200 in 1148ms
+Error: Route "/api/radar/verbas/[slug]" used `params.slug`. `params` should be awaited before using its properties. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at GET (src/app/api/radar/verbas/[slug]/route.ts:83:12)
+  81 |     { params }: { params: { slug: string } }
+  82 | ) {
+> 83 |     const { slug } = params;
+     |            ^
+  84 |     const { searchParams } = new URL(request.url);
+  85 |
+  86 |     // Query params opcionais
+ GET /api/radar/verbas/bobo-deputado-ba?page=0&pageSize=25 200 in 714ms
+Error: Route "/api/radar/verbas/[slug]" used `params.slug`. `params` should be awaited before using its properties. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at GET (src/app/api/radar/verbas/[slug]/route.ts:83:12)
+  81 |     { params }: { params: { slug: string } }
+  82 | ) {
+> 83 |     const { slug } = params;
+     |            ^
+  84 |     const { searchParams } = new URL(request.url);
+  85 |
+  86 |     // Query params opcionais
+ GET /api/radar/verbas/bobo-deputado-ba?page=1&pageSize=25 200 in 429ms
+Error: Route "/api/radar/verbas/[slug]" used `params.slug`. `params` should be awaited before using its properties. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at GET (src/app/api/radar/verbas/[slug]/route.ts:83:12)
+  81 |     { params }: { params: { slug: string } }
+  82 | ) {
+> 83 |     const { slug } = params;
+     |            ^
+  84 |     const { searchParams } = new URL(request.url);
+  85 |
+  86 |     // Query params opcionais
+ GET /api/radar/verbas/bobo-deputado-ba?page=0&pageSize=25 200 in 773ms
+Error: Route "/api/radar/verbas/[slug]" used `params.slug`. `params` should be awaited before using its properties. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at GET (src/app/api/radar/verbas/[slug]/route.ts:83:12)
+  81 |     { params }: { params: { slug: string } }
+  82 | ) {
+> 83 |     const { slug } = params;
+     |            ^
+  84 |     const { searchParams } = new URL(request.url);
+  85 |
+  86 |     // Query params opcionais
+ GET /api/radar/verbas/bobo-deputado-ba?modo=kpis 200 in 812ms
+Error: Route "/api/radar/verbas/[slug]" used `params.slug`. `params` should be awaited before using its properties. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at GET (src/app/api/radar/verbas/[slug]/route.ts:83:12)
+  81 |     { params }: { params: { slug: string } }
+  82 | ) {
+> 83 |     const { slug } = params;
+     |            ^
+  84 |     const { searchParams } = new URL(request.url);
+  85 |
+  86 |     // Query params opcionais
+ GET /api/radar/verbas/bobo-deputado-ba?modo=kpis 200 in 256ms
+Error: Route "/api/radar/verbas/[slug]" used `params.slug`. `params` should be awaited before using its properties. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at GET (src/app/api/radar/verbas/[slug]/route.ts:83:12)
+  81 |     { params }: { params: { slug: string } }
+  82 | ) {
+> 83 |     const { slug } = params;
+     |            ^
+  84 |     const { searchParams } = new URL(request.url);
+  85 |
+  86 |     // Query params opcionais
+ GET /api/radar/verbas/bobo-deputado-ba?page=0&pageSize=25 200 in 280ms
+Error: Route "/api/radar/verbas/[slug]" used `params.slug`. `params` should be awaited before using its properties. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at GET (src/app/api/radar/verbas/[slug]/route.ts:83:12)
+  81 |     { params }: { params: { slug: string } }
+  82 | ) {
+> 83 |     const { slug } = params;
+     |            ^
+  84 |     const { searchParams } = new URL(request.url);
+  85 |
+  86 |     // Query params opcionais
+ GET /api/radar/verbas/bobo-deputado-ba?page=0&pageSize=25 200 in 276ms
+ ○ Compiling / ...
+ ✓ Compiled / in 4.2s
+ GET / 307 in 4580ms
+ ○ Compiling /login ...
+ ✓ Compiled /login in 3s
+ GET /login 200 in 3301ms

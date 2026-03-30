@@ -439,8 +439,8 @@ export default function RastreabilidadeTab({ politicianId }: RastreabilidadeTabP
                     }))}
             </div>
 
-            {/* Detalhe da Despesa (Sheet) */}═══════════════════════════════════════════════════════════════════
-            SHEET: Detalhe do Gasto Municipal
+            {/* ═══════════════════════════════════════════════════════════════════
+                SHEET: Detalhe do Gasto Municipal
             ═══════════════════════════════════════════════════════════════════ */}
             <Sheet open={!!selectedExpense} onOpenChange={(open) => !open && setSelectedExpense(null)}>
                 <SheetContent className="sm:max-w-[480px] bg-white p-0 border-l border-slate-200 shadow-2xl overflow-y-auto">

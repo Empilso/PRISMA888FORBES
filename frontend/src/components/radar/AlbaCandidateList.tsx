@@ -14,16 +14,16 @@ import {
 import Link from "next/link";
 
 interface DeputadoAlba {
-    parlamentar_id: number;
-    nome: string;
-    partido: string;
+    prisma_id: string;
+    id_alba: number | null;
+    nome_urna: string;
+    sigla_partido: string;
     foto_url: string;
-    municipio_base: string;
-    slug: string; // Novo campo gerado pela API
-    status_extracao: string;
-    proposicoes_count: number;
-    frequencia_count: number;
-    comissoes_count: number;
+    uf: string;
+    slug: string;
+    status: string;
+    mandatos_count: number;
+    qualidade_score: number;
 }
 
 export function AlbaCandidateList() {
@@ -39,7 +39,7 @@ export function AlbaCandidateList() {
                 return res.json();
             })
             .then((data) => {
-                setDeputados(Array.isArray(data) ? data : []);
+                setDeputados(data.parlamentares || []);
                 setLoading(false);
             })
             .catch((err) => {
@@ -52,9 +52,9 @@ export function AlbaCandidateList() {
     // Filtro seguro contra null/undefined e garantindo que deputados seja array
     const safeDeputados = Array.isArray(deputados) ? deputados : [];
     const filtered = safeDeputados.filter(d =>
-        (d.nome || "").toLowerCase().includes(search.toLowerCase()) ||
-        (d.partido || "").toLowerCase().includes(search.toLowerCase()) ||
-        (d.municipio_base || "").toLowerCase().includes(search.toLowerCase())
+        (d.nome_urna || "").toLowerCase().includes(search.toLowerCase()) ||
+        (d.sigla_partido || "").toLowerCase().includes(search.toLowerCase()) ||
+        (d.uf || "").toLowerCase().includes(search.toLowerCase())
     );
 
     if (loading) {
@@ -87,7 +87,7 @@ export function AlbaCandidateList() {
             <div className="space-y-3">
                 {filtered.map((dep) => (
                     <Card
-                        key={dep.parlamentar_id}
+                        key={dep.prisma_id}
                         className="border-slate-200 hover:shadow-md hover:border-blue-200 transition-all group overflow-hidden"
                     >
                         <CardContent className="p-0">
@@ -96,10 +96,10 @@ export function AlbaCandidateList() {
                                 <div className="w-12 h-12 rounded-xl overflow-hidden border border-slate-200 flex-shrink-0 shadow-sm bg-slate-50">
                                     <img
                                         src={dep.foto_url || "/api/placeholder/48/48"}
-                                        alt={dep.nome}
+                                        alt={dep.nome_urna}
                                         className="w-full h-full object-cover"
                                         onError={(e) => {
-                                            (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${encodeURIComponent(dep.nome)}&background=random`;
+                                            (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${encodeURIComponent(dep.nome_urna)}&background=random`;
                                         }}
                                     />
                                 </div>
@@ -108,17 +108,17 @@ export function AlbaCandidateList() {
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-2 flex-wrap">
                                         <span className="font-semibold text-slate-900 truncate uppercase">
-                                            {dep.nome}
+                                            {dep.nome_urna}
                                         </span>
                                         <Badge variant="outline" className="text-xs bg-purple-50 text-purple-700 border-purple-100">
                                             Dep. Estadual
                                         </Badge>
                                         <Badge variant="secondary" className="text-xs bg-slate-100 text-slate-600">
-                                            {dep.partido}
+                                            {dep.sigla_partido}
                                         </Badge>
                                     </div>
                                     <p className="text-[10px] text-slate-400 uppercase mt-0.5">
-                                        Base: {dep.municipio_base || "Geral / BA"}
+                                        Base: {dep.uf || "BA"}
                                     </p>
                                 </div>
 
@@ -126,22 +126,22 @@ export function AlbaCandidateList() {
                                 <div className="hidden lg:flex items-center gap-6 mr-4 text-center">
                                     <div>
                                         <p className="text-[8px] text-slate-400 uppercase font-bold">Produção</p>
-                                        <p className="text-xs font-black text-slate-700">{dep.proposicoes_count || 0}</p>
+                                        <p className="text-xs font-black text-slate-700">0</p>
                                     </div>
                                     <div>
-                                        <p className="text-[8px] text-slate-400 uppercase font-bold">Presenças</p>
-                                        <p className="text-xs font-black text-slate-700">{dep.frequencia_count || 0}</p>
+                                        <p className="text-[8px] text-slate-400 uppercase font-bold">Qualidade</p>
+                                        <p className="text-xs font-black text-slate-700">{dep.qualidade_score || 0}%</p>
                                     </div>
                                 </div>
 
                                 {/* Ações */}
                                 <div className="flex items-center gap-2">
-                                    {dep.status_extracao === 'completo' && (
-                                        <Badge className="bg-green-500 text-white border-0 text-[8px] font-black h-5 mr-2">
-                                            LIVRE
+                                    {dep.status === 'aprovado' && (
+                                        <Badge className="bg-emerald-500 text-white border-0 text-[8px] font-black h-5 mr-2">
+                                            VERIFICADO
                                         </Badge>
                                     )}
-                                    <Link href={`/admin/radar/${dep.slug}`}>
+                                    <Link href={`/admin/radar/${dep.prisma_id}`}>
                                         <Button
                                             size="sm"
                                             className="bg-blue-600 hover:bg-blue-700 text-white gap-2 shadow-sm"
@@ -155,9 +155,9 @@ export function AlbaCandidateList() {
                             </div>
 
                             {/* Detalhe visual de completude */}
-                            {dep.status_extracao === 'completo' && (
-                                <div className="h-0.5 w-full bg-green-500/20">
-                                    <div className="h-full bg-green-500 w-full" />
+                            {dep.status === 'aprovado' && (
+                                <div className="h-0.5 w-full bg-emerald-500/20">
+                                    <div className="h-full bg-emerald-500 w-full" />
                                 </div>
                             )}
                         </CardContent>

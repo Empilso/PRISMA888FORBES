@@ -1,304 +1,654 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { createDadosClient } from "@/lib/supabase/dados";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import React, { useState, useMemo, useCallback } from "react";
 import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow
-} from "@/components/ui/table";
-import {
-    BarChart,
-    Bar,
-    XAxis,
-    YAxis,
-    CartesianGrid,
-    Tooltip as RechartsTooltip,
-    ResponsiveContainer,
-    Cell
+    PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
+    CartesianGrid, Area, AreaChart, XAxis, YAxis,
 } from "recharts";
 import {
-    DollarSign,
-    FileText,
-    Calendar,
-    AlertCircle,
-    ExternalLink,
-    ChevronLeft,
-    ChevronRight,
-    TrendingDown
+    ExternalLink, FileText, X, ChevronLeft, ChevronRight,
+    AlertTriangle, Building2, Search, Loader2, RefreshCw,
 } from "lucide-react";
-import { formatCurrency, formatCompactCurrency } from "@/lib/fiscal-analytics";
+import { Badge } from "@/components/ui/badge";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 
-interface VerbasIndenizatoriasTabProps {
+// ─── Tipos ─────────────────────────────────────────────────────────────────────
+interface VerbasTabProps {
     politicianName: string;
-    parlamentar_id?: number;
+    slug: string; // ex: "bobo-deputado-ba"
 }
 
-const COLORS = ["#10B981", "#3B82F6", "#F59E0B", "#8B5CF6", "#EF4444", "#06B6D4", "#F97316"];
+interface VerbaRow {
+    id: string;
+    num_processo: string;
+    competencia: string;
+    ano: number;
+    categoria: string;
+    valor: number;
+    valor_glosado: number;
+    fornecedor: string;
+    cnpj: string;
+    tipo_documento: string;
+    nf: string;
+    hasPdf: boolean;
+    link_pdf: string;
+    link_detalhe: string;
+    score: number;
+    risco: string;
+    motivos_risco: string[];
+    comentario_aguia: string;
+}
 
-export default function VerbasIndenizatoriasTab({ politicianName, parlamentar_id }: VerbasIndenizatoriasTabProps) {
-    const [page, setPage] = useState(1);
-    const pageSize = 20;
+interface ApiResponse {
+    deputado: string;
+    totalGasto: number;
+    totalGlosado: number;
+    totalNotas: number;
+    totalFornecedores: number;
+    altoRiscoPct: number;
+    categoriaMaior: string;
+    categorias: { name: string; value: number }[];
+    topFornecedores: { nome: string; cnpj: string; valor: number }[];
+    gastosMensais: { mes: string; valor: number }[];
+    alertasForenses: { tipo: string; count: number; total: number }[];
+    porRisco: Record<string, number>;
+    anos: number[];
+    categoriasDisponiveis: string[];
+    pagina: number;
+    pageSize: number;
+    totalRegistros: number;
+    totalPaginas: number;
+    registros: VerbaRow[];
+    error?: string;
+}
 
-    const { data: allData, isLoading } = useQuery({
-        queryKey: ["verbasIndenizatorias", politicianName, parlamentar_id],
-        queryFn: async () => {
-            const supabase = createDadosClient();
+// ─── Paleta de categorias ──────────────────────────────────────────────────────
+const CAT_COLORS: Record<string, string> = {
+    "Divulgação da  atividade parlamentar": "#F97316",
+    "Divulgação da atividade parlamentar": "#F97316",
+    "Consultorias, assessorias, pesquisas  e trabalhos técnicos": "#FDBA74",
+    "Consultorias, assessorias, pesquisas e trabalhos técnicos": "#FDBA74",
+    "Aluguel  de imóveis para escritório; despesas concernentes a eles": "#FED7AA",
+    "Aluguel de imóveis para escritório; despesas concernentes a eles": "#FED7AA",
+    "Aquisição de material de expediente": "#FFEDD5",
+    "Locomoção, hospedagem": "#FEF3C7",
+};
+function getCatColor(name: string) {
+    return CAT_COLORS[name] ?? "#e5e7eb";
+}
+function catShort(name: string) {
+    if (name.toLowerCase().startsWith("divulgaç")) return "Divulgação";
+    if (name.toLowerCase().startsWith("consultor")) return "Consultorias";
+    if (name.toLowerCase().startsWith("aluguel")) return "Aluguel";
+    if (name.toLowerCase().startsWith("aquisiç")) return "Material";
+    if (name.toLowerCase().startsWith("locomoc")) return "Locomoção";
+    if (name.toLowerCase().startsWith("aquisiç") || name.toLowerCase().startsWith("locação de software")) return "TI/Software";
+    return name.slice(0, 22);
+}
 
-            let query = supabase.from("alba_verbas").select("*");
+// ─── Helpers ───────────────────────────────────────────────────────────────────
+function fmt(v: number) {
+    if (v >= 1_000_000) return `R$ ${(v / 1_000_000).toFixed(1)}M`;
+    if (v >= 1_000) return `R$ ${(v / 1_000).toFixed(0)}k`;
+    return `R$ ${v.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
+}
 
-            // A tabela alba_verbas não possui parlamentar_id, buscamos pelo nome do deputado
-            query = query.ilike("deputado", `%${politicianName}%`);
+function riscoBadgeClass(r: string) {
+    if (r === "MÁXIMO") return "bg-red-100 text-red-700 border-red-200";
+    if (r === "ALTO") return "bg-orange-100 text-orange-700 border-orange-200";
+    if (r === "MÉDIO") return "bg-yellow-100 text-yellow-700 border-yellow-200";
+    return "bg-slate-100 text-slate-600 border-slate-200";
+}
 
-            const { data, error } = await query.order("valor", { ascending: false });
+function riscoRowClass(r: string) {
+    if (r === "MÁXIMO") return "bg-red-50/40";
+    if (r === "ALTO") return "bg-orange-50/30";
+    return "";
+}
 
-            if (error) throw error;
-            return data || [];
-        },
-        staleTime: 1000 * 60 * 15,
-    });
+function riscoColor(r: string) {
+    if (r === "MÁXIMO") return "#EF4444";
+    if (r === "ALTO") return "#F97316";
+    if (r === "MÉDIO") return "#EAB308";
+    return "#6B7280";
+}
 
-    const analytics = useMemo(() => {
-        if (!allData || allData.length === 0) return null;
+// ─── NFGenérica detector ───────────────────────────────────────────────────────
+function isNFGenerica(nf: string) {
+    const clean = nf.replace(/[^0-9]/g, "");
+    return clean.length <= 2 || /^0+$/.test(clean) || clean === "1";
+}
 
-        const totalGasto = allData.reduce((sum, item) => sum + (item.valor || 0), 0);
-        const totalGlosado = allData.reduce((sum, item) => sum + (item.valor_glosado || 0), 0);
-        const totalNotas = allData.length;
+// ─── Drawer de detalhe ────────────────────────────────────────────────────────
+function DetalheDrawer({ row, open, onClose }: { row: VerbaRow | null; open: boolean; onClose: () => void }) {
+    if (!row) return null;
+    return (
+        <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
+            <SheetContent className="sm:max-w-[500px] bg-white p-0 overflow-y-auto border-l border-slate-100 shadow-2xl" side="right">
+                {/* barra de cor por risco */}
+                <div className="h-1.5 w-full" style={{ background: riscoColor(row.risco) }} />
 
-        const anosSet = new Set(allData.map(item => item.ano).filter(Boolean));
-        const anosCobertos = Array.from(anosSet).sort().join(", ");
+                <div className="p-6 space-y-6">
+                    {/* Header */}
+                    <SheetHeader className="space-y-2">
+                        <div className="flex items-center gap-2 text-[11px] text-slate-400 font-semibold uppercase tracking-wider">
+                            🏛️ <span>Verbas de Gabinete — ALBA</span>
+                        </div>
+                        <SheetTitle className="text-xl font-black text-slate-900 leading-tight">
+                            NF {row.nf} — {(row.fornecedor || "Fornecedor").split(" ").slice(0, 3).join(" ")}
+                        </SheetTitle>
+                        <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg w-max`}
+                            style={{ background: `${riscoColor(row.risco)}18`, border: `1px solid ${riscoColor(row.risco)}30` }}>
+                            <span className="text-2xl font-black" style={{ color: riscoColor(row.risco) }}>
+                                {row.score}/10
+                            </span>
+                            <span className="text-[12px] font-bold text-slate-600">
+                                {row.risco === "MÁXIMO" ? "🔴 MÁXIMO" : row.risco === "ALTO" ? "🟠 ALTO" : "🟡 MÉDIO"}
+                            </span>
+                        </div>
+                    </SheetHeader>
 
-        // Agrupamento por Categoria para o Gráfico
-        const catMap: Record<string, number> = {};
-        allData.forEach(item => {
-            const cat = item.categoria || "Outros";
-            catMap[cat] = (catMap[cat] || 0) + (item.valor || 0);
-        });
+                    {/* ① Dados do Registro */}
+                    <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">① Dados do Registro</p>
+                        <div className="grid grid-cols-2 gap-2.5">
+                            {[
+                                ["Competência", row.competencia],
+                                ["Categoria", catShort(row.categoria)],
+                                ["Valor", fmt(row.valor)],
+                                ...(row.valor_glosado > 0 ? [["Valor Glosado", fmt(row.valor_glosado)]] : []),
+                                ["Nº NF/Recibo", row.nf],
+                                ["Nº Processo", row.num_processo],
+                                ["Tipo Doc.", row.tipo_documento],
+                            ].map(([k, v]) => (
+                                <div key={k} className="bg-slate-50 rounded-xl p-3 border border-slate-100">
+                                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">{k}</p>
+                                    <p className="text-[13px] font-semibold text-slate-900 break-words">{v}</p>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
 
-        const chartData = Object.entries(catMap)
-            .map(([name, value]) => ({ name, value }))
-            .sort((a, b) => b.value - a.value);
+                    {/* ② Fornecedor */}
+                    <div className="bg-orange-50 rounded-2xl p-4 border border-orange-100">
+                        <div className="flex items-center gap-2 mb-3">
+                            <Building2 className="w-4 h-4 text-orange-500" />
+                            <p className="text-[10px] font-bold text-orange-700 uppercase tracking-widest">② Fornecedor</p>
+                        </div>
+                        <p className="font-bold text-slate-900 text-[14px] mb-1">{row.fornecedor || "Nome não informado"}</p>
+                        <p className="text-[12px] text-slate-500 font-mono mb-3">{row.cnpj}</p>
+                        <a
+                            href={`https://brasil.io/dataset/socios-brasil/socios/?cnpj=${row.cnpj.replace(/\D/g, "")}`}
+                            target="_blank" rel="noopener noreferrer"
+                            className="text-[12px] font-bold text-orange-600 hover:text-orange-800 flex items-center gap-1"
+                        >
+                            Buscar no Brasil.IO <ExternalLink className="w-3 h-3" />
+                        </a>
+                    </div>
 
-        return {
-            totalGasto,
-            totalGlosado,
-            totalNotas,
-            anosCobertos,
-            chartData
-        };
-    }, [allData]);
+                    {/* ③ Análise Águia 🦅 — dados reais */}
+                    <div className="bg-yellow-50 rounded-2xl p-4 border border-yellow-200">
+                        <div className="flex items-center gap-2 mb-3">
+                            <span className="text-base">🦅</span>
+                            <p className="text-[10px] font-bold text-yellow-800 uppercase tracking-widest">③ Análise Águia</p>
+                        </div>
+                        <p className="font-bold text-slate-900 text-[13px] mb-3">{row.comentario_aguia}</p>
+                        <ul className="space-y-1.5">
+                            {row.motivos_risco.map((motivo) => (
+                                <li key={motivo} className="flex items-center gap-2 text-[12px] text-slate-700">
+                                    <span className="shrink-0 w-1.5 h-1.5 rounded-full" style={{ background: riscoColor(row.risco) }} />
+                                    {motivo}
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
 
-    const paginatedData = useMemo(() => {
-        if (!allData) return [];
-        const start = (page - 1) * pageSize;
-        return allData.slice(start, start + pageSize);
-    }, [allData, page]);
+                    {/* ④ Ações */}
+                    <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100">
+                        {row.hasPdf && (
+                            <a href={row.link_pdf} target="_blank" rel="noopener noreferrer"
+                                className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-slate-900 text-white text-[12px] font-bold hover:bg-slate-800 transition-colors">
+                                <FileText className="w-3.5 h-3.5" /> Ver PDF NF
+                            </a>
+                        )}
+                        <a href={row.link_detalhe} target="_blank" rel="noopener noreferrer"
+                            className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-slate-200 text-slate-700 text-[12px] font-bold hover:bg-slate-50 transition-colors">
+                            <ExternalLink className="w-3.5 h-3.5" /> Portal ALBA
+                        </a>
+                        <button className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-slate-200 text-slate-700 text-[12px] font-bold hover:bg-slate-50 transition-colors">
+                            <Search className="w-3.5 h-3.5" /> Ver Fornecedor
+                        </button>
+                        <button className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-slate-200 text-slate-700 text-[12px] font-bold hover:bg-slate-50 transition-colors">
+                            📁 Dossiê
+                        </button>
+                    </div>
+                </div>
+            </SheetContent>
+        </Sheet>
+    );
+}
 
-    if (isLoading) {
-        return <div className="p-20 text-center text-slate-400 animate-pulse">Consultando DADOS-PRISMA (ALBA)...</div>;
+// ─── Resumo ────────────────────────────────────────────────────────────────────
+function ResumoContent({ data }: { data: ApiResponse }) {
+    const CTooltip = ({ active, payload }: any) => {
+        if (!active || !payload?.length) return null;
+        return (
+            <div className="bg-slate-900 text-white rounded-xl p-3 text-[12px] shadow-xl">
+                <p className="font-bold">{catShort(payload[0]?.name || "")}</p>
+                <p className="text-orange-400 font-black">{fmt(payload[0]?.value)}</p>
+            </div>
+        );
+    };
+    const BTooltip = ({ active, payload, label }: any) => {
+        if (!active || !payload?.length) return null;
+        return (
+            <div className="bg-slate-900 text-white rounded-xl p-3 text-[12px] shadow-xl">
+                <p className="font-semibold text-slate-300 mb-1">{label}</p>
+                <p className="font-black text-orange-400">{fmt(payload[0]?.value)}</p>
+            </div>
+        );
+    };
+
+    const categoriasComCor = data.categorias.map(c => ({
+        ...c,
+        color: getCatColor(c.name),
+        nameShort: catShort(c.name),
+    }));
+
+    const motivoEmoji: Record<string, string> = {
+        "Link ausente/Lista errada": "🔗",
+        "Concentração de Fornecedor": "🔴",
+        "CNPJ Matriz/Nova + Alto valor": "🏢",
+        "Valor alto divulgação (> R$2500)": "💰",
+        "NF genérica (ausente ou len < 3)": "⚠️",
+    };
+
+    return (
+        <div className="space-y-8">
+            {/* KPIs */}
+            <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 divide-x divide-y sm:divide-y-0 divide-slate-100">
+                    {[
+                        { label: "Total Gasto", value: fmt(data.totalGasto), icon: "💰", color: "text-orange-600" },
+                        { label: "Notas Fiscais", value: data.totalNotas.toLocaleString("pt-BR"), icon: "📄", color: "text-slate-900" },
+                        { label: "Fornecedores", value: data.totalFornecedores.toString(), icon: "🏢", color: "text-slate-900" },
+                        { label: "Alto Risco", value: `${data.altoRiscoPct}% 🔴`, icon: "⚠️", color: "text-red-600" },
+                        { label: "Categoria Maior", value: catShort(data.categoriaMaior), icon: "📊", color: "text-slate-900" },
+                    ].map(({ label, value, icon, color }) => (
+                        <div key={label} className="p-5 flex flex-col gap-1.5">
+                            <div className="flex items-center gap-2">
+                                <span className="text-lg">{icon}</span>
+                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{label}</span>
+                            </div>
+                            <p className={`text-[22px] font-black tracking-tight leading-none ${color}`}>{value}</p>
+                        </div>
+                    ))}
+                </div>
+            </div>
+
+            {/* Donut + Top Fornecedores */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-5">
+                    <p className="text-[13px] font-bold text-slate-900 mb-4">Categorias de Gasto</p>
+                    <div className="flex items-center gap-4">
+                        <ResponsiveContainer width={160} height={160}>
+                            <PieChart>
+                                <Pie data={categoriasComCor} dataKey="value" cx="50%" cy="50%" innerRadius={48} outerRadius={72} strokeWidth={2} stroke="#fff">
+                                    {categoriasComCor.map((c, i) => <Cell key={i} fill={c.color} />)}
+                                </Pie>
+                                <Tooltip content={<CTooltip />} />
+                            </PieChart>
+                        </ResponsiveContainer>
+                        <div className="flex-1 space-y-2">
+                            {categoriasComCor.slice(0, 5).map((c) => (
+                                <div key={c.name} className="flex items-center justify-between gap-2">
+                                    <div className="flex items-center gap-2 min-w-0">
+                                        <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: c.color }} />
+                                        <span className="text-[11px] text-slate-600 font-medium truncate">{c.nameShort}</span>
+                                    </div>
+                                    <span className="text-[11px] font-bold text-slate-900 whitespace-nowrap">{fmt(c.value)}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+
+                <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-5">
+                    <p className="text-[13px] font-bold text-slate-900 mb-4">Top 10 Fornecedores</p>
+                    <div className="space-y-2">
+                        {data.topFornecedores.map((f, i) => {
+                            const pct = data.topFornecedores[0] ? (f.valor / data.topFornecedores[0].valor) * 100 : 0;
+                            return (
+                                <div key={i} className="flex items-center gap-3">
+                                    <span className="text-[11px] text-slate-400 font-bold w-4">{i + 1}</span>
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-[11px] font-semibold text-slate-700 truncate">{f.nome || f.cnpj}</p>
+                                        <div className="h-1.5 bg-slate-100 rounded-full mt-1 overflow-hidden">
+                                            <div className="h-full rounded-full bg-gradient-to-r from-orange-400 to-orange-600" style={{ width: `${pct}%` }} />
+                                        </div>
+                                    </div>
+                                    <span className="text-[11px] font-bold text-slate-900 whitespace-nowrap">{fmt(f.valor)}</span>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            </div>
+
+            {/* Gastos Mensais */}
+            <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-5">
+                <p className="text-[13px] font-bold text-slate-900 mb-4">Gastos por Competência</p>
+                <ResponsiveContainer width="100%" height={180}>
+                    <AreaChart data={data.gastosMensais} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+                        <defs>
+                            <linearGradient id="verbasGrad" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor="#F97316" stopOpacity={0.15} />
+                                <stop offset="95%" stopColor="#F97316" stopOpacity={0} />
+                            </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
+                        <XAxis dataKey="mes" tick={{ fontSize: 11, fill: "#94A3B8", fontWeight: 600 }} axisLine={false} tickLine={false} />
+                        <YAxis tickFormatter={fmt} tick={{ fontSize: 10, fill: "#94A3B8" }} axisLine={false} tickLine={false} width={58} />
+                        <Tooltip content={<BTooltip />} />
+                        <Area type="monotone" dataKey="valor" stroke="#F97316" strokeWidth={2.5} fill="url(#verbasGrad)" dot={{ r: 3.5, fill: "#F97316", strokeWidth: 0 }} />
+                    </AreaChart>
+                </ResponsiveContainer>
+            </div>
+
+            {/* Alertas Forenses — dados reais dos motivos */}
+            {data.alertasForenses.length > 0 && (
+                <div>
+                    <p className="text-base font-bold text-slate-900 mb-4 flex items-center gap-2">
+                        <span className="text-lg">🦅</span> Padrões detectados pela Análise Águia
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                        {data.alertasForenses.map((a) => (
+                            <div key={a.tipo} className="bg-white border border-slate-100 rounded-2xl shadow-sm p-5 hover:shadow-md transition-all cursor-pointer group">
+                                <div className="flex items-center gap-2 mb-3">
+                                    <span className="text-base">{motivoEmoji[a.tipo] ?? "⚠️"}</span>
+                                    <p className="text-[12px] font-black text-slate-900 leading-tight">{a.tipo}</p>
+                                </div>
+                                <p className="text-4xl font-black text-slate-900 mb-0.5">{a.count}</p>
+                                <p className="text-[12px] text-slate-400 font-medium">ocorrências · {fmt(a.total)} total</p>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
+// ─── Dados Completos ───────────────────────────────────────────────────────────
+function DadosCompletosContent({
+    slug, anos, categoriasDisponiveis,
+}: {
+    slug: string;
+    anos: number[];
+    categoriasDisponiveis: string[];
+}) {
+    const PAGE_SIZE = 25;
+    const [page, setPage] = useState(0);
+    const [filterAno, setFilterAno] = useState("all");
+    const [filterMes, setFilterMes] = useState("all");
+    const [filterCat, setFilterCat] = useState("all");
+    const [filterRisco, setFilterRisco] = useState("all");
+    const [filterFornecedor, setFilterFornecedor] = useState("");
+    const [selectedRow, setSelectedRow] = useState<VerbaRow | null>(null);
+    const [drawerOpen, setDrawerOpen] = useState(false);
+    const [data, setData] = useState<ApiResponse | null>(null);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    const hasFilters = filterAno !== "all" || filterMes !== "all" || filterCat !== "all" || filterRisco !== "all" || filterFornecedor.trim() !== "";
+
+    const fetchPage = useCallback(async (pg: number) => {
+        setLoading(true);
+        setError(null);
+        try {
+            const params = new URLSearchParams({ page: String(pg), pageSize: String(PAGE_SIZE) });
+            if (filterAno !== "all") params.set("ano", filterAno);
+            if (filterMes !== "all") params.set("mes", filterMes);
+            if (filterCat !== "all") params.set("categoria", filterCat);
+            if (filterRisco !== "all") params.set("risco", filterRisco);
+            if (filterFornecedor.trim()) params.set("fornecedor", filterFornecedor);
+
+            const res = await fetch(`/api/radar/verbas/${slug}?${params.toString()}`);
+            const json = await res.json() as ApiResponse;
+            if (json.error) throw new Error(json.error);
+            setData(json);
+        } catch (e: any) {
+            setError(e.message);
+        } finally {
+            setLoading(false);
+        }
+    }, [slug, filterAno, filterMes, filterCat, filterRisco, filterFornecedor]);
+
+    // Carrega na primeira vez
+    React.useEffect(() => { fetchPage(0); setPage(0); }, [slug, filterAno, filterMes, filterCat, filterRisco, filterFornecedor]);
+
+    function openDrawer(row: VerbaRow) { setSelectedRow(row); setDrawerOpen(true); }
+    function clearFilters() {
+        setFilterAno("all"); setFilterMes("all"); setFilterCat("all");
+        setFilterRisco("all"); setFilterFornecedor(""); setPage(0);
     }
 
-    if (!allData || allData.length === 0) {
+    function goPage(pg: number) { setPage(pg); fetchPage(pg); }
+
+    const totalPaginas = data?.totalPaginas ?? 0;
+
+    return (
+        <div>
+            {/* Filtros Sticky */}
+            <div className="sticky top-16 z-10 bg-white/95 backdrop-blur-sm border-b border-slate-100 py-3 mb-4 flex flex-wrap items-center gap-2">
+                <Select value={filterAno} onValueChange={(v) => { setFilterAno(v); }}>
+                    <SelectTrigger className="h-9 w-28 text-[12px] bg-slate-50 border-slate-200"><SelectValue placeholder="Ano ▼" /></SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">Todos os anos</SelectItem>
+                        {anos.map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
+                    </SelectContent>
+                </Select>
+                <Select value={filterMes} onValueChange={(v) => setFilterMes(v)}>
+                    <SelectTrigger className="h-9 w-24 text-[12px] bg-slate-50 border-slate-200"><SelectValue placeholder="Mês ▼" /></SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">Todos</SelectItem>
+                        {["01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12"].map(m => (
+                            <SelectItem key={m} value={m}>{["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"][parseInt(m) - 1]}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+                <Select value={filterCat} onValueChange={(v) => setFilterCat(v)}>
+                    <SelectTrigger className="h-9 w-40 text-[12px] bg-slate-50 border-slate-200"><SelectValue placeholder="Categoria ▼" /></SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">Todas as categorias</SelectItem>
+                        {categoriasDisponiveis.map(c => (
+                            <SelectItem key={c} value={c}>{catShort(c)}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+                <Select value={filterRisco} onValueChange={(v) => setFilterRisco(v)}>
+                    <SelectTrigger className="h-9 w-28 text-[12px] bg-slate-50 border-slate-200"><SelectValue placeholder="🔴 Risco ▼" /></SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">Todos</SelectItem>
+                        {["MÁXIMO", "ALTO", "MÉDIO"].map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                    </SelectContent>
+                </Select>
+                <div className="flex-1 min-w-36">
+                    <Input
+                        placeholder="🔍 Fornecedor / CNPJ..."
+                        value={filterFornecedor}
+                        onChange={(e) => setFilterFornecedor(e.target.value)}
+                        className="h-9 text-[12px] bg-slate-50 border-slate-200"
+                    />
+                </div>
+                {hasFilters && (
+                    <Button variant="ghost" size="sm" onClick={clearFilters} className="h-9 text-slate-400 hover:text-red-500 text-[12px]">
+                        <X className="w-3.5 h-3.5 mr-1" /> Limpar
+                    </Button>
+                )}
+                {loading && <Loader2 className="w-4 h-4 text-slate-400 animate-spin" />}
+            </div>
+
+            {error && (
+                <div className="flex items-center gap-3 p-4 bg-red-50 border border-red-100 rounded-2xl mb-4 text-red-600 text-[13px] font-medium">
+                    <AlertTriangle className="w-4 h-4 shrink-0" />
+                    {error}
+                    <button onClick={() => fetchPage(page)} className="ml-auto flex items-center gap-1 text-[12px] hover:underline">
+                        <RefreshCw className="w-3 h-3" /> Tentar novamente
+                    </button>
+                </div>
+            )}
+
+            {/* Tabela */}
+            <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
+                <div className="overflow-x-auto">
+                    <table className="w-full text-[13px]">
+                        <thead>
+                            <tr className="border-b border-slate-100">
+                                {["Risco", "Competência", "Categoria", "Valor", "Fornecedor", "CNPJ", "Nº NF", "PDF", "···"].map(h => (
+                                    <th key={h} className="px-4 py-3 text-left text-[10px] font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap">{h}</th>
+                                ))}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {loading && !data?.registros?.length ? (
+                                <tr>
+                                    <td colSpan={9} className="py-16 text-center text-slate-400 text-[13px]">
+                                        <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />
+                                        Carregando registros...
+                                    </td>
+                                </tr>
+                            ) : (data?.registros ?? []).map((row) => (
+                                <tr
+                                    key={row.id}
+                                    className={`border-b border-slate-50/70 cursor-pointer hover:bg-slate-50 transition-colors ${riscoRowClass(row.risco)}`}
+                                    onClick={() => openDrawer(row)}
+                                >
+                                    <td className="px-4 py-2.5">
+                                        <Badge variant="outline" className={`text-[10px] font-bold border ${riscoBadgeClass(row.risco)}`}>{row.risco}</Badge>
+                                    </td>
+                                    <td className="px-4 py-2.5 text-slate-600 whitespace-nowrap">{row.competencia}</td>
+                                    <td className="px-4 py-2.5 text-slate-600 whitespace-nowrap">{catShort(row.categoria)}</td>
+                                    <td className="px-4 py-2.5 font-semibold text-slate-900 whitespace-nowrap">R$ {row.valor.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</td>
+                                    <td className="px-4 py-2.5 text-slate-600 max-w-[180px] truncate">{row.fornecedor || <span className="text-slate-300 italic">Não informado</span>}</td>
+                                    <td className="px-4 py-2.5 text-slate-400 font-mono text-[11px] whitespace-nowrap">{row.cnpj}</td>
+                                    <td className="px-4 py-2.5 font-mono text-slate-600">
+                                        {isNFGenerica(row.nf)
+                                            ? <span className="text-red-500 font-bold">{row.nf} ⚠️</span>
+                                            : row.nf
+                                        }
+                                    </td>
+                                    <td className="px-4 py-2.5" onClick={e => e.stopPropagation()}>
+                                        {row.hasPdf
+                                            ? <a href={row.link_pdf} target="_blank" rel="noopener noreferrer" className="text-slate-500 hover:text-slate-900 transition-colors" onClick={e => e.stopPropagation()}>📄</a>
+                                            : <span className="text-slate-200">📄</span>
+                                        }
+                                    </td>
+                                    <td className="px-4 py-2.5">
+                                        <button className="text-slate-300 hover:text-slate-700 transition-colors">···</button>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+
+                {/* Paginação */}
+                <div className="flex items-center justify-between px-5 py-3.5 border-t border-slate-100">
+                    <span className="text-[12px] text-slate-400 font-medium">
+                        {data ? `${page * PAGE_SIZE + 1}–${Math.min((page + 1) * PAGE_SIZE, data.totalRegistros)} de ${data.totalRegistros} registros` : "—"}
+                    </span>
+                    <div className="flex items-center gap-1">
+                        <button onClick={() => goPage(Math.max(0, page - 1))} disabled={page === 0}
+                            className="p-1.5 rounded-lg hover:bg-slate-100 disabled:opacity-30 transition-colors">
+                            <ChevronLeft className="w-4 h-4" />
+                        </button>
+                        {Array.from({ length: Math.min(5, totalPaginas) }, (_, i) => i + Math.max(0, Math.min(page - 2, totalPaginas - 5))).map(p => (
+                            <button key={p} onClick={() => goPage(p)}
+                                className={`w-8 h-8 rounded-lg text-[13px] font-bold transition-colors ${page === p ? "bg-slate-900 text-white" : "hover:bg-slate-100 text-slate-500"}`}>
+                                {p + 1}
+                            </button>
+                        ))}
+                        <button onClick={() => goPage(Math.min(totalPaginas - 1, page + 1))} disabled={page >= totalPaginas - 1}
+                            className="p-1.5 rounded-lg hover:bg-slate-100 disabled:opacity-30 transition-colors">
+                            <ChevronRight className="w-4 h-4" />
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <DetalheDrawer row={selectedRow} open={drawerOpen} onClose={() => setDrawerOpen(false)} />
+        </div>
+    );
+}
+
+// ─── Componente Principal ──────────────────────────────────────────────────────
+export default function VerbasIndenizatoriasTab({ politicianName, slug }: VerbasTabProps) {
+    const [subTab, setSubTab] = useState<"resumo" | "dados">("resumo");
+    const [kpiData, setKpiData] = useState<ApiResponse | null>(null);
+    const [loadingKpis, setLoadingKpis] = useState(true);
+    const [errorKpis, setErrorKpis] = useState<string | null>(null);
+
+    // Carrega KPIs no mount
+    React.useEffect(() => {
+        if (!slug) return;
+        setLoadingKpis(true);
+        setErrorKpis(null);
+        fetch(`/api/radar/verbas/${slug}?modo=kpis`)
+            .then(r => r.json())
+            .then((data: ApiResponse) => {
+                if (data.error) throw new Error(data.error);
+                setKpiData(data);
+            })
+            .catch(e => setErrorKpis(e.message))
+            .finally(() => setLoadingKpis(false));
+    }, [slug]);
+
+    if (loadingKpis) {
         return (
-            <div className="p-20 text-center bg-white border rounded-3xl">
-                <AlertCircle className="w-12 h-12 text-slate-200 mx-auto mb-4" />
-                <h3 className="text-lg font-bold text-slate-700">Nenhum dado encontrado</h3>
-                <p className="text-slate-500 mt-2">Não localizamos verbas indenizatórias para {politicianName} na base da ALBA.</p>
+            <div className="flex flex-col items-center justify-center py-24 gap-3">
+                <Loader2 className="w-8 h-8 text-orange-400 animate-spin" />
+                <p className="text-[14px] text-slate-400 font-medium">Carregando verbas de gabinete...</p>
             </div>
         );
     }
 
-    const totalPages = Math.ceil(allData.length / pageSize);
+    if (errorKpis) {
+        return (
+            <div className="flex flex-col items-center justify-center py-24 gap-3 text-center">
+                <AlertTriangle className="w-10 h-10 text-red-300" />
+                <p className="text-[15px] font-bold text-slate-700">Dados não encontrados</p>
+                <p className="text-[13px] text-slate-400">{errorKpis}</p>
+            </div>
+        );
+    }
 
     return (
-        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            {/* KPIs */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <Card className="border-0 shadow-sm bg-white ring-1 ring-slate-100 overflow-hidden relative group">
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                            <DollarSign className="w-4 h-4 text-emerald-500" />
-                            Total Gasto
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <p className="text-3xl font-extrabold text-emerald-600 tracking-tight">
-                            {formatCompactCurrency(analytics?.totalGasto || 0)}
-                        </p>
-                    </CardContent>
-                    <div className="absolute bottom-0 right-0 p-2 opacity-5 group-hover:opacity-10 transition-opacity">
-                        <DollarSign className="w-12 h-12 text-emerald-600" />
-                    </div>
-                </Card>
-
-                <Card className="border-0 shadow-sm bg-white ring-1 ring-slate-100 overflow-hidden relative group">
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                            <TrendingDown className="w-4 h-4 text-rose-500" />
-                            Valor Glosado
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <p className="text-3xl font-extrabold text-rose-600 tracking-tight">
-                            {formatCompactCurrency(analytics?.totalGlosado || 0)}
-                        </p>
-                    </CardContent>
-                    <div className="absolute bottom-0 right-0 p-2 opacity-5 group-hover:opacity-10 transition-opacity">
-                        <TrendingDown className="w-12 h-12 text-rose-600" />
-                    </div>
-                </Card>
-
-                <Card className="border-0 shadow-sm bg-white ring-1 ring-slate-100 overflow-hidden relative group">
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                            <FileText className="w-4 h-4 text-indigo-500" />
-                            Total de Notas
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <p className="text-3xl font-extrabold text-indigo-600 tracking-tight">
-                            {analytics?.totalNotas}
-                        </p>
-                    </CardContent>
-                    <div className="absolute bottom-0 right-0 p-2 opacity-5 group-hover:opacity-10 transition-opacity">
-                        <FileText className="w-12 h-12 text-indigo-600" />
-                    </div>
-                </Card>
-
-                <Card className="border-0 shadow-sm bg-white ring-1 ring-slate-100 overflow-hidden relative group">
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                            <Calendar className="w-4 h-4 text-amber-500" />
-                            Anos Cobertos
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <p className="text-xl font-bold text-slate-700 tracking-tight leading-tight">
-                            {analytics?.anosCobertos}
-                        </p>
-                    </CardContent>
-                </Card>
+        <div className="animate-in fade-in duration-500">
+            {/* Sub-Tabs Pill */}
+            <div className="flex items-center gap-2 mb-6 bg-slate-100/50 p-1 rounded-full w-max border border-slate-200">
+                <button onClick={() => setSubTab("resumo")}
+                    className={`px-5 py-1.5 rounded-full text-[13px] font-bold transition-all ${subTab === "resumo" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
+                    📊 Resumo
+                </button>
+                <button onClick={() => setSubTab("dados")}
+                    className={`px-5 py-1.5 rounded-full text-[13px] font-bold transition-all ${subTab === "dados" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
+                    📋 Dados Completos
+                </button>
             </div>
 
-            {/* Gráfico */}
-            <Card className="border-0 shadow-sm ring-1 ring-slate-100 bg-white">
-                <CardHeader>
-                    <CardTitle className="text-lg font-bold text-slate-800">Gastos por Categoria</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <div style={{ width: "100%", height: 350, minHeight: 350 }}>
-                        <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={analytics?.chartData} layout="vertical" margin={{ left: 40, right: 40 }}>
-                                <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#f1f5f9" />
-                                <XAxis type="number" hide />
-                                <YAxis
-                                    dataKey="name"
-                                    type="category"
-                                    axisLine={false}
-                                    tickLine={false}
-                                    width={150}
-                                    tick={{ fill: "#64748b", fontSize: 11, fontWeight: 600 }}
-                                />
-                                <RechartsTooltip
-                                    contentStyle={{ borderRadius: 12, border: "none", boxShadow: "0 10px 15px -3px rgb(0 0 0 / 0.1)" }}
-                                    formatter={(v: any) => formatCurrency(Number(v) || 0)}
-                                />
-                                <Bar dataKey="value" radius={[0, 4, 4, 0]}>
-                                    {analytics?.chartData.map((entry, index) => (
-                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                    ))}
-                                </Bar>
-                            </BarChart>
-                        </ResponsiveContainer>
-                    </div>
-                </CardContent>
-            </Card>
-
-            {/* Tabela */}
-            <Card className="border-0 shadow-sm ring-1 ring-slate-100 bg-white overflow-hidden">
-                <CardHeader className="bg-slate-50/50 border-b border-slate-100">
-                    <CardTitle className="text-lg font-bold text-slate-800">Detalhamento das Notas Fiscais</CardTitle>
-                </CardHeader>
-                <Table>
-                    <TableHeader className="bg-slate-50/50">
-                        <TableRow>
-                            <TableHead className="font-bold text-slate-500">Comp.</TableHead>
-                            <TableHead className="font-bold text-slate-500">Categoria</TableHead>
-                            <TableHead className="font-bold text-slate-500">Fornecedor</TableHead>
-                            <TableHead className="font-bold text-slate-500">CNPJ/CPF</TableHead>
-                            <TableHead className="font-bold text-slate-500 text-right">Valor</TableHead>
-                            <TableHead className="font-bold text-slate-500 text-center">Ações</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {paginatedData.map((item, idx) => (
-                            <TableRow key={`${item.id}-${idx}`} className="hover:bg-slate-50/50 transition-colors">
-                                <TableCell className="font-medium text-slate-600">{item.competencia}</TableCell>
-                                <TableCell className="max-w-[200px] truncate text-slate-500 text-xs font-semibold uppercase">{item.categoria}</TableCell>
-                                <TableCell className="max-w-[250px] truncate font-bold text-slate-700">{item.nome_fornecedor}</TableCell>
-                                <TableCell className="text-slate-400 font-mono text-[10px]">{item.cnpj_fornecedor}</TableCell>
-                                <TableCell className={`text-right font-extrabold ${item.valor > 10000 ? "text-rose-600" : "text-slate-900"}`}>
-                                    {formatCurrency(item.valor)}
-                                </TableCell>
-                                <TableCell>
-                                    <div className="flex items-center justify-center gap-2">
-                                        {item.link_pdf_nf && (
-                                            <Button variant="ghost" size="sm" asChild className="h-8 w-8 p-0 text-slate-400 hover:text-indigo-600">
-                                                <a href={item.link_pdf_nf} target="_blank" rel="noopener noreferrer">
-                                                    <FileText className="w-4 h-4" />
-                                                </a>
-                                            </Button>
-                                        )}
-                                        {item.link_detalhe && (
-                                            <Button variant="ghost" size="sm" asChild className="h-8 w-8 p-0 text-slate-400 hover:text-amber-600">
-                                                <a href={item.link_detalhe} target="_blank" rel="noopener noreferrer">
-                                                    <ExternalLink className="w-4 h-4" />
-                                                </a>
-                                            </Button>
-                                        )}
-                                    </div>
-                                </TableCell>
-                            </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
-
-                {/* Paginação */}
-                <div className="flex items-center justify-between px-6 py-4 bg-slate-50/50 border-t border-slate-100">
-                    <p className="text-sm text-slate-500">
-                        Mostrando <span className="font-bold">{paginatedData.length}</span> de <span className="font-bold">{allData.length}</span> registros
-                    </p>
-                    <div className="flex items-center gap-2">
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setPage(p => Math.max(1, p - 1))}
-                            disabled={page === 1}
-                            className="bg-white"
-                        >
-                            <ChevronLeft className="w-4 h-4" />
-                        </Button>
-                        <span className="text-sm font-bold text-slate-700 mx-2">
-                            Página {page} de {totalPages}
-                        </span>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                            disabled={page === totalPages}
-                            className="bg-white"
-                        >
-                            <ChevronRight className="w-4 h-4" />
-                        </Button>
-                    </div>
-                </div>
-            </Card>
+            {subTab === "resumo" && kpiData ? (
+                <ResumoContent data={kpiData} />
+            ) : subTab === "dados" ? (
+                <DadosCompletosContent
+                    slug={slug}
+                    anos={kpiData?.anos ?? []}
+                    categoriasDisponiveis={kpiData?.categoriasDisponiveis ?? []}
+                />
+            ) : null}
         </div>
     );
 }
