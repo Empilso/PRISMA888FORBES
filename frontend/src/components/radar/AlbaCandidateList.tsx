@@ -6,9 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
     Search, ChevronRight, FileText, Users, CheckCircle2,
-    AlertCircle, MapPin, Calendar, Shield, Star, Eye
+    AlertCircle, MapPin, Calendar, Shield, Eye, LayoutGrid
 } from "lucide-react";
-import { useRouter } from "next/navigation";
 
 interface DeputadoAlba {
     prisma_id:       string;
@@ -27,54 +26,55 @@ interface DeputadoAlba {
 }
 
 const PARTIDO_COLOR: Record<string, string> = {
-    PT:      "#e11d48", PL:     "#3b82f6", PP:    "#f59e0b",
-    MDB:     "#0ea5e9", PSD:    "#8b5cf6", PSDB:  "#22c55e",
-    PDT:     "#f97316", PSOL:   "#dc2626", REPUBLICANOS: "#14b8a6",
+    PT: "#e11d48", PL: "#3b82f6", PP: "#f59e0b",
+    MDB: "#0ea5e9", PSD: "#8b5cf6", PSDB: "#22c55e",
+    PDT: "#f97316", PSOL: "#dc2626", REPUBLICANOS: "#14b8a6",
     SOLIDARIEDADE: "#f472b6", AVANTE: "#84cc16", PRD: "#6366f1",
-    UNIÃO:   "#0d9488", DC:     "#94a3b8", NOVO:  "#fb923c",
+    "UNI\u00c3O": "#0d9488", DC: "#94a3b8", NOVO: "#fb923c",
 };
 
 const ESFERA_LABEL: Record<string, string> = {
     estadual: "Dep. Estadual", federal: "Dep. Federal",
-    municipal: "Vereador",    senado: "Senador",
+    municipal: "Vereador", senado: "Senador",
 };
-
-function getInitials(name: string) {
-    return name.split(" ").filter(Boolean).slice(0, 2).map(n => n[0]).join("").toUpperCase();
-}
 
 function getPartidoColor(partido: string) {
     return PARTIDO_COLOR[partido] || "#6366f1";
 }
 
 function ScoreRing({ score }: { score: number }) {
-    const val   = score > 0 && score <= 1 ? score * 100 : score;
+    const val = score > 0 && score <= 1 ? score * 100 : score;
     const color = val < 40 ? "#ef4444" : val < 70 ? "#f59e0b" : "#22c55e";
     const label = val < 40 ? "CR" : val < 70 ? "MD" : "TOP";
     return (
-        <div className="flex flex-col items-center">
+        <div className="flex flex-col items-center gap-0.5">
             <div
-                className="w-10 h-10 rounded-full flex items-center justify-center text-[10px] font-black text-white"
+                className="w-10 h-10 rounded-full flex items-center justify-center"
                 style={{ background: `conic-gradient(${color} ${val * 3.6}deg, #e2e8f0 0deg)` }}
             >
                 <div className="w-7 h-7 rounded-full bg-white flex items-center justify-center">
                     <span style={{ color }} className="text-[9px] font-black">{label}</span>
                 </div>
             </div>
-            <span className="text-[9px] text-slate-400 font-bold mt-0.5 uppercase tracking-wide">{Math.round(val)}%</span>
+            <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wide">{Math.round(val)}%</span>
         </div>
     );
 }
 
+// Navega sem usar URL absoluta — compativel com qualquer host
+function navegarParaPerfil(slug: string) {
+    const path = `/admin/radar/${slug}`;
+    // usa window.location.pathname base para garantir relativo
+    window.history.pushState({}, "", path);
+    window.location.assign(path);
+}
+
 export function AlbaCandidateList() {
-    const router = useRouter();
-    const [deputados, setDeputados]           = useState<DeputadoAlba[]>([]);
-    const [loading, setLoading]               = useState(true);
-    const [search, setSearch]                 = useState("");
-    const [filtroPartido, setFiltroPartido]   = useState("");
-    // Legislaturas ativas (multi-select chips)
-    const [legsAtivas, setLegsAtivas]         = useState<Set<string>>(new Set());
-    const [legsInicialized, setLegsInicialized] = useState(false);
+    const [deputados, setDeputados]         = useState<DeputadoAlba[]>([]);
+    const [loading, setLoading]             = useState(true);
+    const [search, setSearch]               = useState("");
+    const [filtroPartido, setFiltroPartido] = useState("");
+    const [legAtiva, setLegAtiva]           = useState<string | null>(null);
 
     useEffect(() => {
         fetch("/api/prisma/deputados-alba")
@@ -87,39 +87,25 @@ export function AlbaCandidateList() {
             .catch(err => { console.error(err); setLoading(false); });
     }, []);
 
-    // Legislaturas disponíveis ordenadas desc (mais recente primeiro)
-    const legislaturasDisponiveis = useMemo(() => {
-        const all = Array.from(new Set(deputados.flatMap(d => d.legislaturas || [])));
-        return all.sort((a, b) => b.localeCompare(a));
+    // Legislaturas ordenadas desc com contagem de deputados
+    const legislaturasInfo = useMemo(() => {
+        const map: Record<string, number> = {};
+        deputados.forEach(d => {
+            (d.legislaturas || []).forEach(l => {
+                map[l] = (map[l] || 0) + 1;
+            });
+        });
+        return Object.entries(map)
+            .sort((a, b) => b[0].localeCompare(a[0]))
+            .map(([leg, count]) => ({ leg, count }));
     }, [deputados]);
 
-    // Inicializa com a legislatura mais recente ativa
+    // Ativa a mais recente automaticamente ao carregar
     useEffect(() => {
-        if (!legsInicialized && legislaturasDisponiveis.length > 0) {
-            setLegsAtivas(new Set([legislaturasDisponiveis[0]]));
-            setLegsInicialized(true);
+        if (legislaturasInfo.length > 0 && legAtiva === null) {
+            setLegAtiva(legislaturasInfo[0].leg);
         }
-    }, [legislaturasDisponiveis, legsInicialized]);
-
-    const toggleLeg = (leg: string) => {
-        setLegsAtivas(prev => {
-            const next = new Set(prev);
-            if (next.has(leg)) {
-                // Não permite desativar tudo
-                if (next.size === 1) return prev;
-                next.delete(leg);
-            } else {
-                next.add(leg);
-            }
-            return next;
-        });
-    };
-
-    const ativarTodas = () => setLegsAtivas(new Set(legislaturasDisponiveis));
-    const ativarSoMaisRecente = () => {
-        if (legislaturasDisponiveis.length > 0)
-            setLegsAtivas(new Set([legislaturasDisponiveis[0]]));
-    };
+    }, [legislaturasInfo, legAtiva]);
 
     const partidosDisponiveis = useMemo(() =>
         Array.from(new Set(deputados.map(d => d.sigla_partido).filter(Boolean))).sort(),
@@ -128,19 +114,13 @@ export function AlbaCandidateList() {
 
     const filtered = useMemo(() => deputados.filter(d => {
         const matchSearch =
-            (d.nome_urna     || "").toLowerCase().includes(search.toLowerCase()) ||
+            (d.nome_urna || "").toLowerCase().includes(search.toLowerCase()) ||
             (d.sigla_partido || "").toLowerCase().includes(search.toLowerCase());
-        const matchLeg = legsAtivas.size === 0 ||
-            (d.legislaturas || []).some(l => legsAtivas.has(l));
+        const matchLeg = legAtiva === "todas" || legAtiva === null ||
+            (d.legislaturas || []).includes(legAtiva);
         const matchPartido = filtroPartido ? d.sigla_partido === filtroPartido : true;
         return matchSearch && matchLeg && matchPartido;
-    }), [deputados, search, legsAtivas, filtroPartido]);
-
-    // Navega com router para evitar URL absoluta com localhost
-    const handleTransparencia = (slug: string, prisma_id: string) => {
-        const id = slug || prisma_id;
-        router.push(`/admin/radar/${id}`);
-    };
+    }), [deputados, search, legAtiva, filtroPartido]);
 
     if (loading) {
         return (
@@ -155,67 +135,109 @@ export function AlbaCandidateList() {
     return (
         <div className="space-y-6">
 
-            {/* ═══ MENU LEGISLATURAS ═══ */}
-            {legislaturasDisponiveis.length > 0 && (
-                <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
-                    <div className="flex items-center justify-between mb-4">
+            {/* ══════════════════════════════════════
+                MENU DE LEGISLATURAS EM QUADROS
+            ══════════════════════════════════════ */}
+            {legislaturasInfo.length > 0 && (
+                <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
+                    {/* Header do menu */}
+                    <div className="flex items-center justify-between mb-5">
                         <div className="flex items-center gap-2">
-                            <Calendar className="w-4 h-4 text-indigo-500" />
-                            <span className="text-sm font-black text-slate-800 uppercase tracking-wide">Legislaturas Ativas</span>
-                            <span className="text-[11px] bg-indigo-100 text-indigo-700 font-bold px-2 py-0.5 rounded-full">
-                                {legsAtivas.size} de {legislaturasDisponiveis.length}
+                            <LayoutGrid className="w-4 h-4 text-indigo-500" />
+                            <span className="text-sm font-black text-slate-800 uppercase tracking-widest">
+                                Legislaturas
+                            </span>
+                            <span className="text-[10px] bg-slate-100 text-slate-500 font-bold px-2 py-0.5 rounded-full">
+                                {legislaturasInfo.length} per\u00edodos
                             </span>
                         </div>
-                        <div className="flex items-center gap-2">
-                            <button
-                                onClick={ativarSoMaisRecente}
-                                className="text-[11px] font-semibold text-slate-400 hover:text-indigo-600 transition-colors px-2 py-1 rounded-lg hover:bg-indigo-50"
-                            >
-                                Só Atual
-                            </button>
-                            <button
-                                onClick={ativarTodas}
-                                className="text-[11px] font-semibold text-slate-400 hover:text-indigo-600 transition-colors px-2 py-1 rounded-lg hover:bg-indigo-50"
-                            >
-                                Todas
-                            </button>
-                        </div>
+                        <button
+                            onClick={() => setLegAtiva("todas")}
+                            className={`text-[11px] font-bold px-3 py-1.5 rounded-lg transition-all ${
+                                legAtiva === "todas"
+                                    ? "bg-slate-800 text-white"
+                                    : "bg-slate-100 text-slate-400 hover:bg-slate-200 hover:text-slate-600"
+                            }`}
+                        >
+                            Ver Todas
+                        </button>
                     </div>
 
-                    <div className="flex flex-wrap gap-2">
-                        {legislaturasDisponiveis.map((leg, idx) => {
-                            const isAtiva  = legsAtivas.has(leg);
+                    {/* Cards de legislaturas */}
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+                        {legislaturasInfo.map(({ leg, count }, idx) => {
+                            const isAtiva       = legAtiva === leg;
                             const isMaisRecente = idx === 0;
+                            // Extrai ano inicial/final do formato "2023-2027" ou s\u00f3 "2023"
+                            const partes = leg.split("-");
+                            const anoInicio = partes[0];
+                            const anoFim    = partes[1] || null;
+
                             return (
                                 <button
                                     key={leg}
-                                    onClick={() => toggleLeg(leg)}
-                                    className={`relative flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all duration-200 border-2 ${
+                                    onClick={() => setLegAtiva(leg)}
+                                    className={`relative flex flex-col items-center justify-center gap-1 p-4 rounded-2xl border-2 transition-all duration-200 group ${
                                         isAtiva
-                                            ? "bg-indigo-600 border-indigo-600 text-white shadow-md shadow-indigo-200"
-                                            : "bg-slate-50 border-slate-200 text-slate-500 hover:border-indigo-300 hover:text-indigo-600"
+                                            ? "bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-200 scale-105"
+                                            : "bg-slate-50 border-slate-200 text-slate-600 hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-700"
                                     }`}
                                 >
+                                    {/* Badge ATUAL */}
                                     {isMaisRecente && (
-                                        <span className="absolute -top-1.5 -right-1.5 text-[8px] font-black bg-emerald-500 text-white px-1.5 py-0.5 rounded-full leading-none">
-                                            ATUAL
+                                        <span className="absolute -top-2 left-1/2 -translate-x-1/2 text-[8px] font-black bg-emerald-500 text-white px-2 py-0.5 rounded-full whitespace-nowrap shadow">
+                                            ● ATUAL
                                         </span>
                                     )}
-                                    <Calendar className="w-3.5 h-3.5" />
-                                    {leg}
-                                    {isAtiva && <CheckCircle2 className="w-3.5 h-3.5 opacity-80" />}
+
+                                    {/* \u00cdcone calend\u00e1rio */}
+                                    <Calendar className={`w-5 h-5 mb-1 ${
+                                        isAtiva ? "text-white/80" : "text-indigo-400 group-hover:text-indigo-600"
+                                    }`} />
+
+                                    {/* Ano(s) */}
+                                    <span className={`text-lg font-black leading-none ${
+                                        isAtiva ? "text-white" : "text-slate-800"
+                                    }`}>
+                                        {anoInicio}
+                                    </span>
+                                    {anoFim && (
+                                        <span className={`text-[10px] font-bold ${
+                                            isAtiva ? "text-white/70" : "text-slate-400"
+                                        }`}>
+                                            at\u00e9 {anoFim}
+                                        </span>
+                                    )}
+
+                                    {/* N\u00famero de deputados */}
+                                    <div className={`mt-1 flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                        isAtiva
+                                            ? "bg-white/20 text-white"
+                                            : "bg-slate-200 text-slate-500 group-hover:bg-indigo-100 group-hover:text-indigo-700"
+                                    }`}>
+                                        <Users className="w-2.5 h-2.5" />
+                                        {count} dep.
+                                    </div>
+
+                                    {/* Check ativo */}
+                                    {isAtiva && (
+                                        <CheckCircle2 className="w-4 h-4 text-white/80 mt-0.5" />
+                                    )}
                                 </button>
                             );
                         })}
                     </div>
 
-                    <p className="text-[11px] text-slate-400 mt-3 font-medium">
-                        💡 Clique nos chips para ativar ou desativar legislaturas. A lista abaixo mostra apenas os deputados com mandato nas selecionadas.
+                    <p className="text-[11px] text-slate-400 mt-4 font-medium">
+                        💡 Clique em uma legislatura para filtrar os deputados com mandato naquele per\u00edodo.
+                        A <strong className="text-emerald-600">legislatura atual</strong> \u00e9 selecionada por padr\u00e3o.
                     </p>
                 </div>
             )}
 
-            {/* ═══ BARRA DE FILTROS ═══ */}
+            {/* ══════════════════════════════════════
+                BARRA DE FILTROS
+            ══════════════════════════════════════ */}
             <div className="flex items-center gap-3 flex-wrap">
                 <div className="relative flex-1 min-w-[200px] max-w-sm">
                     <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -238,30 +260,45 @@ export function AlbaCandidateList() {
                     </select>
                 )}
 
+                {/* Indicador de legislatura ativa */}
+                {legAtiva && legAtiva !== "todas" && (
+                    <div className="flex items-center gap-2 h-11 px-4 bg-indigo-50 border border-indigo-200 rounded-xl text-sm font-bold text-indigo-700">
+                        <Calendar className="w-4 h-4" />
+                        {legAtiva}
+                        <button
+                            onClick={() => setLegAtiva("todas")}
+                            className="ml-1 text-indigo-400 hover:text-indigo-700 font-black text-lg leading-none"
+                        >
+                            ×
+                        </button>
+                    </div>
+                )}
+
                 <div className="flex items-center gap-2 h-11 px-4 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-500 shadow-sm ml-auto">
                     <Users className="w-4 h-4 text-indigo-500" />
                     <span><strong className="text-slate-800">{filtered.length}</strong> parlamentares</span>
                 </div>
             </div>
 
-            {/* ═══ LISTA PREMIUM ═══ */}
+            {/* ══════════════════════════════════════
+                LISTA PREMIUM
+            ══════════════════════════════════════ */}
             <div className="space-y-3">
                 {filtered.map((dep) => {
-                    const profileSlug    = dep.slug || dep.prisma_id;
-                    const esferaLabel    = ESFERA_LABEL[dep.esfera] || "Parlamentar";
-                    const partidoColor   = getPartidoColor(dep.sigla_partido);
-                    const scoreVal       = dep.qualidade_score > 0 && dep.qualidade_score <= 1
-                        ? dep.qualidade_score * 100 : dep.qualidade_score;
-                    const isVerificado   = dep.status === "aprovado";
-                    const legsDeputado   = (dep.legislaturas || []).filter(l => legsAtivas.has(l));
+                    const profileSlug  = dep.slug || dep.prisma_id;
+                    const esferaLabel  = ESFERA_LABEL[dep.esfera] || "Parlamentar";
+                    const partidoColor = getPartidoColor(dep.sigla_partido);
+                    const scoreVal     = dep.qualidade_score > 0 && dep.qualidade_score <= 1
+                        ? dep.qualidade_score * 100 : (dep.qualidade_score || 0);
+                    const isVerificado = dep.status === "aprovado";
 
                     return (
                         <div
                             key={dep.prisma_id}
                             className="group relative bg-white border-2 border-slate-100 hover:border-indigo-200 rounded-3xl overflow-hidden transition-all duration-200 hover:shadow-lg hover:shadow-indigo-50 cursor-pointer"
-                            onClick={() => handleTransparencia(dep.slug, dep.prisma_id)}
+                            onClick={() => navegarParaPerfil(profileSlug)}
                         >
-                            {/* Faixa colorida do partido na esquerda */}
+                            {/* Faixa lateral cor partido */}
                             <div
                                 className="absolute left-0 top-0 bottom-0 w-1.5 transition-all duration-200 group-hover:w-2"
                                 style={{ background: partidoColor }}
@@ -272,8 +309,8 @@ export function AlbaCandidateList() {
                                 {/* FOTO GRANDE */}
                                 <div className="relative shrink-0">
                                     <div
-                                        className="w-20 h-20 rounded-2xl overflow-hidden shadow-md ring-[3px] transition-all duration-200 group-hover:ring-[4px] group-hover:scale-105"
-                                        style={{ ringColor: partidoColor }}
+                                        className="w-20 h-20 rounded-2xl overflow-hidden shadow-md transition-all duration-200 group-hover:scale-105"
+                                        style={{ outline: `3px solid ${partidoColor}40`, outlineOffset: "2px" }}
                                     >
                                         <img
                                             src={dep.foto_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(dep.nome_urna)}&background=6366f1&color=fff&bold=true&size=128`}
@@ -285,9 +322,9 @@ export function AlbaCandidateList() {
                                             }}
                                         />
                                     </div>
-                                    {/* Badge partido sobre a foto */}
+                                    {/* Badge partido */}
                                     <div
-                                        className="absolute -bottom-1.5 -right-1.5 text-[9px] font-black text-white px-1.5 py-0.5 rounded-lg shadow-sm"
+                                        className="absolute -bottom-1.5 -right-1.5 text-[9px] font-black text-white px-1.5 py-0.5 rounded-lg shadow"
                                         style={{ background: partidoColor }}
                                     >
                                         {dep.sigla_partido}
@@ -301,20 +338,13 @@ export function AlbaCandidateList() {
 
                                 {/* IDENTIDADE */}
                                 <div className="flex-1 min-w-0">
-                                    <div className="flex items-start gap-2 flex-wrap">
-                                        <h3 className="font-black text-slate-900 text-[17px] leading-tight uppercase tracking-tight group-hover:text-indigo-700 transition-colors">
-                                            {dep.nome_urna}
-                                        </h3>
-                                        {isVerificado && (
-                                            <span className="text-[9px] font-black bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full border border-emerald-200 uppercase tracking-wider mt-0.5">
-                                                ✓ Verificado
-                                            </span>
-                                        )}
-                                    </div>
+                                    <h3 className="font-black text-slate-900 text-[17px] leading-tight uppercase tracking-tight group-hover:text-indigo-700 transition-colors truncate">
+                                        {dep.nome_urna}
+                                    </h3>
 
                                     <div className="flex items-center flex-wrap gap-2 mt-2">
                                         <span
-                                            className="text-[11px] font-bold px-2.5 py-1 rounded-full text-white shadow-sm"
+                                            className="text-[11px] font-bold px-2.5 py-1 rounded-full text-white"
                                             style={{ background: partidoColor }}
                                         >
                                             {dep.sigla_partido}
@@ -322,26 +352,29 @@ export function AlbaCandidateList() {
                                         <span className="text-[11px] font-semibold bg-slate-100 text-slate-600 px-2.5 py-1 rounded-full">
                                             {esferaLabel}
                                         </span>
-                                        <span className="flex items-center gap-1 text-[11px] text-slate-500 font-medium">
+                                        <span className="flex items-center gap-1 text-[11px] text-slate-500">
                                             <MapPin className="w-3 h-3 text-red-400" />
                                             {dep.casa || "ALBA"} · {dep.uf || "BA"}
                                         </span>
                                         {dep.mandatos_count > 0 && (
-                                            <span className="flex items-center gap-1 text-[11px] text-slate-400 font-medium">
+                                            <span className="flex items-center gap-1 text-[11px] text-slate-400">
                                                 <Shield className="w-3 h-3 text-indigo-300" />
                                                 {dep.mandatos_count} mandato{dep.mandatos_count !== 1 ? "s" : ""}
                                             </span>
                                         )}
                                     </div>
 
-                                    {/* Chips de legislaturas ativas deste deputado */}
-                                    {legsDeputado.length > 0 && (
+                                    {/* Legislaturas do deputado */}
+                                    {(dep.legislaturas || []).length > 0 && (
                                         <div className="flex items-center gap-1.5 mt-2 flex-wrap">
-                                            {legsDeputado.map(leg => (
+                                            {(dep.legislaturas || []).sort((a,b) => b.localeCompare(a)).map(leg => (
                                                 <span
                                                     key={leg}
-                                                    className="text-[9px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full"
-                                                    style={{ background: `${partidoColor}20`, color: partidoColor }}
+                                                    className={`text-[9px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full border ${
+                                                        leg === legAtiva
+                                                            ? "border-indigo-400 text-indigo-700 bg-indigo-50"
+                                                            : "border-slate-200 text-slate-400 bg-slate-50"
+                                                    }`}
                                                 >
                                                     📅 {leg}
                                                 </span>
@@ -355,20 +388,23 @@ export function AlbaCandidateList() {
                                     <ScoreRing score={scoreVal} />
                                 </div>
 
-                                {/* BOTÃO */}
+                                {/* BOT\u00c3O TRANSPAR\u00caNCIA */}
                                 <div className="shrink-0">
                                     <button
-                                        onClick={(e) => { e.stopPropagation(); handleTransparencia(dep.slug, dep.prisma_id); }}
-                                        className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-[13px] font-bold rounded-xl transition-all shadow-sm hover:shadow-md hover:shadow-indigo-300 active:scale-95"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            navegarParaPerfil(profileSlug);
+                                        }}
+                                        className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-[13px] font-bold rounded-xl transition-all shadow-sm hover:shadow-md active:scale-95"
                                     >
                                         <Eye className="w-4 h-4" />
-                                        Transparência
+                                        Transpar\u00eancia
                                         <ChevronRight className="w-4 h-4 opacity-70" />
                                     </button>
                                 </div>
                             </div>
 
-                            {/* Barra gradiente no hover */}
+                            {/* Barra gradiente bottom */}
                             <div className="absolute bottom-0 left-0 right-0 h-[3px]">
                                 <div
                                     className="h-full opacity-0 group-hover:opacity-100 transition-opacity duration-300"
@@ -383,9 +419,11 @@ export function AlbaCandidateList() {
                     <div className="py-20 text-center bg-white rounded-3xl border border-dashed border-slate-200">
                         <Users className="w-16 h-16 mx-auto mb-4 opacity-20 text-slate-400" />
                         <p className="font-bold text-slate-600 text-lg">Nenhum parlamentar encontrado</p>
-                        <p className="text-slate-400 text-sm mt-1">Tente ativar mais legislaturas ou limpar os filtros.</p>
+                        <p className="text-slate-400 text-sm mt-1">Selecione outra legislatura ou limpe os filtros.</p>
                         <Button variant="outline" className="mt-5 rounded-xl" onClick={() => {
-                            setSearch(""); setFiltroPartido(""); ativarSoMaisRecente();
+                            setSearch("");
+                            setFiltroPartido("");
+                            if (legislaturasInfo.length > 0) setLegAtiva(legislaturasInfo[0].leg);
                         }}>Resetar Filtros</Button>
                     </div>
                 )}
