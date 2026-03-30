@@ -18,13 +18,13 @@ import {
 
 const RADAR_TABS = [
     { id: "visao-geral",     icon: "🏠", label: "Visão Geral",        color: "text-blue-500",    border: "border-blue-500",    hasData: true,  hasAlert: false },
-    { id: "verbas-old",      icon: "🏛️", label: "Verbas Gabinete",   color: "text-orange-500",  border: "border-orange-500",  hasData: true,  hasAlert: false },
+    { id: "verbas-old",      icon: "🏗️", label: "Verbas Gabinete",   color: "text-orange-500",  border: "border-orange-500",  hasData: true,  hasAlert: false },
     { id: "emendas-painel",  icon: "📊", label: "Emendas BA Painel", color: "text-green-500",   border: "border-green-500",   hasData: true,  hasAlert: false },
     { id: "emendas-dados",   icon: "📦", label: "Emendas BA Dados",  color: "text-emerald-500", border: "border-emerald-500", hasData: true,  hasAlert: false },
     { id: "seplan-loa",      icon: "📄", label: "SEPLAN LOA",        color: "text-teal-500",    border: "border-teal-500",    hasData: false, hasAlert: false },
-    { id: "ceap-camara",     icon: "🏛️", label: "CEAP Câmara",      color: "text-violet-500",  border: "border-violet-500",  hasData: false, hasAlert: false },
+    { id: "ceap-camara",     icon: "🏗️", label: "CEAP Câmara",      color: "text-violet-500",  border: "border-violet-500",  hasData: false, hasAlert: false },
     { id: "senado",          icon: "🎤", label: "Senado",            color: "text-purple-500",  border: "border-purple-500",  hasData: false, hasAlert: false },
-    { id: "portal-federal",  icon: "🇧🇷", label: "Portal Federal",  color: "text-indigo-500",  border: "border-indigo-500",  hasData: false, hasAlert: false },
+    { id: "portal-federal",  icon: "🇬🇧", label: "Portal Federal",  color: "text-indigo-500",  border: "border-indigo-500",  hasData: false, hasAlert: false },
     { id: "empresas-rf",     icon: "🏢", label: "Empresas RF",       color: "text-yellow-500",  border: "border-yellow-500",  hasData: false, hasAlert: true  },
     { id: "tcm-ba",          icon: "⚖️", label: "TCM-BA",           color: "text-red-500",     border: "border-red-500",     hasData: false, hasAlert: true  },
     { id: "rastreabilidade", icon: "🔗", label: "Rastreabilidade",   color: "text-gray-500",    border: "border-gray-500",    hasData: false, hasAlert: true  },
@@ -72,18 +72,19 @@ export default function RadarPoliticoPage() {
     const { data: politician, isLoading, error: queryError } = useQuery({
         queryKey: ["politicianData", politicoSlug],
         queryFn: async () => {
-            // FIX: busca por slug primeiro, fallback por prisma_id
+            // Busca SEMPRE por prisma_id primeiro (hash estável — nunca muda)
             let { data, error } = await dadosClient
                 .from('parlamentares')
                 .select('*')
-                .eq('slug', politicoSlug)
+                .eq('prisma_id', politicoSlug)
                 .single();
 
+            // Fallback: se não encontrou por hash, tenta pelo slug legado
             if (error || !data) {
                 const res = await dadosClient
                     .from('parlamentares')
                     .select('*')
-                    .eq('prisma_id', politicoSlug)
+                    .eq('slug', politicoSlug)
                     .single();
                 data = res.data;
                 error = res.error;
@@ -92,7 +93,7 @@ export default function RadarPoliticoPage() {
             if (error || !data) throw new Error(`Parlamentar não encontrado: ${politicoSlug}`);
 
             return {
-                id: data.slug || data.prisma_id,
+                id: data.prisma_id,
                 prisma_id: data.prisma_id,
                 parlamentar_id: data.id_alba || data.prisma_id,
                 name: data.nome_urna || data.nome_civil || "—",
@@ -161,7 +162,7 @@ export default function RadarPoliticoPage() {
                 <div className="text-center">
                     <DatabaseBackup className="w-16 h-16 text-slate-200 mx-auto mb-4" strokeWidth={1} />
                     <h2 className="text-2xl font-black text-slate-900">Parlamentar não encontrado</h2>
-                    <p className="text-slate-400 mt-2 mb-6">Slug: <code className="bg-slate-100 px-2 py-0.5 rounded text-sm">{politicoSlug}</code></p>
+                    <p className="text-slate-400 mt-2 mb-6">ID: <code className="bg-slate-100 px-2 py-0.5 rounded text-sm">{politicoSlug}</code></p>
                     <button onClick={() => router.back()} className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl font-bold text-sm hover:bg-indigo-700 transition-colors">
                         <ArrowLeft className="w-4 h-4" /> Voltar ao RADAR
                     </button>
