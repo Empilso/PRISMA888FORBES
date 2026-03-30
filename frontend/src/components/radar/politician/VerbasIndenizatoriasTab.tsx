@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useCallback } from "react";
 import {
     PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
     CartesianGrid, Area, AreaChart, XAxis, YAxis,
@@ -18,7 +18,7 @@ import { Button } from "@/components/ui/button";
 // ─── Tipos ─────────────────────────────────────────────────────────────────────
 interface VerbasTabProps {
     politicianName: string;
-    slug: string; // ex: "bobo-deputado-ba"
+    slug: string;
 }
 
 interface VerbaRow {
@@ -48,13 +48,14 @@ interface ApiResponse {
     totalGlosado: number;
     totalNotas: number;
     totalFornecedores: number;
-    altoRiscoPct: number;
     categoriaMaior: string;
     categorias: { name: string; value: number }[];
     topFornecedores: { nome: string; cnpj: string; valor: number }[];
     gastosMensais: { mes: string; valor: number }[];
-    alertasForenses: { tipo: string; count: number; total: number }[];
-    porRisco: Record<string, number>;
+    // campos futuros do agente forense — opcionais
+    alertasForenses?: { tipo: string; count: number; total: number }[];
+    altoRiscoPct?: number;
+    porRisco?: Record<string, number>;
     anos: number[];
     categoriasDisponiveis: string[];
     pagina: number;
@@ -85,7 +86,7 @@ function catShort(name: string) {
     if (name.toLowerCase().startsWith("aluguel")) return "Aluguel";
     if (name.toLowerCase().startsWith("aquisiç")) return "Material";
     if (name.toLowerCase().startsWith("locomoc")) return "Locomoção";
-    if (name.toLowerCase().startsWith("aquisiç") || name.toLowerCase().startsWith("locação de software")) return "TI/Software";
+    if (name.toLowerCase().startsWith("locação de software")) return "TI/Software";
     return name.slice(0, 22);
 }
 
@@ -116,7 +117,6 @@ function riscoColor(r: string) {
     return "#6B7280";
 }
 
-// ─── NFGenérica detector ───────────────────────────────────────────────────────
 function isNFGenerica(nf: string) {
     const clean = nf.replace(/[^0-9]/g, "");
     return clean.length <= 2 || /^0+$/.test(clean) || clean === "1";
@@ -128,11 +128,8 @@ function DetalheDrawer({ row, open, onClose }: { row: VerbaRow | null; open: boo
     return (
         <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
             <SheetContent className="sm:max-w-[500px] bg-white p-0 overflow-y-auto border-l border-slate-100 shadow-2xl" side="right">
-                {/* barra de cor por risco */}
                 <div className="h-1.5 w-full" style={{ background: riscoColor(row.risco) }} />
-
                 <div className="p-6 space-y-6">
-                    {/* Header */}
                     <SheetHeader className="space-y-2">
                         <div className="flex items-center gap-2 text-[11px] text-slate-400 font-semibold uppercase tracking-wider">
                             🏛️ <span>Verbas de Gabinete — ALBA</span>
@@ -140,18 +137,8 @@ function DetalheDrawer({ row, open, onClose }: { row: VerbaRow | null; open: boo
                         <SheetTitle className="text-xl font-black text-slate-900 leading-tight">
                             NF {row.nf} — {(row.fornecedor || "Fornecedor").split(" ").slice(0, 3).join(" ")}
                         </SheetTitle>
-                        <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg w-max`}
-                            style={{ background: `${riscoColor(row.risco)}18`, border: `1px solid ${riscoColor(row.risco)}30` }}>
-                            <span className="text-2xl font-black" style={{ color: riscoColor(row.risco) }}>
-                                {row.score}/10
-                            </span>
-                            <span className="text-[12px] font-bold text-slate-600">
-                                {row.risco === "MÁXIMO" ? "🔴 MÁXIMO" : row.risco === "ALTO" ? "🟠 ALTO" : "🟡 MÉDIO"}
-                            </span>
-                        </div>
                     </SheetHeader>
 
-                    {/* ① Dados do Registro */}
                     <div>
                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">① Dados do Registro</p>
                         <div className="grid grid-cols-2 gap-2.5">
@@ -172,7 +159,6 @@ function DetalheDrawer({ row, open, onClose }: { row: VerbaRow | null; open: boo
                         </div>
                     </div>
 
-                    {/* ② Fornecedor */}
                     <div className="bg-orange-50 rounded-2xl p-4 border border-orange-100">
                         <div className="flex items-center gap-2 mb-3">
                             <Building2 className="w-4 h-4 text-orange-500" />
@@ -189,24 +175,6 @@ function DetalheDrawer({ row, open, onClose }: { row: VerbaRow | null; open: boo
                         </a>
                     </div>
 
-                    {/* ③ Análise Águia 🦅 — dados reais */}
-                    <div className="bg-yellow-50 rounded-2xl p-4 border border-yellow-200">
-                        <div className="flex items-center gap-2 mb-3">
-                            <span className="text-base">🦅</span>
-                            <p className="text-[10px] font-bold text-yellow-800 uppercase tracking-widest">③ Análise Águia</p>
-                        </div>
-                        <p className="font-bold text-slate-900 text-[13px] mb-3">{row.comentario_aguia}</p>
-                        <ul className="space-y-1.5">
-                            {row.motivos_risco.map((motivo) => (
-                                <li key={motivo} className="flex items-center gap-2 text-[12px] text-slate-700">
-                                    <span className="shrink-0 w-1.5 h-1.5 rounded-full" style={{ background: riscoColor(row.risco) }} />
-                                    {motivo}
-                                </li>
-                            ))}
-                        </ul>
-                    </div>
-
-                    {/* ④ Ações */}
                     <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100">
                         {row.hasPdf && (
                             <a href={row.link_pdf} target="_blank" rel="noopener noreferrer"
@@ -252,12 +220,14 @@ function ResumoContent({ data }: { data: ApiResponse }) {
         );
     };
 
-    const categoriasComCor = data.categorias.map(c => ({
+    const categoriasComCor = (data.categorias ?? []).map(c => ({
         ...c,
         color: getCatColor(c.name),
         nameShort: catShort(c.name),
     }));
 
+    // alertasForenses — campo futuro do Agente Forense, só renderiza quando existir
+    const alertasForenses = data.alertasForenses ?? [];
     const motivoEmoji: Record<string, string> = {
         "Link ausente/Lista errada": "🔗",
         "Concentração de Fornecedor": "🔴",
@@ -270,13 +240,12 @@ function ResumoContent({ data }: { data: ApiResponse }) {
         <div className="space-y-8">
             {/* KPIs */}
             <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 divide-x divide-y sm:divide-y-0 divide-slate-100">
+                <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 divide-x divide-y sm:divide-y-0 divide-slate-100">
                     {[
-                        { label: "Total Gasto", value: fmt(data.totalGasto), icon: "💰", color: "text-orange-600" },
-                        { label: "Notas Fiscais", value: data.totalNotas.toLocaleString("pt-BR"), icon: "📄", color: "text-slate-900" },
-                        { label: "Fornecedores", value: data.totalFornecedores.toString(), icon: "🏢", color: "text-slate-900" },
-                        { label: "Alto Risco", value: `${data.altoRiscoPct}% 🔴`, icon: "⚠️", color: "text-red-600" },
-                        { label: "Categoria Maior", value: catShort(data.categoriaMaior), icon: "📊", color: "text-slate-900" },
+                        { label: "Total Gasto", value: fmt(data.totalGasto ?? 0), icon: "💰", color: "text-orange-600" },
+                        { label: "Notas Fiscais", value: (data.totalNotas ?? 0).toLocaleString("pt-BR"), icon: "📄", color: "text-slate-900" },
+                        { label: "Fornecedores", value: (data.totalFornecedores ?? 0).toString(), icon: "🏢", color: "text-slate-900" },
+                        { label: "Categoria Maior", value: catShort(data.categoriaMaior ?? "—"), icon: "📊", color: "text-slate-900" },
                     ].map(({ label, value, icon, color }) => (
                         <div key={label} className="p-5 flex flex-col gap-1.5">
                             <div className="flex items-center gap-2">
@@ -319,8 +288,8 @@ function ResumoContent({ data }: { data: ApiResponse }) {
                 <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-5">
                     <p className="text-[13px] font-bold text-slate-900 mb-4">Top 10 Fornecedores</p>
                     <div className="space-y-2">
-                        {data.topFornecedores.map((f, i) => {
-                            const pct = data.topFornecedores[0] ? (f.valor / data.topFornecedores[0].valor) * 100 : 0;
+                        {(data.topFornecedores ?? []).map((f, i) => {
+                            const pct = data.topFornecedores?.[0] ? (f.valor / data.topFornecedores[0].valor) * 100 : 0;
                             return (
                                 <div key={i} className="flex items-center gap-3">
                                     <span className="text-[11px] text-slate-400 font-bold w-4">{i + 1}</span>
@@ -342,7 +311,7 @@ function ResumoContent({ data }: { data: ApiResponse }) {
             <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-5">
                 <p className="text-[13px] font-bold text-slate-900 mb-4">Gastos por Competência</p>
                 <ResponsiveContainer width="100%" height={180}>
-                    <AreaChart data={data.gastosMensais} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+                    <AreaChart data={data.gastosMensais ?? []} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
                         <defs>
                             <linearGradient id="verbasGrad" x1="0" y1="0" x2="0" y2="1">
                                 <stop offset="5%" stopColor="#F97316" stopOpacity={0.15} />
@@ -358,15 +327,15 @@ function ResumoContent({ data }: { data: ApiResponse }) {
                 </ResponsiveContainer>
             </div>
 
-            {/* Alertas Forenses — dados reais dos motivos */}
-            {data.alertasForenses.length > 0 && (
+            {/* Alertas Forenses — só renderiza quando o Agente Forense estiver ativo */}
+            {alertasForenses.length > 0 && (
                 <div>
                     <p className="text-base font-bold text-slate-900 mb-4 flex items-center gap-2">
                         <span className="text-lg">🦅</span> Padrões detectados pela Análise Águia
                     </p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-                        {data.alertasForenses.map((a) => (
-                            <div key={a.tipo} className="bg-white border border-slate-100 rounded-2xl shadow-sm p-5 hover:shadow-md transition-all cursor-pointer group">
+                        {alertasForenses.map((a) => (
+                            <div key={a.tipo} className="bg-white border border-slate-100 rounded-2xl shadow-sm p-5 hover:shadow-md transition-all cursor-pointer">
                                 <div className="flex items-center gap-2 mb-3">
                                     <span className="text-base">{motivoEmoji[a.tipo] ?? "⚠️"}</span>
                                     <p className="text-[12px] font-black text-slate-900 leading-tight">{a.tipo}</p>
@@ -427,7 +396,6 @@ function DadosCompletosContent({
         }
     }, [slug, filterAno, filterMes, filterCat, filterRisco, filterFornecedor]);
 
-    // Carrega na primeira vez
     React.useEffect(() => { fetchPage(0); setPage(0); }, [slug, filterAno, filterMes, filterCat, filterRisco, filterFornecedor]);
 
     function openDrawer(row: VerbaRow) { setSelectedRow(row); setDrawerOpen(true); }
@@ -435,7 +403,6 @@ function DadosCompletosContent({
         setFilterAno("all"); setFilterMes("all"); setFilterCat("all");
         setFilterRisco("all"); setFilterFornecedor(""); setPage(0);
     }
-
     function goPage(pg: number) { setPage(pg); fetchPage(pg); }
 
     const totalPaginas = data?.totalPaginas ?? 0;
@@ -444,7 +411,7 @@ function DadosCompletosContent({
         <div>
             {/* Filtros Sticky */}
             <div className="sticky top-16 z-10 bg-white/95 backdrop-blur-sm border-b border-slate-100 py-3 mb-4 flex flex-wrap items-center gap-2">
-                <Select value={filterAno} onValueChange={(v) => { setFilterAno(v); }}>
+                <Select value={filterAno} onValueChange={(v) => setFilterAno(v)}>
                     <SelectTrigger className="h-9 w-28 text-[12px] bg-slate-50 border-slate-200"><SelectValue placeholder="Ano ▼" /></SelectTrigger>
                     <SelectContent>
                         <SelectItem value="all">Todos os anos</SelectItem>
@@ -455,8 +422,8 @@ function DadosCompletosContent({
                     <SelectTrigger className="h-9 w-24 text-[12px] bg-slate-50 border-slate-200"><SelectValue placeholder="Mês ▼" /></SelectTrigger>
                     <SelectContent>
                         <SelectItem value="all">Todos</SelectItem>
-                        {["01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12"].map(m => (
-                            <SelectItem key={m} value={m}>{["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"][parseInt(m) - 1]}</SelectItem>
+                        {["01","02","03","04","05","06","07","08","09","10","11","12"].map(m => (
+                            <SelectItem key={m} value={m}>{["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"][parseInt(m)-1]}</SelectItem>
                         ))}
                     </SelectContent>
                 </Select>
@@ -473,7 +440,7 @@ function DadosCompletosContent({
                     <SelectTrigger className="h-9 w-28 text-[12px] bg-slate-50 border-slate-200"><SelectValue placeholder="🔴 Risco ▼" /></SelectTrigger>
                     <SelectContent>
                         <SelectItem value="all">Todos</SelectItem>
-                        {["MÁXIMO", "ALTO", "MÉDIO"].map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                        {["MÁXIMO","ALTO","MÉDIO"].map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
                     </SelectContent>
                 </Select>
                 <div className="flex-1 min-w-36">
@@ -502,13 +469,12 @@ function DadosCompletosContent({
                 </div>
             )}
 
-            {/* Tabela */}
             <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="w-full text-[13px]">
                         <thead>
                             <tr className="border-b border-slate-100">
-                                {["Risco", "Competência", "Categoria", "Valor", "Fornecedor", "CNPJ", "Nº NF", "PDF", "···"].map(h => (
+                                {["Competência", "Categoria", "Valor", "Fornecedor", "CNPJ", "Nº NF", "PDF", "···"].map(h => (
                                     <th key={h} className="px-4 py-3 text-left text-[10px] font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap">{h}</th>
                                 ))}
                             </tr>
@@ -516,7 +482,7 @@ function DadosCompletosContent({
                         <tbody>
                             {loading && !data?.registros?.length ? (
                                 <tr>
-                                    <td colSpan={9} className="py-16 text-center text-slate-400 text-[13px]">
+                                    <td colSpan={8} className="py-16 text-center text-slate-400 text-[13px]">
                                         <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />
                                         Carregando registros...
                                     </td>
@@ -527,9 +493,6 @@ function DadosCompletosContent({
                                     className={`border-b border-slate-50/70 cursor-pointer hover:bg-slate-50 transition-colors ${riscoRowClass(row.risco)}`}
                                     onClick={() => openDrawer(row)}
                                 >
-                                    <td className="px-4 py-2.5">
-                                        <Badge variant="outline" className={`text-[10px] font-bold border ${riscoBadgeClass(row.risco)}`}>{row.risco}</Badge>
-                                    </td>
                                     <td className="px-4 py-2.5 text-slate-600 whitespace-nowrap">{row.competencia}</td>
                                     <td className="px-4 py-2.5 text-slate-600 whitespace-nowrap">{catShort(row.categoria)}</td>
                                     <td className="px-4 py-2.5 font-semibold text-slate-900 whitespace-nowrap">R$ {row.valor.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</td>
@@ -543,7 +506,7 @@ function DadosCompletosContent({
                                     </td>
                                     <td className="px-4 py-2.5" onClick={e => e.stopPropagation()}>
                                         {row.hasPdf
-                                            ? <a href={row.link_pdf} target="_blank" rel="noopener noreferrer" className="text-slate-500 hover:text-slate-900 transition-colors" onClick={e => e.stopPropagation()}>📄</a>
+                                            ? <a href={row.link_pdf} target="_blank" rel="noopener noreferrer" className="text-slate-500 hover:text-slate-900 transition-colors">📄</a>
                                             : <span className="text-slate-200">📄</span>
                                         }
                                     </td>
@@ -556,7 +519,6 @@ function DadosCompletosContent({
                     </table>
                 </div>
 
-                {/* Paginação */}
                 <div className="flex items-center justify-between px-5 py-3.5 border-t border-slate-100">
                     <span className="text-[12px] text-slate-400 font-medium">
                         {data ? `${page * PAGE_SIZE + 1}–${Math.min((page + 1) * PAGE_SIZE, data.totalRegistros)} de ${data.totalRegistros} registros` : "—"}
@@ -592,7 +554,6 @@ export default function VerbasIndenizatoriasTab({ politicianName, slug }: Verbas
     const [loadingKpis, setLoadingKpis] = useState(true);
     const [errorKpis, setErrorKpis] = useState<string | null>(null);
 
-    // Carrega KPIs no mount
     React.useEffect(() => {
         if (!slug) return;
         setLoadingKpis(true);
@@ -628,7 +589,6 @@ export default function VerbasIndenizatoriasTab({ politicianName, slug }: Verbas
 
     return (
         <div className="animate-in fade-in duration-500">
-            {/* Sub-Tabs Pill */}
             <div className="flex items-center gap-2 mb-6 bg-slate-100/50 p-1 rounded-full w-max border border-slate-200">
                 <button onClick={() => setSubTab("resumo")}
                     className={`px-5 py-1.5 rounded-full text-[13px] font-bold transition-all ${subTab === "resumo" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
