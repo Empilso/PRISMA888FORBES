@@ -42,15 +42,16 @@ function Sparkline({ data, color }: { data: number[]; color: string }) {
 }
 
 // Portal data - Configuração Enterprise (Zero Mocks)
+// total: null = dados ainda não carregados (nunca exibir mock de valor)
 const PORTAIS_BASE = [
-    { id: "verbas-old",        icon: "🏛️", label: "Verbas Gabinete",   total: "R$ 0,00", meta: "Sincronização Pendente", bar: null, alert: 0, ativo: true,  trend: null, acento: "#D97706", bg: "#FFFBEB", fg: "#92400E", tabId: "verbas" },
-    { id: "emendas-ba-painel", icon: "📊", label: "Emendas BA Painel", total: "R$ 0,00", meta: "Sincronização Pendente", bar: null, alert: 0, ativo: false, trend: null, acento: "#16A34A", bg: "#F0FDF4", fg: "#15803D", tabId: null },
-    { id: "emendas-ba-dados",  icon: "📦", label: "Emendas BA Dados",  total: "R$ 0,00", meta: "Sincronização Pendente", bar: null, alert: 0, ativo: false, trend: null, acento: "#0D9488", bg: "#F0FDFA", fg: "#0F766E", tabId: null },
-    { id: "seplan-loa",        icon: "📄", label: "SEPLAN LOA",        total: "R$ 0,00", meta: "Sincronização Pendente", bar: null, alert: 0, ativo: false, trend: null, acento: "#0284C7", bg: "#F0F9FF", fg: "#0369A1", tabId: null },
-    { id: "portal-federal",    icon: "🇾🇧", label: "Portal Federal",   total: "R$ 0,00", meta: "Sincronização Pendente", bar: null, alert: 0, ativo: false, trend: null, acento: "#2563EB", bg: "#EFF6FF", fg: "#1D4ED8", tabId: null },
-    { id: "empresas-rf",       icon: "🏢", label: "Empresas RF",       total: "—",       meta: "Sincronização Pendente", bar: null, alert: 0, ativo: false, trend: null, acento: "#B45309", bg: "#FFFBEB", fg: "#92400E", tabId: null },
-    { id: "tcm-ba",            icon: "⚖️", label: "TCM-BA",           total: "R$ 0,00", meta: "Sincronização Pendente", bar: null, alert: 0, ativo: false, trend: null, acento: "#DC2626", bg: "#FEF2F2", fg: "#991B1B", tabId: null },
-    { id: "rastreabilidade",   icon: "🔗", label: "Rastreabilidade",   total: "—",       meta: "Sincronização Pendente", bar: null, alert: 0, ativo: false, trend: null, acento: "#2563EB", bg: "#EFF6FF", fg: "#1E40AF", tabId: null },
+    { id: "verbas-old",        icon: "🏛️", label: "Verbas Gabinete",   total: null, meta: null, bar: null, alert: 0, ativo: true,  trend: null, acento: "#D97706", bg: "#FFFBEB", fg: "#92400E", tabId: "verbas" },
+    { id: "emendas-ba-painel", icon: "📊", label: "Emendas BA Painel", total: null, meta: null, bar: null, alert: 0, ativo: false, trend: null, acento: "#16A34A", bg: "#F0FDF4", fg: "#15803D", tabId: null },
+    { id: "emendas-ba-dados",  icon: "📦", label: "Emendas BA Dados",  total: null, meta: null, bar: null, alert: 0, ativo: false, trend: null, acento: "#0D9488", bg: "#F0FDFA", fg: "#0F766E", tabId: null },
+    { id: "seplan-loa",        icon: "📄", label: "SEPLAN LOA",        total: null, meta: null, bar: null, alert: 0, ativo: false, trend: null, acento: "#0284C7", bg: "#F0F9FF", fg: "#0369A1", tabId: null },
+    { id: "portal-federal",    icon: "🇾🇧", label: "Portal Federal",   total: null, meta: null, bar: null, alert: 0, ativo: false, trend: null, acento: "#2563EB", bg: "#EFF6FF", fg: "#1D4ED8", tabId: null },
+    { id: "empresas-rf",       icon: "🏢", label: "Empresas RF",       total: null, meta: null, bar: null, alert: 0, ativo: false, trend: null, acento: "#B45309", bg: "#FFFBEB", fg: "#92400E", tabId: null },
+    { id: "tcm-ba",            icon: "⚖️", label: "TCM-BA",           total: null, meta: null, bar: null, alert: 0, ativo: false, trend: null, acento: "#DC2626", bg: "#FEF2F2", fg: "#991B1B", tabId: null },
+    { id: "rastreabilidade",   icon: "🔗", label: "Rastreabilidade",   total: null, meta: null, bar: null, alert: 0, ativo: false, trend: null, acento: "#2563EB", bg: "#EFF6FF", fg: "#1E40AF", tabId: null },
 ];
 
 const ALERTAS: any[] = [];
@@ -122,15 +123,26 @@ export default function VisaoGeralTab({ nome, onNavigateToTab, verbasSummary, al
     };
 
     // ── Merge de portais com dados reais (verbasSummary) ──
+    // Regra: NUNCA exibir valores mock. Se não há dados, exibe estado de carregamento honesto.
     const portais = PORTAIS_BASE.map(p => {
-        if (p.id === "verbas-old" && verbasSummary) {
-            const totalFormatado = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(verbasSummary.totalGasto || 0);
-            const alertCount = verbasSummary.alertasForenses?.reduce((s: number, a: any) => s + a.count, 0) || 0;
+        if (p.id === "verbas-old") {
+            if (verbasSummary) {
+                // Dados reais disponíveis
+                const totalFormatado = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(verbasSummary.totalGasto || 0);
+                const alertCount = verbasSummary.alertasForenses?.reduce((s: number, a: any) => s + a.count, 0) || 0;
+                return {
+                    ...p,
+                    total: totalFormatado,
+                    meta:  `${verbasSummary.totalNotas ?? 0} registros · ${verbasSummary.totalFornecedores ?? 0} fornecedores`,
+                    alert: alertCount,
+                    ativo: true,
+                };
+            }
+            // Sem dados ainda — estado honesto, sem mock de R$ 0,00
             return {
                 ...p,
-                total: totalFormatado,
-                meta:  `${verbasSummary.totalNotas ?? 0} registros · ${verbasSummary.totalFornecedores ?? 0} fornecedores`,
-                alert: alertCount,
+                total: null,  // null = exibe skeleton/carregando
+                meta:  null,
                 ativo: true,
             };
         }
@@ -336,6 +348,8 @@ export default function VisaoGeralTab({ nome, onNavigateToTab, verbasSummary, al
                     {portais.map((p) => {
                         const isClickable = p.ativo && p.tabId && onNavigateToTab;
                         const Wrapper = isClickable ? "button" : "div";
+                        // Estado de carregamento — dados ainda não chegaram do servidor
+                        const isLoading = p.ativo && p.total === null;
                         return (
                             <Wrapper
                                 key={p.id}
@@ -371,12 +385,24 @@ export default function VisaoGeralTab({ nome, onNavigateToTab, verbasSummary, al
                                 <p className="text-[8px] font-black uppercase tracking-widest mb-1" style={{ color: p.ativo ? p.acento : "#94A3B8" }}>
                                     {p.label}
                                 </p>
-                                <p className="text-[15px] font-mono font-black" style={{ color: p.ativo ? "#1E293B" : "#CBD5E1" }}>
-                                    {p.total}
-                                </p>
-                                {p.ativo && p.meta && (
-                                    <p className="text-[9px] text-slate-400 font-medium mt-0.5 truncate">{p.meta}</p>
+
+                                {/* Valor principal — real ou skeleton de carregamento */}
+                                {isLoading ? (
+                                    <div className="space-y-1 mt-1">
+                                        <div className="h-4 w-24 rounded-md animate-pulse bg-amber-100/70" />
+                                        <div className="h-2.5 w-16 rounded-md animate-pulse bg-slate-100" />
+                                    </div>
+                                ) : (
+                                    <>
+                                        <p className="text-[15px] font-mono font-black" style={{ color: p.ativo ? "#1E293B" : "#CBD5E1" }}>
+                                            {p.total ?? "—"}
+                                        </p>
+                                        {p.ativo && p.meta && (
+                                            <p className="text-[9px] text-slate-400 font-medium mt-0.5 truncate">{p.meta}</p>
+                                        )}
+                                    </>
                                 )}
+
                                 {p.trend && p.ativo && (
                                     <div className="mt-2"><Sparkline data={p.trend as number[]} color={p.acento} /></div>
                                 )}
