@@ -251,7 +251,7 @@ function DetalheDrawer({ row, open, onClose }: { row: VerbaRow | null; open: boo
     if (!row) return null;
 
     // Resolve campos: prefere campos reais do banco, cai nos legados
-    const nomeForncedor    = row.metadados?.nome_fornecedor_limpo || row.nome_fornecedor || row.fornecedor || "—";
+    const nomeFornecedor   = row.metadados?.nome_fornecedor_limpo || row.nome_fornecedor || row.fornecedor || "—";
     const cnpjRaw          = row.cnpj_fornecedor || row.cnpj || "";
     const cpfRaw           = row.cpf_fornecedor || "";
     const tipoDoc          = row.tipo_documento || "CNPJ";
@@ -280,8 +280,11 @@ function DetalheDrawer({ row, open, onClose }: { row: VerbaRow | null; open: boo
     const nivel            = row.nivel_qualidade || "";
     const fonte            = row.fonte_portal || "al_ba_gov_br";
     const coletadoEm       = fmtDataHora(row.coletado_em);
+    const criadoEm         = fmtDataHora(row.criado_em);
     const flags            = row.metadados?.flags ?? [];
     const cnpjValido       = row.metadados?.cnpj_valido;
+    const qualidadeScore   = row.qualidade_score ?? row.score ?? null;
+    const prismaId         = row.prisma_id || row.id || "—";
 
     const slugBadge        = SLUG_BADGE[catSlug] ?? { bg: "bg-slate-100", text: "text-slate-600", label: catShort(catPortal) };
 
@@ -304,7 +307,7 @@ function DetalheDrawer({ row, open, onClose }: { row: VerbaRow | null; open: boo
                                     {slugBadge.label}
                                 </span>
                                 <SheetTitle className="text-[15px] font-black text-slate-900 leading-tight">
-                                    {nomeForncedor.split(" ").slice(0, 4).join(" ")}
+                                    {nomeFornecedor.split(" ").slice(0, 4).join(" ")}
                                 </SheetTitle>
                                 <p className="text-[12px] text-slate-400 mt-0.5">{competenciaLabel}</p>
                             </div>
@@ -321,7 +324,7 @@ function DetalheDrawer({ row, open, onClose }: { row: VerbaRow | null; open: boo
                             <Building2 className="w-4 h-4 text-orange-500" />
                             <p className="text-[10px] font-bold text-orange-700 uppercase tracking-widest">② Fornecedor</p>
                         </div>
-                        <p className="font-bold text-slate-900 text-[14px] mb-1">{nomeForncedor}</p>
+                        <p className="font-bold text-slate-900 text-[14px] mb-1">{nomeFornecedor}</p>
                         <p className="text-[12px] text-slate-500 font-mono mb-2">{docFormatado}</p>
                         <div className="flex items-center gap-2 mb-3 flex-wrap">
                             {isCPF ? (
@@ -386,6 +389,10 @@ function DetalheDrawer({ row, open, onClose }: { row: VerbaRow | null; open: boo
                                 </a>
                             )}
                         </div>
+                        {/* Nenhum link disponível */}
+                        {!urlPDF && !urlPortal && !urlDetalhe && (
+                            <p className="text-[11px] text-slate-300 italic">Nenhum link de documento disponível</p>
+                        )}
                     </div>
 
                     {/* ④ VALORES */}
@@ -463,12 +470,20 @@ function DetalheDrawer({ row, open, onClose }: { row: VerbaRow | null; open: boo
                                         <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Coletado em</p>
                                         <p className="text-[11px] text-slate-600">{coletadoEm}</p>
                                     </div>
-                                    {row.qualidade_score != null && (
+                                    <div>
+                                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Criado em</p>
+                                        <p className="text-[11px] text-slate-600">{criadoEm}</p>
+                                    </div>
+                                    {qualidadeScore != null && (
                                         <div>
                                             <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Score</p>
-                                            <p className="text-[11px] text-slate-600">{(row.qualidade_score * 100).toFixed(0)}%</p>
+                                            <p className="text-[11px] text-slate-600">{(qualidadeScore * 100).toFixed(0)}%</p>
                                         </div>
                                     )}
+                                    <div>
+                                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Prisma ID</p>
+                                        <p className="text-[10px] text-slate-400 font-mono break-all">{prismaId}</p>
+                                    </div>
                                 </div>
                                 {flags.length > 0 && (
                                     <div>
