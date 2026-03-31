@@ -14,6 +14,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 // ─── Tipos ─────────────────────────────────────────────────────────────────────
 interface VerbasTabProps {
@@ -131,73 +132,33 @@ function AnoSeletor({
     anoAtivo: string;
     onChange: (ano: string) => void;
 }) {
-    if (!anos || anos.length === 0) return null;
-    const sorted = [...anos].sort((a, b) => b - a);
-    const maisRecente = sorted[0];
+    const anosOpcoes = ['all', '2025', '2024', '2023', '2022', '2021', '2020', '2019', '2018', '2017', '2016'];
 
     return (
-        <div className="flex flex-wrap items-center gap-2.5 mb-6 px-4 py-3.5
-            bg-white border border-slate-200 rounded-2xl shadow-md
-            ring-1 ring-slate-100">
-
-            {/* Label */}
-            <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] mr-1 select-none">
-                Período
+        <div className="flex items-center gap-2 flex-wrap mb-6">
+            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider mr-1 select-none">
+                Período:
             </span>
-
-            {/* ── TODOS ── */}
-            <button
-                onClick={() => onChange("all")}
-                className={`
-                    relative h-9 px-4 rounded-xl border-2 text-[13px] font-black
-                    transition-all duration-200 shadow-sm select-none
-                    focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400
-                    ${
-                        anoAtivo === "all"
-                            ? "bg-slate-900 border-slate-900 text-white shadow-slate-900/20 shadow-md scale-105"
-                            : "bg-slate-50 border-slate-200 text-slate-500 hover:border-slate-400 hover:text-slate-800 hover:bg-white hover:shadow-md hover:scale-105"
-                    }
-                `}
-            >
-                Todos
-            </button>
-
-            {/* ── Um chip por ano — NUNCA some independente do ano selecionado ── */}
-            {sorted.map((ano) => {
-                const isAtivo = anoAtivo === String(ano);
-                const isRecente = ano === maisRecente;
-                return (
-                    <div key={ano} className="relative">
-                        {isRecente && (
-                            <span
-                                className="
-                                    absolute -top-2 left-1/2 -translate-x-1/2 z-10
-                                    text-[8px] font-black bg-emerald-500 text-white
-                                    px-1.5 py-[2px] rounded-full leading-none whitespace-nowrap
-                                    shadow-sm ring-1 ring-white
-                                "
-                            >
-                                atual
-                            </span>
-                        )}
-                        <button
-                            onClick={() => onChange(String(ano))}
-                            className={`
-                                h-9 px-4 rounded-xl border-2 text-[13px] font-black
-                                transition-all duration-200 shadow-sm select-none
-                                focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-400
-                                ${
-                                    isAtivo
-                                        ? "bg-orange-500 border-orange-500 text-white shadow-orange-400/30 shadow-md scale-105"
-                                        : "bg-slate-50 border-slate-200 text-slate-600 hover:border-orange-300 hover:text-orange-600 hover:bg-orange-50 hover:shadow-md hover:scale-105"
-                                }
-                            `}
-                        >
-                            {ano}
-                        </button>
-                    </div>
-                );
-            })}
+            {anosOpcoes.map((ano) => (
+                <button
+                    key={ano}
+                    onClick={() => onChange(ano)}
+                    className={cn(
+                        "px-4 py-2 rounded-xl text-sm font-semibold border transition-all duration-200 cursor-pointer",
+                        "shadow-sm hover:shadow-md hover:-translate-y-0.5 select-none whitespace-nowrap min-w-[60px]",
+                        "bg-white border-slate-200 text-slate-600 hover:border-amber-400 hover:text-amber-700",
+                        anoAtivo === ano ? [
+                            "bg-gradient-to-br from-amber-500 to-amber-600",
+                            "border-transparent text-white",
+                            "shadow-md shadow-amber-200/60 -translate-y-0.5",
+                            "hover:from-amber-600 hover:to-amber-700"
+                        ] : "",
+                        ano === '2025' && anoAtivo !== '2025' ? "bg-amber-50 border-amber-300 text-amber-700 font-bold" : "",
+                    )}
+                >
+                    {ano === 'all' ? 'Todos' : ano === '2025' ? 'atual 2025' : ano}
+                </button>
+            ))}
         </div>
     );
 }
