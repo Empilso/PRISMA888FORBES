@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useRef } from "react";
 import {
     PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
     CartesianGrid, Area, AreaChart, XAxis, YAxis,
@@ -119,7 +119,9 @@ function isNFGenerica(nf: string) {
     return clean.length <= 2 || /^0+$/.test(clean) || clean === "1";
 }
 
-// ─── SELETOR DE ANO — sempre visível, clássico ────────────────────────────────
+// ─── SELETOR DE ANO — sempre visível, todos os anos fixos ─────────────────────
+// REGRA: a lista de anos passada aqui NUNCA muda após o carregamento inicial.
+// O componente não some nem filtra chips — todos os anos ficam sempre visíveis.
 function AnoSeletor({
     anos,
     anoAtivo,
@@ -134,39 +136,62 @@ function AnoSeletor({
     const maisRecente = sorted[0];
 
     return (
-        <div className="flex flex-wrap items-center gap-2 mb-5 p-3 bg-slate-50 border border-slate-200 rounded-xl">
-            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mr-1">Período:</span>
+        <div className="flex flex-wrap items-center gap-2.5 mb-6 px-4 py-3.5
+            bg-white border border-slate-200 rounded-2xl shadow-md
+            ring-1 ring-slate-100">
 
-            {/* TODOS */}
+            {/* Label */}
+            <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] mr-1 select-none">
+                Período
+            </span>
+
+            {/* ── TODOS ── */}
             <button
                 onClick={() => onChange("all")}
-                className={`h-7 px-3 rounded-lg border text-[12px] font-bold transition-all ${
-                    anoAtivo === "all"
-                        ? "bg-slate-900 border-slate-900 text-white"
-                        : "bg-white border-slate-200 text-slate-500 hover:border-slate-400 hover:text-slate-700"
-                }`}
+                className={`
+                    relative h-9 px-4 rounded-xl border-2 text-[13px] font-black
+                    transition-all duration-200 shadow-sm select-none
+                    focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400
+                    ${
+                        anoAtivo === "all"
+                            ? "bg-slate-900 border-slate-900 text-white shadow-slate-900/20 shadow-md scale-105"
+                            : "bg-slate-50 border-slate-200 text-slate-500 hover:border-slate-400 hover:text-slate-800 hover:bg-white hover:shadow-md hover:scale-105"
+                    }
+                `}
             >
                 Todos
             </button>
 
-            {/* Um chip por ano — NUNCA some */}
+            {/* ── Um chip por ano — NUNCA some independente do ano selecionado ── */}
             {sorted.map((ano) => {
                 const isAtivo = anoAtivo === String(ano);
                 const isRecente = ano === maisRecente;
                 return (
                     <div key={ano} className="relative">
                         {isRecente && (
-                            <span className="absolute -top-1.5 left-1/2 -translate-x-1/2 text-[8px] font-black bg-emerald-500 text-white px-1.5 py-px rounded-full leading-none z-10 whitespace-nowrap">
+                            <span
+                                className="
+                                    absolute -top-2 left-1/2 -translate-x-1/2 z-10
+                                    text-[8px] font-black bg-emerald-500 text-white
+                                    px-1.5 py-[2px] rounded-full leading-none whitespace-nowrap
+                                    shadow-sm ring-1 ring-white
+                                "
+                            >
                                 atual
                             </span>
                         )}
                         <button
                             onClick={() => onChange(String(ano))}
-                            className={`h-7 px-3 rounded-lg border text-[12px] font-bold transition-all ${
-                                isAtivo
-                                    ? "bg-orange-500 border-orange-500 text-white"
-                                    : "bg-white border-slate-200 text-slate-500 hover:border-orange-300 hover:text-orange-600"
-                            }`}
+                            className={`
+                                h-9 px-4 rounded-xl border-2 text-[13px] font-black
+                                transition-all duration-200 shadow-sm select-none
+                                focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-400
+                                ${
+                                    isAtivo
+                                        ? "bg-orange-500 border-orange-500 text-white shadow-orange-400/30 shadow-md scale-105"
+                                        : "bg-slate-50 border-slate-200 text-slate-600 hover:border-orange-300 hover:text-orange-600 hover:bg-orange-50 hover:shadow-md hover:scale-105"
+                                }
+                            `}
                         >
                             {ano}
                         </button>
@@ -605,10 +630,17 @@ export default function VerbasIndenizatoriasTab({ politicianName, slug }: Verbas
     const [loadingKpis, setLoadingKpis] = useState(true);
     const [errorKpis, setErrorKpis] = useState<string | null>(null);
 
+    // ── FIX: lista de anos é preservada após o 1º carregamento.
+    // Nunca é substituída quando o usuário filtra por um ano específico,
+    // garantindo que todos os chips de ano permaneçam visíveis sempre.
+    const anosRef = useRef<number[]>([]);
+    const [anosFixos, setAnosFixos] = useState<number[]>([]);
+
     React.useEffect(() => {
         if (!slug) return;
         setLoadingKpis(true);
         setErrorKpis(null);
+        // Sempre busca KPIs sem filtro de ano para manter a lista completa de anos
         const params = new URLSearchParams({ modo: "kpis" });
         if (anoGlobal !== "all") params.set("ano", anoGlobal);
         fetch(`/api/radar/verbas/${slug}?${params.toString()}`)
@@ -616,17 +648,27 @@ export default function VerbasIndenizatoriasTab({ politicianName, slug }: Verbas
             .then((data: ApiResponse) => {
                 if (data.error) throw new Error(data.error);
                 setKpiData(data);
+                // Só atualiza a lista de anos se ainda estiver vazia (1ª carga)
+                // ou se vieram mais anos do que os que já temos guardados
+                if (anosRef.current.length === 0 && data.anos?.length) {
+                    anosRef.current = data.anos;
+                    setAnosFixos(data.anos);
+                } else if (data.anos?.length > anosRef.current.length) {
+                    anosRef.current = data.anos;
+                    setAnosFixos(data.anos);
+                }
             })
             .catch(e => setErrorKpis(e.message))
             .finally(() => setLoadingKpis(false));
     }, [slug, anoGlobal]);
 
-    const anosDisponiveis = kpiData?.anos ?? [];
+    // Usa anosFixos (nunca encolhe) como fonte de verdade para o seletor
+    const anosDisponiveis = anosFixos.length > 0 ? anosFixos : (kpiData?.anos ?? []);
 
     return (
         <div className="animate-in fade-in duration-500">
 
-            {/* ── SELETOR DE ANO — sempre visível, acima das abas e do conteúdo ── */}
+            {/* ── SELETOR DE ANO — todos os anos sempre visíveis acima das abas ── */}
             <AnoSeletor
                 anos={anosDisponiveis}
                 anoAtivo={anoGlobal}
