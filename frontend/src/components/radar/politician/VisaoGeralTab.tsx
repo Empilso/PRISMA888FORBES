@@ -42,15 +42,15 @@ function Sparkline({ data, color }: { data: number[]; color: string }) {
 }
 
 // Portal data - Configuração Enterprise (Zero Mocks)
-const PORTAIS = [
-    { id: "verbas-old",        icon: "🏛️", label: "Verbas Gabinete",   total: "R$ 0,00", meta: "Sincronização Pendente", bar: null, alert: 0, ativo: false, trend: null, acento: "#D97706", bg: "#FFFBEB", fg: "#92400E" },
-    { id: "emendas-ba-painel", icon: "📊", label: "Emendas BA Painel", total: "R$ 0,00", meta: "Sincronização Pendente", bar: null, alert: 0, ativo: false, trend: null, acento: "#16A34A", bg: "#F0FDF4", fg: "#15803D" },
-    { id: "emendas-ba-dados",  icon: "📦", label: "Emendas BA Dados",  total: "R$ 0,00", meta: "Sincronização Pendente", bar: null, alert: 0, ativo: false, trend: null, acento: "#0D9488", bg: "#F0FDFA", fg: "#0F766E" },
-    { id: "seplan-loa",        icon: "📄", label: "SEPLAN LOA",        total: "R$ 0,00", meta: "Sincronização Pendente", bar: null, alert: 0, ativo: false, trend: null, acento: "#0284C7", bg: "#F0F9FF", fg: "#0369A1" },
-    { id: "portal-federal",    icon: "🇧🇷", label: "Portal Federal",   total: "R$ 0,00", meta: "Sincronização Pendente", bar: null, alert: 0, ativo: false, trend: null, acento: "#2563EB", bg: "#EFF6FF", fg: "#1D4ED8" },
-    { id: "empresas-rf",       icon: "🏢", label: "Empresas RF",       total: "—",       meta: "Sincronização Pendente", bar: null, alert: 0, ativo: false, trend: null, acento: "#B45309", bg: "#FFFBEB", fg: "#92400E" },
-    { id: "tcm-ba",            icon: "⚖️", label: "TCM-BA",           total: "R$ 0,00", meta: "Sincronização Pendente", bar: null, alert: 0, ativo: false, trend: null, acento: "#DC2626", bg: "#FEF2F2", fg: "#991B1B" },
-    { id: "rastreabilidade",   icon: "🔗", label: "Rastreabilidade",   total: "—",       meta: "Sincronização Pendente", bar: null, alert: 0, ativo: false, trend: null, acento: "#2563EB", bg: "#EFF6FF", fg: "#1E40AF" },
+const PORTAIS_BASE = [
+    { id: "verbas-old",        icon: "🏛️", label: "Verbas Gabinete",   total: "R$ 0,00", meta: "Sincronização Pendente", bar: null, alert: 0, ativo: true,  trend: null, acento: "#D97706", bg: "#FFFBEB", fg: "#92400E", tabId: "verbas" },
+    { id: "emendas-ba-painel", icon: "📊", label: "Emendas BA Painel", total: "R$ 0,00", meta: "Sincronização Pendente", bar: null, alert: 0, ativo: false, trend: null, acento: "#16A34A", bg: "#F0FDF4", fg: "#15803D", tabId: null },
+    { id: "emendas-ba-dados",  icon: "📦", label: "Emendas BA Dados",  total: "R$ 0,00", meta: "Sincronização Pendente", bar: null, alert: 0, ativo: false, trend: null, acento: "#0D9488", bg: "#F0FDFA", fg: "#0F766E", tabId: null },
+    { id: "seplan-loa",        icon: "📄", label: "SEPLAN LOA",        total: "R$ 0,00", meta: "Sincronização Pendente", bar: null, alert: 0, ativo: false, trend: null, acento: "#0284C7", bg: "#F0F9FF", fg: "#0369A1", tabId: null },
+    { id: "portal-federal",    icon: "🇾🇧", label: "Portal Federal",   total: "R$ 0,00", meta: "Sincronização Pendente", bar: null, alert: 0, ativo: false, trend: null, acento: "#2563EB", bg: "#EFF6FF", fg: "#1D4ED8", tabId: null },
+    { id: "empresas-rf",       icon: "🏢", label: "Empresas RF",       total: "—",       meta: "Sincronização Pendente", bar: null, alert: 0, ativo: false, trend: null, acento: "#B45309", bg: "#FFFBEB", fg: "#92400E", tabId: null },
+    { id: "tcm-ba",            icon: "⚖️", label: "TCM-BA",           total: "R$ 0,00", meta: "Sincronização Pendente", bar: null, alert: 0, ativo: false, trend: null, acento: "#DC2626", bg: "#FEF2F2", fg: "#991B1B", tabId: null },
+    { id: "rastreabilidade",   icon: "🔗", label: "Rastreabilidade",   total: "—",       meta: "Sincronização Pendente", bar: null, alert: 0, ativo: false, trend: null, acento: "#2563EB", bg: "#EFF6FF", fg: "#1E40AF", tabId: null },
 ];
 
 const ALERTAS: any[] = [];
@@ -64,23 +64,19 @@ const glass = {
     boxShadow: "0 4px 32px rgba(0,0,0,0.04), 0 1px 4px rgba(0,0,0,0.03)",
 };
 
-// Helpers para lidar com item de array que pode ser string ou objeto
 function getItemLabel(item: any): string {
     if (!item) return "";
     if (typeof item === "string") return item;
     return item.label || item.cargo || item.curso || item.titulo || item.nome || item.descricao || JSON.stringify(item);
 }
 
-// FIX: agora lê 'sub' (padrão Zidane/Supabase) além dos campos legados
 function getItemSub(item: any): string | null {
     if (!item || typeof item === "string") return null;
     return item.sub || item.instituicao || item.periodo || item.ano || item.local || null;
 }
 
-// Limpa valores de profissão que são lixo do scraper
 function sanitizeProfissao(val: string | null | undefined): string {
     if (!val) return "—";
-    // Remove valores que claramente são labels capturados errado pelo scraper
     const lixo = ["nascimento:", "naturalidade:", "partido:", "gabinete:", "email:", "telefone:"];
     if (lixo.some(l => val.toLowerCase().trim().startsWith(l))) return "—";
     return val.trim() || "—";
@@ -93,14 +89,12 @@ export default function VisaoGeralTab({ nome, onNavigateToTab, verbasSummary, al
         return <div className="p-8 text-center text-slate-400">Carregando dados estruturados...</div>;
     }
 
-    // ── Dados estruturados do Supabase (Padrão Zidane) ──
     const formacaoAcademica:    any[] = Array.isArray(albaData.formacao_academica)    ? albaData.formacao_academica    : [];
     const carreiraPolitica:     any[] = Array.isArray(albaData.carreira_politica)     ? albaData.carreira_politica     : [];
     const liderancaComissoes:   any[] = Array.isArray(albaData.lideranca_e_comissoes) ? albaData.lideranca_e_comissoes : [];
     const condecoracoes:        any[] = Array.isArray(albaData.condecoracoes)         ? albaData.condecoracoes         : [];
     const tagsEstrategicas:     any[] = Array.isArray(albaData.tags_estrategicas)     ? albaData.tags_estrategicas     : [];
 
-    // Fallback: se os campos estruturados chegarem vazios, ainda usamos biografia_completa para resumo
     const bioResumo = albaData.biografia_resumo || albaData.nome_urna || nome || "Biografia em processamento pelo Radar...";
 
     const d = {
@@ -128,19 +122,22 @@ export default function VisaoGeralTab({ nome, onNavigateToTab, verbasSummary, al
     };
 
     // ── Merge de portais com dados reais (verbasSummary) ──
-    const portais = PORTAIS.map(p => {
+    const portais = PORTAIS_BASE.map(p => {
         if (p.id === "verbas-old" && verbasSummary) {
+            const totalFormatado = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(verbasSummary.totalGasto || 0);
+            const alertCount = verbasSummary.alertasForenses?.reduce((s: number, a: any) => s + a.count, 0) || 0;
             return {
                 ...p,
-                total: new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(verbasSummary.totalGasto),
-                meta: `${verbasSummary.totalNotas} registros`,
-                alert: verbasSummary.alertasForenses?.reduce((s: number, a: any) => s + a.count, 0) || 0,
+                total: totalFormatado,
+                meta:  `${verbasSummary.totalNotas ?? 0} registros · ${verbasSummary.totalFornecedores ?? 0} fornecedores`,
+                alert: alertCount,
+                ativo: true,
             };
         }
         return p;
     });
 
-    // ── Timeline: prioriza carreira_politica estruturada, fallback para mandatos ──
+    // ── Timeline ──
     type TimelineItem = {
         labelYear: string;
         text: string;
@@ -207,16 +204,15 @@ export default function VisaoGeralTab({ nome, onNavigateToTab, verbasSummary, al
             )
         );
 
-    // ── 4 Quadrantes: usa dados estruturados, sem parseBio ──
     const quadrantes = [
         {
             t: "FORMAÇÃO",
             icon: <GraduationCap className="w-3.5 h-3.5" />,
             items: formacaoAcademica,
-            fallback: albaData.biografia_completa?.match(/Forma[çc][aã]o[^]*?(?=Atividade|Mandato|$)/i)?.[0]?.replace(/Forma[çc][aã]o[\s\w]*:?/i, "").trim() || null,
+            fallback: albaData.biografia_completa?.match(/Forma[\u00e7c][\u00e3a]o[^]*?(?=Atividade|Mandato|$)/i)?.[0]?.replace(/Forma[\u00e7c][\u00e3a]o[\s\w]*:?/i, "").trim() || null,
         },
         {
-            t: "PROFISSÃO",
+            t: "PROFISS\u00c3O",
             icon: <Briefcase className="w-3.5 h-3.5" />,
             items: albaData.atividade_profissional ? [albaData.atividade_profissional] : [],
             fallback: sanitizeProfissao(albaData.profissao) !== "—" ? sanitizeProfissao(albaData.profissao) : (albaData.biografia_completa?.match(/Atividade Profissional[^]*?(?=Mandato|Atividade Parlamentar|$)/i)?.[0]?.replace(/Atividade Profissional:?/i, "").trim() || null),
@@ -228,7 +224,7 @@ export default function VisaoGeralTab({ nome, onNavigateToTab, verbasSummary, al
             fallback: albaData.biografia_completa?.match(/Mandato Eletivo[^]*?(?=Atividade Parlamentar|$)/i)?.[0]?.replace(/Mandato Eletivo:?/i, "").split(/[.;]/)[0]?.trim() || null,
         },
         {
-            t: "MESA DIRETORA E COMISSÕES",
+            t: "MESA DIRETORA E COMISS\u00d5ES",
             icon: <Shield className="w-3.5 h-3.5" />,
             items: liderancaComissoes,
             fallback: albaData.biografia_completa?.match(/Atividade Parlamentar[^]*/i)?.[0]?.replace(/Atividade Parlamentar:?/i, "").trim() || null,
@@ -260,7 +256,6 @@ export default function VisaoGeralTab({ nome, onNavigateToTab, verbasSummary, al
                                 <span className="text-[11px] font-medium text-slate-400 flex items-center gap-1"><MapPin className="w-3 h-3" /> {d.municipioBase}</span>
                             </div>
 
-                            {/* Tags Estratégicas como Badges premium */}
                             {tagsEstrategicas.length > 0 && (
                                 <div className="flex flex-wrap gap-1.5 mb-3">
                                     {tagsEstrategicas.slice(0, 8).map((tag: any, i: number) => (
@@ -312,10 +307,9 @@ export default function VisaoGeralTab({ nome, onNavigateToTab, verbasSummary, al
                             )}
                         </div>
 
-                        {/* Stats Slim */}
                         <div className="flex gap-2 shrink-0">
                             {[
-                                { val: d.mandatosCount, label: "mandatos", color: "#6366F1" },
+                                { val: d.mandatosCount,         label: "mandatos", color: "#6366F1" },
                                 { val: d.qualidadeScore + "%",  label: "score",    color: "#10B981" },
                                 { val: d.telefones.length,      label: "contatos", color: "#F59E0B" },
                             ].map(s => (
@@ -339,26 +333,65 @@ export default function VisaoGeralTab({ nome, onNavigateToTab, verbasSummary, al
                     </div>
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-2.5">
-                    {portais.map((p) => (
-                        <div key={p.id} className="rounded-2xl border p-3 transition-all relative overflow-hidden group border-slate-100/50"
-                             style={{ backgroundColor: p.ativo ? "rgba(255,255,255,0.9)" : "rgba(248,250,252,0.5)", opacity: p.ativo ? 1 : 0.6 }}>
-                            {p.ativo && <div className="absolute top-0 right-0 w-12 h-12 -mr-6 -mt-6 rounded-full opacity-10" style={{ backgroundColor: p.acento }} />}
-                            <div className="flex justify-between items-start mb-2">
-                                <span className="text-[14px]">{p.icon}</span>
-                                {p.alert > 0 && <span className="text-[8px] font-black text-white px-1.5 py-0.5 rounded-full" style={{ backgroundColor: p.acento }}>{p.alert}</span>}
-                            </div>
-                            <p className="text-[8px] font-black uppercase tracking-widest mb-1" style={{ color: p.ativo ? p.acento : "#94A3B8" }}>{p.label}</p>
-                            <p className="text-[15px] font-mono font-black" style={{ color: p.ativo ? "#1E293B" : "#CBD5E1" }}>{p.total}</p>
-                            {p.trend && p.ativo && <div className="mt-2"><Sparkline data={p.trend as number[]} color={p.acento} /></div>}
-                        </div>
-                    ))}
+                    {portais.map((p) => {
+                        const isClickable = p.ativo && p.tabId && onNavigateToTab;
+                        const Wrapper = isClickable ? "button" : "div";
+                        return (
+                            <Wrapper
+                                key={p.id}
+                                {...(isClickable ? { onClick: () => onNavigateToTab!(p.tabId!) } : {})}
+                                className={`rounded-2xl border p-3 transition-all relative overflow-hidden group border-slate-100/50 text-left ${
+                                    isClickable
+                                        ? "cursor-pointer hover:shadow-md hover:scale-[1.02] hover:border-amber-200"
+                                        : ""
+                                }`}
+                                style={{
+                                    backgroundColor: p.ativo ? "rgba(255,255,255,0.95)" : "rgba(248,250,252,0.5)",
+                                    opacity: p.ativo ? 1 : 0.55,
+                                }}
+                            >
+                                {p.ativo && (
+                                    <div className="absolute top-0 right-0 w-12 h-12 -mr-6 -mt-6 rounded-full opacity-10" style={{ backgroundColor: p.acento }} />
+                                )}
+                                <div className="flex justify-between items-start mb-2">
+                                    <span className="text-[14px]">{p.icon}</span>
+                                    <div className="flex items-center gap-1">
+                                        {p.alert > 0 && (
+                                            <span className="text-[8px] font-black text-white px-1.5 py-0.5 rounded-full" style={{ backgroundColor: p.acento }}>
+                                                {p.alert}
+                                            </span>
+                                        )}
+                                        {p.ativo && p.tabId && (
+                                            <span className="text-[8px] font-black px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200">
+                                                ATIVO
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
+                                <p className="text-[8px] font-black uppercase tracking-widest mb-1" style={{ color: p.ativo ? p.acento : "#94A3B8" }}>
+                                    {p.label}
+                                </p>
+                                <p className="text-[15px] font-mono font-black" style={{ color: p.ativo ? "#1E293B" : "#CBD5E1" }}>
+                                    {p.total}
+                                </p>
+                                {p.ativo && p.meta && (
+                                    <p className="text-[9px] text-slate-400 font-medium mt-0.5 truncate">{p.meta}</p>
+                                )}
+                                {p.trend && p.ativo && (
+                                    <div className="mt-2"><Sparkline data={p.trend as number[]} color={p.acento} /></div>
+                                )}
+                                {isClickable && (
+                                    <p className="text-[9px] font-bold mt-2" style={{ color: p.acento }}>Ver detalhes →</p>
+                                )}
+                            </Wrapper>
+                        );
+                    })}
                 </div>
             </div>
 
             {/* ══ TIMELINE + SIDEBAR ══ */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
                 <div className="lg:col-span-7 space-y-4">
-                    {/* CARREIRA ALBA TIMELINE */}
                     <div className="rounded-3xl p-6" style={glass}>
                         <h3 className="text-[14px] font-black text-slate-900 uppercase tracking-tighter mb-5">Carreira ALBA</h3>
                         <div className="relative pl-5">
@@ -387,7 +420,6 @@ export default function VisaoGeralTab({ nome, onNavigateToTab, verbasSummary, al
                         </div>
                     </div>
 
-                    {/* ALERTAS - Oculto se vazio */}
                     {ALERTAS.length > 0 && (
                         <div className="rounded-3xl p-6" style={glass}>
                             <h3 className="text-[14px] font-black text-slate-900 uppercase tracking-tighter mb-4">Vetores Críticos</h3>
@@ -410,7 +442,6 @@ export default function VisaoGeralTab({ nome, onNavigateToTab, verbasSummary, al
                 </div>
 
                 <div className="lg:col-span-5 space-y-4">
-                    {/* DOSSIÊ DETALHADO */}
                     <div className="rounded-3xl p-6" style={glass}>
                         <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-4">Dossiê Detalhado</p>
                         <div className="space-y-3">
@@ -423,11 +454,9 @@ export default function VisaoGeralTab({ nome, onNavigateToTab, verbasSummary, al
                         </div>
                     </div>
 
-                    {/* HONRARIAS & CONTATOS */}
                     <div className="rounded-3xl p-6" style={glass}>
                         <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-4">Honrarias & Contatos</p>
                         <div className="space-y-4">
-                            {/* Condecorações da Crew Zidane */}
                             {condecoracoes.length > 0 && (
                                 <div className="space-y-1.5 mb-3">
                                     {condecoracoes.slice(0, 5).map((c: any, i: number) => (
@@ -455,7 +484,6 @@ export default function VisaoGeralTab({ nome, onNavigateToTab, verbasSummary, al
                 </div>
             </div>
 
-            {/* EVOLUÇÃO (Chart) - Oculto se vazio */}
             {EVOLUCAO.length > 0 && (
                 <div className="rounded-3xl p-6" style={glass}>
                     <div className="flex justify-between items-center mb-6">
