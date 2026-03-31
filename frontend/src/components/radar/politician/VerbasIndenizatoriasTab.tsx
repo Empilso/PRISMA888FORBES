@@ -8,7 +8,6 @@ import {
 import {
     ExternalLink, FileText, X, ChevronLeft, ChevronRight,
     AlertTriangle, Building2, Search, Loader2, RefreshCw,
-    Calendar, Filter,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -120,7 +119,7 @@ function isNFGenerica(nf: string) {
     return clean.length <= 2 || /^0+$/.test(clean) || clean === "1";
 }
 
-// ─── SELETOR DE ANO PREMIUM ───────────────────────────────────────────────────
+// ─── SELETOR DE ANO — sempre visível, clássico ────────────────────────────────
 function AnoSeletor({
     anos,
     anoAtivo,
@@ -131,75 +130,49 @@ function AnoSeletor({
     onChange: (ano: string) => void;
 }) {
     if (!anos || anos.length === 0) return null;
-
     const sorted = [...anos].sort((a, b) => b - a);
+    const maisRecente = sorted[0];
 
     return (
-        <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-5 mb-6">
-            <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-xl bg-orange-50 flex items-center justify-center">
-                        <Calendar className="w-4 h-4 text-orange-500" />
-                    </div>
-                    <div>
-                        <p className="text-[13px] font-black text-slate-800 uppercase tracking-widest">Período</p>
-                        <p className="text-[10px] text-slate-400 font-medium">Filtre por ano de competência</p>
-                    </div>
-                </div>
-                <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 bg-slate-50 px-3 py-1.5 rounded-full border border-slate-200">
-                    <Filter className="w-3 h-3" />
-                    {anoAtivo === "all" ? "Todos os anos" : `Ano ${anoAtivo}`}
-                </div>
-            </div>
+        <div className="flex flex-wrap items-center gap-2 mb-5 p-3 bg-slate-50 border border-slate-200 rounded-xl">
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mr-1">Período:</span>
 
-            <div className="flex flex-wrap gap-2">
-                {/* Botão TODOS */}
-                <button
-                    onClick={() => onChange("all")}
-                    className={`relative flex flex-col items-center justify-center px-5 py-3 rounded-2xl border-2 font-black text-[13px] transition-all duration-200 min-w-[80px] ${
-                        anoAtivo === "all"
-                            ? "bg-orange-500 border-orange-500 text-white shadow-lg shadow-orange-100 scale-105"
-                            : "bg-slate-50 border-slate-200 text-slate-500 hover:border-orange-200 hover:bg-orange-50 hover:text-orange-600"
-                    }`}
-                >
-                    <span className="text-[10px] font-bold opacity-70 uppercase tracking-wide mb-0.5">Ver</span>
-                    <span>TODOS</span>
-                    <span className={`text-[9px] font-bold mt-0.5 ${anoAtivo === "all" ? "text-white/70" : "text-slate-400"}`}>
-                        {anos.length} anos
-                    </span>
-                </button>
+            {/* TODOS */}
+            <button
+                onClick={() => onChange("all")}
+                className={`h-7 px-3 rounded-lg border text-[12px] font-bold transition-all ${
+                    anoAtivo === "all"
+                        ? "bg-slate-900 border-slate-900 text-white"
+                        : "bg-white border-slate-200 text-slate-500 hover:border-slate-400 hover:text-slate-700"
+                }`}
+            >
+                Todos
+            </button>
 
-                {/* Botão por ano */}
-                {sorted.map((ano, idx) => {
-                    const isAtivo = anoAtivo === String(ano);
-                    const isMaisRecente = idx === 0;
-                    return (
+            {/* Um chip por ano — NUNCA some */}
+            {sorted.map((ano) => {
+                const isAtivo = anoAtivo === String(ano);
+                const isRecente = ano === maisRecente;
+                return (
+                    <div key={ano} className="relative">
+                        {isRecente && (
+                            <span className="absolute -top-1.5 left-1/2 -translate-x-1/2 text-[8px] font-black bg-emerald-500 text-white px-1.5 py-px rounded-full leading-none z-10 whitespace-nowrap">
+                                atual
+                            </span>
+                        )}
                         <button
-                            key={ano}
                             onClick={() => onChange(String(ano))}
-                            className={`relative flex flex-col items-center justify-center px-5 py-3 rounded-2xl border-2 font-black transition-all duration-200 min-w-[80px] ${
+                            className={`h-7 px-3 rounded-lg border text-[12px] font-bold transition-all ${
                                 isAtivo
-                                    ? "bg-orange-500 border-orange-500 text-white shadow-lg shadow-orange-100 scale-105"
-                                    : "bg-slate-50 border-slate-200 text-slate-600 hover:border-orange-200 hover:bg-orange-50 hover:text-orange-600"
+                                    ? "bg-orange-500 border-orange-500 text-white"
+                                    : "bg-white border-slate-200 text-slate-500 hover:border-orange-300 hover:text-orange-600"
                             }`}
                         >
-                            {isMaisRecente && (
-                                <span className="absolute -top-2 left-1/2 -translate-x-1/2 text-[8px] font-black bg-emerald-500 text-white px-2 py-0.5 rounded-full whitespace-nowrap shadow-sm">
-                                    ● ATUAL
-                                </span>
-                            )}
-                            <span className={`text-[10px] font-bold uppercase tracking-wide mb-0.5 ${isAtivo ? "text-white/70" : "text-slate-400"}`}>
-                                Ano
-                            </span>
-                            <span className="text-[22px] leading-none">{ano}</span>
+                            {ano}
                         </button>
-                    );
-                })}
-            </div>
-
-            <p className="text-[11px] text-slate-400 mt-4 font-medium">
-                💡 Selecione um ano para filtrar <strong className="text-orange-500">Resumo</strong> e <strong className="text-orange-500">Dados Completos</strong> simultaneamente.
-            </p>
+                    </div>
+                );
+            })}
         </div>
     );
 }
@@ -319,7 +292,6 @@ function ResumoContent({ data }: { data: ApiResponse }) {
 
     return (
         <div className="space-y-8">
-            {/* KPIs */}
             <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
                 <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 divide-x divide-y sm:divide-y-0 divide-slate-100">
                     {[
@@ -339,7 +311,6 @@ function ResumoContent({ data }: { data: ApiResponse }) {
                 </div>
             </div>
 
-            {/* Donut + Top Fornecedores */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-5">
                     <p className="text-[13px] font-bold text-slate-900 mb-4">Categorias de Gasto</p>
@@ -388,7 +359,6 @@ function ResumoContent({ data }: { data: ApiResponse }) {
                 </div>
             </div>
 
-            {/* Gastos Mensais */}
             <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-5">
                 <p className="text-[13px] font-bold text-slate-900 mb-4">Gastos por Competência</p>
                 <ResponsiveContainer width="100%" height={180}>
@@ -408,7 +378,6 @@ function ResumoContent({ data }: { data: ApiResponse }) {
                 </ResponsiveContainer>
             </div>
 
-            {/* Alertas Forenses */}
             {alertasForenses.length > 0 && (
                 <div>
                     <p className="text-base font-bold text-slate-900 mb-4 flex items-center gap-2">
@@ -454,7 +423,6 @@ function DadosCompletosContent({
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    // Sincroniza com o seletor global quando muda
     React.useEffect(() => { setFilterAno(anoGlobal); setPage(0); }, [anoGlobal]);
 
     const hasFilters = filterAno !== "all" || filterMes !== "all" || filterCat !== "all" || filterRisco !== "all" || filterFornecedor.trim() !== "";
@@ -469,7 +437,6 @@ function DadosCompletosContent({
             if (filterCat !== "all") params.set("categoria", filterCat);
             if (filterRisco !== "all") params.set("risco", filterRisco);
             if (filterFornecedor.trim()) params.set("fornecedor", filterFornecedor);
-
             const res = await fetch(`/api/radar/verbas/${slug}?${params.toString()}`);
             const json = await res.json() as ApiResponse;
             if (json.error) throw new Error(json.error);
@@ -489,12 +456,10 @@ function DadosCompletosContent({
         setFilterRisco("all"); setFilterFornecedor(""); setPage(0);
     }
     function goPage(pg: number) { setPage(pg); fetchPage(pg); }
-
     const totalPaginas = data?.totalPaginas ?? 0;
 
     return (
         <div>
-            {/* Filtros Sticky */}
             <div className="sticky top-16 z-10 bg-white/95 backdrop-blur-sm border-b border-slate-100 py-3 mb-4 flex flex-wrap items-center gap-2">
                 <Select value={filterAno} onValueChange={(v) => setFilterAno(v)}>
                     <SelectTrigger className="h-9 w-28 text-[12px] bg-slate-50 border-slate-200"><SelectValue placeholder="Ano ▼" /></SelectTrigger>
@@ -640,7 +605,6 @@ export default function VerbasIndenizatoriasTab({ politicianName, slug }: Verbas
     const [loadingKpis, setLoadingKpis] = useState(true);
     const [errorKpis, setErrorKpis] = useState<string | null>(null);
 
-    // Rebusca o resumo quando o ano global muda
     React.useEffect(() => {
         if (!slug) return;
         setLoadingKpis(true);
@@ -662,14 +626,12 @@ export default function VerbasIndenizatoriasTab({ politicianName, slug }: Verbas
     return (
         <div className="animate-in fade-in duration-500">
 
-            {/* ── SELETOR DE ANO PREMIUM (sempre visível acima das abas) ── */}
-            {anosDisponiveis.length > 0 && (
-                <AnoSeletor
-                    anos={anosDisponiveis}
-                    anoAtivo={anoGlobal}
-                    onChange={(ano) => { setAnoGlobal(ano); }}
-                />
-            )}
+            {/* ── SELETOR DE ANO — sempre visível, acima das abas e do conteúdo ── */}
+            <AnoSeletor
+                anos={anosDisponiveis}
+                anoAtivo={anoGlobal}
+                onChange={setAnoGlobal}
+            />
 
             {/* ── SUB-ABAS ── */}
             <div className="flex items-center gap-2 mb-6 bg-slate-100/50 p-1 rounded-full w-max border border-slate-200">
