@@ -8,6 +8,7 @@ import {
 import {
     ExternalLink, FileText, X, ChevronLeft, ChevronRight,
     AlertTriangle, Building2, Search, Loader2, RefreshCw,
+    Calendar, Filter,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -52,7 +53,6 @@ interface ApiResponse {
     categorias: { name: string; value: number }[];
     topFornecedores: { nome: string; cnpj: string; valor: number }[];
     gastosMensais: { mes: string; valor: number }[];
-    // campos futuros do agente forense — opcionais
     alertasForenses?: { tipo: string; count: number; total: number }[];
     altoRiscoPct?: number;
     porRisco?: Record<string, number>;
@@ -77,9 +77,7 @@ const CAT_COLORS: Record<string, string> = {
     "Aquisição de material de expediente": "#FFEDD5",
     "Locomoção, hospedagem": "#FEF3C7",
 };
-function getCatColor(name: string) {
-    return CAT_COLORS[name] ?? "#e5e7eb";
-}
+function getCatColor(name: string) { return CAT_COLORS[name] ?? "#e5e7eb"; }
 function catShort(name: string) {
     if (name.toLowerCase().startsWith("divulgaç")) return "Divulgação";
     if (name.toLowerCase().startsWith("consultor")) return "Consultorias";
@@ -120,6 +118,90 @@ function riscoColor(r: string) {
 function isNFGenerica(nf: string) {
     const clean = nf.replace(/[^0-9]/g, "");
     return clean.length <= 2 || /^0+$/.test(clean) || clean === "1";
+}
+
+// ─── SELETOR DE ANO PREMIUM ───────────────────────────────────────────────────
+function AnoSeletor({
+    anos,
+    anoAtivo,
+    onChange,
+}: {
+    anos: number[];
+    anoAtivo: string;
+    onChange: (ano: string) => void;
+}) {
+    if (!anos || anos.length === 0) return null;
+
+    const sorted = [...anos].sort((a, b) => b - a);
+
+    return (
+        <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-5 mb-6">
+            <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-xl bg-orange-50 flex items-center justify-center">
+                        <Calendar className="w-4 h-4 text-orange-500" />
+                    </div>
+                    <div>
+                        <p className="text-[13px] font-black text-slate-800 uppercase tracking-widest">Período</p>
+                        <p className="text-[10px] text-slate-400 font-medium">Filtre por ano de competência</p>
+                    </div>
+                </div>
+                <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 bg-slate-50 px-3 py-1.5 rounded-full border border-slate-200">
+                    <Filter className="w-3 h-3" />
+                    {anoAtivo === "all" ? "Todos os anos" : `Ano ${anoAtivo}`}
+                </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+                {/* Botão TODOS */}
+                <button
+                    onClick={() => onChange("all")}
+                    className={`relative flex flex-col items-center justify-center px-5 py-3 rounded-2xl border-2 font-black text-[13px] transition-all duration-200 min-w-[80px] ${
+                        anoAtivo === "all"
+                            ? "bg-orange-500 border-orange-500 text-white shadow-lg shadow-orange-100 scale-105"
+                            : "bg-slate-50 border-slate-200 text-slate-500 hover:border-orange-200 hover:bg-orange-50 hover:text-orange-600"
+                    }`}
+                >
+                    <span className="text-[10px] font-bold opacity-70 uppercase tracking-wide mb-0.5">Ver</span>
+                    <span>TODOS</span>
+                    <span className={`text-[9px] font-bold mt-0.5 ${anoAtivo === "all" ? "text-white/70" : "text-slate-400"}`}>
+                        {anos.length} anos
+                    </span>
+                </button>
+
+                {/* Botão por ano */}
+                {sorted.map((ano, idx) => {
+                    const isAtivo = anoAtivo === String(ano);
+                    const isMaisRecente = idx === 0;
+                    return (
+                        <button
+                            key={ano}
+                            onClick={() => onChange(String(ano))}
+                            className={`relative flex flex-col items-center justify-center px-5 py-3 rounded-2xl border-2 font-black transition-all duration-200 min-w-[80px] ${
+                                isAtivo
+                                    ? "bg-orange-500 border-orange-500 text-white shadow-lg shadow-orange-100 scale-105"
+                                    : "bg-slate-50 border-slate-200 text-slate-600 hover:border-orange-200 hover:bg-orange-50 hover:text-orange-600"
+                            }`}
+                        >
+                            {isMaisRecente && (
+                                <span className="absolute -top-2 left-1/2 -translate-x-1/2 text-[8px] font-black bg-emerald-500 text-white px-2 py-0.5 rounded-full whitespace-nowrap shadow-sm">
+                                    ● ATUAL
+                                </span>
+                            )}
+                            <span className={`text-[10px] font-bold uppercase tracking-wide mb-0.5 ${isAtivo ? "text-white/70" : "text-slate-400"}`}>
+                                Ano
+                            </span>
+                            <span className="text-[22px] leading-none">{ano}</span>
+                        </button>
+                    );
+                })}
+            </div>
+
+            <p className="text-[11px] text-slate-400 mt-4 font-medium">
+                💡 Selecione um ano para filtrar <strong className="text-orange-500">Resumo</strong> e <strong className="text-orange-500">Dados Completos</strong> simultaneamente.
+            </p>
+        </div>
+    );
 }
 
 // ─── Drawer de detalhe ────────────────────────────────────────────────────────
@@ -226,7 +308,6 @@ function ResumoContent({ data }: { data: ApiResponse }) {
         nameShort: catShort(c.name),
     }));
 
-    // alertasForenses — campo futuro do Agente Forense, só renderiza quando existir
     const alertasForenses = data.alertasForenses ?? [];
     const motivoEmoji: Record<string, string> = {
         "Link ausente/Lista errada": "🔗",
@@ -327,7 +408,7 @@ function ResumoContent({ data }: { data: ApiResponse }) {
                 </ResponsiveContainer>
             </div>
 
-            {/* Alertas Forenses — só renderiza quando o Agente Forense estiver ativo */}
+            {/* Alertas Forenses */}
             {alertasForenses.length > 0 && (
                 <div>
                     <p className="text-base font-bold text-slate-900 mb-4 flex items-center gap-2">
@@ -353,15 +434,16 @@ function ResumoContent({ data }: { data: ApiResponse }) {
 
 // ─── Dados Completos ───────────────────────────────────────────────────────────
 function DadosCompletosContent({
-    slug, anos, categoriasDisponiveis,
+    slug, anos, categoriasDisponiveis, anoGlobal,
 }: {
     slug: string;
     anos: number[];
     categoriasDisponiveis: string[];
+    anoGlobal: string;
 }) {
     const PAGE_SIZE = 25;
     const [page, setPage] = useState(0);
-    const [filterAno, setFilterAno] = useState("all");
+    const [filterAno, setFilterAno] = useState(anoGlobal);
     const [filterMes, setFilterMes] = useState("all");
     const [filterCat, setFilterCat] = useState("all");
     const [filterRisco, setFilterRisco] = useState("all");
@@ -371,6 +453,9 @@ function DadosCompletosContent({
     const [data, setData] = useState<ApiResponse | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+
+    // Sincroniza com o seletor global quando muda
+    React.useEffect(() => { setFilterAno(anoGlobal); setPage(0); }, [anoGlobal]);
 
     const hasFilters = filterAno !== "all" || filterMes !== "all" || filterCat !== "all" || filterRisco !== "all" || filterFornecedor.trim() !== "";
 
@@ -400,7 +485,7 @@ function DadosCompletosContent({
 
     function openDrawer(row: VerbaRow) { setSelectedRow(row); setDrawerOpen(true); }
     function clearFilters() {
-        setFilterAno("all"); setFilterMes("all"); setFilterCat("all");
+        setFilterAno(anoGlobal); setFilterMes("all"); setFilterCat("all");
         setFilterRisco("all"); setFilterFornecedor(""); setPage(0);
     }
     function goPage(pg: number) { setPage(pg); fetchPage(pg); }
@@ -550,15 +635,19 @@ function DadosCompletosContent({
 // ─── Componente Principal ──────────────────────────────────────────────────────
 export default function VerbasIndenizatoriasTab({ politicianName, slug }: VerbasTabProps) {
     const [subTab, setSubTab] = useState<"resumo" | "dados">("resumo");
+    const [anoGlobal, setAnoGlobal] = useState("all");
     const [kpiData, setKpiData] = useState<ApiResponse | null>(null);
     const [loadingKpis, setLoadingKpis] = useState(true);
     const [errorKpis, setErrorKpis] = useState<string | null>(null);
 
+    // Rebusca o resumo quando o ano global muda
     React.useEffect(() => {
         if (!slug) return;
         setLoadingKpis(true);
         setErrorKpis(null);
-        fetch(`/api/radar/verbas/${slug}?modo=kpis`)
+        const params = new URLSearchParams({ modo: "kpis" });
+        if (anoGlobal !== "all") params.set("ano", anoGlobal);
+        fetch(`/api/radar/verbas/${slug}?${params.toString()}`)
             .then(r => r.json())
             .then((data: ApiResponse) => {
                 if (data.error) throw new Error(data.error);
@@ -566,29 +655,23 @@ export default function VerbasIndenizatoriasTab({ politicianName, slug }: Verbas
             })
             .catch(e => setErrorKpis(e.message))
             .finally(() => setLoadingKpis(false));
-    }, [slug]);
+    }, [slug, anoGlobal]);
 
-    if (loadingKpis) {
-        return (
-            <div className="flex flex-col items-center justify-center py-24 gap-3">
-                <Loader2 className="w-8 h-8 text-orange-400 animate-spin" />
-                <p className="text-[14px] text-slate-400 font-medium">Carregando verbas de gabinete...</p>
-            </div>
-        );
-    }
-
-    if (errorKpis) {
-        return (
-            <div className="flex flex-col items-center justify-center py-24 gap-3 text-center">
-                <AlertTriangle className="w-10 h-10 text-red-300" />
-                <p className="text-[15px] font-bold text-slate-700">Dados não encontrados</p>
-                <p className="text-[13px] text-slate-400">{errorKpis}</p>
-            </div>
-        );
-    }
+    const anosDisponiveis = kpiData?.anos ?? [];
 
     return (
         <div className="animate-in fade-in duration-500">
+
+            {/* ── SELETOR DE ANO PREMIUM (sempre visível acima das abas) ── */}
+            {anosDisponiveis.length > 0 && (
+                <AnoSeletor
+                    anos={anosDisponiveis}
+                    anoAtivo={anoGlobal}
+                    onChange={(ano) => { setAnoGlobal(ano); }}
+                />
+            )}
+
+            {/* ── SUB-ABAS ── */}
             <div className="flex items-center gap-2 mb-6 bg-slate-100/50 p-1 rounded-full w-max border border-slate-200">
                 <button onClick={() => setSubTab("resumo")}
                     className={`px-5 py-1.5 rounded-full text-[13px] font-bold transition-all ${subTab === "resumo" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
@@ -600,13 +683,26 @@ export default function VerbasIndenizatoriasTab({ politicianName, slug }: Verbas
                 </button>
             </div>
 
-            {subTab === "resumo" && kpiData ? (
+            {/* ── CONTEÚDO ── */}
+            {loadingKpis ? (
+                <div className="flex flex-col items-center justify-center py-24 gap-3">
+                    <Loader2 className="w-8 h-8 text-orange-400 animate-spin" />
+                    <p className="text-[14px] text-slate-400 font-medium">Carregando verbas de gabinete...</p>
+                </div>
+            ) : errorKpis ? (
+                <div className="flex flex-col items-center justify-center py-24 gap-3 text-center">
+                    <AlertTriangle className="w-10 h-10 text-red-300" />
+                    <p className="text-[15px] font-bold text-slate-700">Dados não encontrados</p>
+                    <p className="text-[13px] text-slate-400">{errorKpis}</p>
+                </div>
+            ) : subTab === "resumo" && kpiData ? (
                 <ResumoContent data={kpiData} />
             ) : subTab === "dados" ? (
                 <DadosCompletosContent
                     slug={slug}
-                    anos={kpiData?.anos ?? []}
+                    anos={anosDisponiveis}
                     categoriasDisponiveis={kpiData?.categoriasDisponiveis ?? []}
+                    anoGlobal={anoGlobal}
                 />
             ) : null}
         </div>
