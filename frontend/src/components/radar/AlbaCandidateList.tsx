@@ -5,8 +5,20 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
     Search, ChevronRight, Users, CheckCircle2,
-    MapPin, Calendar, Shield, Eye, LayoutGrid
+    MapPin, Calendar, Shield, Eye, LayoutGrid, UserMinus, UserCheck
 } from "lucide-react";
+
+// Legislatura pode ser número simples OU objeto rico
+interface LegislaturaObj {
+    tipo?: string;          // "titular" | "suplente"
+    legislatura?: string;
+    periodo?: string;
+    periodo_exercicio?: string;
+    saida?: string;
+    obs?: string;
+}
+
+type LegislaturaItem = number | string | LegislaturaObj;
 
 interface DeputadoAlba {
     prisma_id:       string;
@@ -21,14 +33,40 @@ interface DeputadoAlba {
     status:          string;
     mandatos_count:  number;
     qualidade_score: number;
-    legislaturas:    (string | number)[];
+    legislaturas:    LegislaturaItem[];
 }
 
-// Suporta tanto número (19) quanto string ("19" ou "19ª Legislatura")
-function normalizeLeg(leg: string | number): string {
+// Suporta tanto número (19) quanto string ("19" ou "19ª Legislatura") quanto objeto rico
+function normalizeLeg(leg: LegislaturaItem): string {
+    if (typeof leg === "object" && leg !== null) {
+        const obj = leg as LegislaturaObj;
+        if (obj.legislatura) return obj.legislatura;
+    }
     const s = String(leg).trim();
     const match = s.match(/\d+/);
     return match ? match[0] : s;
+}
+
+// Detecta se o deputado é suplente na legislatura 20 (atual)
+function isSuplente20(legislaturas: LegislaturaItem[]): boolean {
+    return (legislaturas || []).some(leg => {
+        if (typeof leg === "object" && leg !== null) {
+            const obj = leg as LegislaturaObj;
+            return obj.tipo === "suplente" && obj.legislatura === "20";
+        }
+        return false;
+    });
+}
+
+// Detecta se renunciou
+function isRenunciou(legislaturas: LegislaturaItem[]): boolean {
+    return (legislaturas || []).some(leg => {
+        if (typeof leg === "object" && leg !== null) {
+            const obj = leg as LegislaturaObj;
+            return obj.saida && obj.saida.toLowerCase().includes("renunci");
+        }
+        return false;
+    });
 }
 
 // Mapa: número ordinal -> período
@@ -79,6 +117,51 @@ function ScoreRing({ score }: { score: number }) {
             <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wide">{Math.round(val)}%</span>
         </div>
     );
+}
+
+// ─── BADGE DE STATUS ────────────────────────────────────────────────────────
+function StatusBadge({ status, legislaturas }: { status: string; legislaturas: LegislaturaItem[] }) {
+    const inativo   = status === "inativo";
+    const suplente  = isSuplente20(legislaturas);
+    const renunciou = isRenunciou(legislaturas);
+
+    if (inativo && renunciou) {
+        return (
+            <span className="inline-flex items-center gap-1 text-[9px] font-black px-2 py-0.5 rounded-full bg-slate-200 text-slate-500 border border-slate-300 uppercase tracking-wide">
+                <UserMinus className="w-2.5 h-2.5" />
+                RENUNCIOU
+            </span>
+        );
+    }
+
+    if (inativo && suplente) {
+        return (
+            <span className="inline-flex items-center gap-1 text-[9px] font-black px-2 py-0.5 rounded-full bg-slate-200 text-slate-500 border border-slate-300 uppercase tracking-wide">
+                <UserMinus className="w-2.5 h-2.5" />
+                INATIVO
+            </span>
+        );
+    }
+
+    if (inativo) {
+        return (
+            <span className="inline-flex items-center gap-1 text-[9px] font-black px-2 py-0.5 rounded-full bg-red-100 text-red-500 border border-red-200 uppercase tracking-wide">
+                <UserMinus className="w-2.5 h-2.5" />
+                INATIVO
+            </span>
+        );
+    }
+
+    if (suplente) {
+        return (
+            <span className="inline-flex items-center gap-1 text-[9px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-300 uppercase tracking-wide">
+                <UserCheck className="w-2.5 h-2.5" />
+                SUPLENTE
+            </span>
+        );
+    }
+
+    return null;
 }
 
 function navegarParaPerfil(slug: string) {
@@ -291,23 +374,34 @@ export function AlbaCandidateList() {
                         ? dep.qualidade_score * 100 : (dep.qualidade_score || 0);
                     const isVerificado = dep.status === "aprovado";
                     const legsNorm     = (dep.legislaturas || []).map(normalizeLeg);
+                    const isInativo    = dep.status === "inativo";
+                    const isSup        = isSuplente20(dep.legislaturas || []);
 
                     return (
                         <div
                             key={dep.prisma_id}
-                            className="group relative bg-white border-2 border-slate-100 hover:border-indigo-200 rounded-3xl overflow-hidden transition-all duration-200 hover:shadow-lg hover:shadow-indigo-50 cursor-pointer"
+                            className={`group relative border-2 rounded-3xl overflow-hidden transition-all duration-200 cursor-pointer ${
+                                isInativo
+                                    ? "bg-slate-50 border-slate-200 hover:border-slate-300 opacity-70 hover:opacity-90 hover:shadow-md"
+                                    : isSup
+                                        ? "bg-white border-amber-100 hover:border-amber-300 hover:shadow-lg hover:shadow-amber-50"
+                                        : "bg-white border-slate-100 hover:border-indigo-200 hover:shadow-lg hover:shadow-indigo-50"
+                            }`}
                             onClick={() => navegarParaPerfil(profileSlug)}
                         >
-                            {/* Faixa lateral cor partido */}
-                            <div className="absolute left-0 top-0 bottom-0 w-1.5 group-hover:w-2 transition-all duration-200" style={{ background: partidoColor }} />
+                            {/* Faixa lateral cor partido — acinzentada se inativo */}
+                            <div
+                                className="absolute left-0 top-0 bottom-0 w-1.5 group-hover:w-2 transition-all duration-200"
+                                style={{ background: isInativo ? "#cbd5e1" : partidoColor }}
+                            />
 
                             <div className="flex items-center gap-5 p-4 pl-6">
 
                                 {/* FOTO */}
                                 <div className="relative shrink-0">
                                     <div
-                                        className="w-20 h-20 rounded-2xl overflow-hidden shadow-md transition-all duration-200 group-hover:scale-105"
-                                        style={{ outline: `3px solid ${partidoColor}40`, outlineOffset: "2px" }}
+                                        className={`w-20 h-20 rounded-2xl overflow-hidden shadow-md transition-all duration-200 group-hover:scale-105 ${isInativo ? "grayscale" : ""}`}
+                                        style={{ outline: `3px solid ${isInativo ? "#cbd5e140" : partidoColor + "40"}`, outlineOffset: "2px" }}
                                     >
                                         <img
                                             src={dep.foto_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(dep.nome_urna)}&background=6366f1&color=fff&bold=true&size=128`}
@@ -319,7 +413,10 @@ export function AlbaCandidateList() {
                                             }}
                                         />
                                     </div>
-                                    <div className="absolute -bottom-1.5 -right-1.5 text-[9px] font-black text-white px-1.5 py-0.5 rounded-lg shadow" style={{ background: partidoColor }}>
+                                    <div
+                                        className="absolute -bottom-1.5 -right-1.5 text-[9px] font-black text-white px-1.5 py-0.5 rounded-lg shadow"
+                                        style={{ background: isInativo ? "#94a3b8" : partidoColor }}
+                                    >
                                         {dep.sigla_partido}
                                     </div>
                                     {isVerificado && (
@@ -331,11 +428,22 @@ export function AlbaCandidateList() {
 
                                 {/* IDENTIDADE */}
                                 <div className="flex-1 min-w-0">
-                                    <h3 className="font-black text-slate-900 text-[17px] leading-tight uppercase tracking-tight group-hover:text-indigo-700 transition-colors truncate">
-                                        {dep.nome_urna}
-                                    </h3>
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <h3 className={`font-black text-[17px] leading-tight uppercase tracking-tight transition-colors truncate ${
+                                            isInativo
+                                                ? "text-slate-400 group-hover:text-slate-500"
+                                                : "text-slate-900 group-hover:text-indigo-700"
+                                        }`}>
+                                            {dep.nome_urna}
+                                        </h3>
+                                        {/* BADGE STATUS */}
+                                        <StatusBadge status={dep.status} legislaturas={dep.legislaturas || []} />
+                                    </div>
                                     <div className="flex items-center flex-wrap gap-2 mt-2">
-                                        <span className="text-[11px] font-bold px-2.5 py-1 rounded-full text-white" style={{ background: partidoColor }}>
+                                        <span
+                                            className="text-[11px] font-bold px-2.5 py-1 rounded-full text-white"
+                                            style={{ background: isInativo ? "#94a3b8" : partidoColor }}
+                                        >
                                             {dep.sigla_partido}
                                         </span>
                                         <span className="text-[11px] font-semibold bg-slate-100 text-slate-600 px-2.5 py-1 rounded-full">
@@ -377,11 +485,15 @@ export function AlbaCandidateList() {
                                     <ScoreRing score={scoreVal} />
                                 </div>
 
-                                {/* BOTÃO TRANSPARÊNCIA — texto limpo */}
+                                {/* BOTÃO TRANSPARÊNCIA */}
                                 <div className="shrink-0">
                                     <button
                                         onClick={(e) => { e.stopPropagation(); navegarParaPerfil(profileSlug); }}
-                                        className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-[13px] font-bold rounded-xl transition-all shadow-sm hover:shadow-md active:scale-95"
+                                        className={`flex items-center gap-2 px-5 py-2.5 text-[13px] font-bold rounded-xl transition-all shadow-sm hover:shadow-md active:scale-95 ${
+                                            isInativo
+                                                ? "bg-slate-300 hover:bg-slate-400 text-slate-600"
+                                                : "bg-indigo-600 hover:bg-indigo-700 text-white"
+                                        }`}
                                     >
                                         <Eye className="w-4 h-4" />
                                         Transparência
@@ -394,7 +506,12 @@ export function AlbaCandidateList() {
                             <div className="absolute bottom-0 left-0 right-0 h-[3px]">
                                 <div
                                     className="h-full opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-                                    style={{ background: `linear-gradient(to right, ${partidoColor}, #8b5cf6, #22c55e)` }}
+                                    style={{ background: isInativo
+                                        ? "linear-gradient(to right, #cbd5e1, #94a3b8, #cbd5e1)"
+                                        : isSup
+                                            ? "linear-gradient(to right, #f59e0b, #fbbf24, #f59e0b)"
+                                            : `linear-gradient(to right, ${partidoColor}, #8b5cf6, #22c55e)`
+                                    }}
                                 />
                             </div>
                         </div>
