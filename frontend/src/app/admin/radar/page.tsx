@@ -15,47 +15,65 @@ import { Input } from "@/components/ui/input";
 import { CandidateRow, CandidateProps } from "@/components/radar/CandidateRow";
 
 const LEGISLATURE_TABS = [
-    { id: "radar-global", label: "Radar Global", icon: Globe, desc: "Candidatos monitorados" },
-    { id: "alba", label: "Deputados ALBA", icon: Landmark, desc: "Assembleia Legislativa da Bahia" },
+    { id: "radar-global", label: "Radar Global",   icon: Globe,    desc: "Candidatos monitorados" },
+    { id: "alba",         label: "Deputados ALBA", icon: Landmark, desc: "Assembleia Legislativa da Bahia" },
 ];
 
 export default function RadarIndexPage() {
     const [searchTerm, setSearchTerm] = useState("");
-    const [isLoading, setIsLoading] = useState(true);
+    const [isLoading,  setIsLoading]  = useState(true);
     const [politicians, setPoliticians] = useState<CandidateProps[]>([]);
-    const [totalCount, setTotalCount] = useState(0);
-    const [error, setError] = useState<string | null>(null);
-    const [activeTab, setActiveTab] = useState("alba");
-    const [partido, setPartido] = useState("");
-    const [partidos, setPartidos] = useState<string[]>([]);
+    const [totalCount,  setTotalCount]  = useState(0);
+    const [error,       setError]       = useState<string | null>(null);
+    const [activeTab,   setActiveTab]   = useState("alba");
+    const [partido,     setPartido]     = useState("");
+    const [partidos,    setPartidos]    = useState<string[]>([]);
 
     useEffect(() => {
         async function fetchParlamentares() {
             try {
                 setIsLoading(true);
                 setError(null);
+
+                // ── Fonte correta: API local via rota Next.js ───────────────────────
                 const res = await fetch("/api/prisma/deputados-alba");
-                if (!res.ok) throw new Error("Falha ao carregar parlamentares");
+                if (!res.ok) {
+                    const errData = await res.json().catch(() => ({}));
+                    throw new Error(
+                        errData.hint
+                            ? `${errData.error} \u2014 ${errData.hint}`
+                            : `Falha ao carregar parlamentares (HTTP ${res.status})`
+                    );
+                }
                 const json = await res.json();
 
+                // ── Mapear para CandidateProps ──────────────────────────────
                 const mapped: CandidateProps[] = (json.parlamentares || []).map((p: any) => ({
-                    id: p.slug || p.prisma_id,
-                    slug: p.slug,
-                    prisma_id: p.prisma_id,
-                    name: p.nome_urna || p.nome_civil || "—",
-                    partido: p.sigla_partido || "S/P",
-                    city: `${p.uf || "BA"} · Deputado Estadual`,
-                    office: "Deputado Estadual",
-                    avatarUrl: p.foto_url || "",
-                    hasFiscalData: true,
+                    id:             p.id       || p.prisma_id,
+                    slug:           p.slug     || p.prisma_id,
+                    prisma_id:      p.prisma_id,
+                    name:           p.nome_urna || p.nome_civil || "—",
+                    partido:        p.sigla_partido || "S/P",
+                    city:           p.nm_ue
+                                        ? `${p.nm_ue} · ${p.uf}`
+                                        : (p.uf || "BA"),
+                    office:         p.cargo || "Deputado Estadual",
+                    avatarUrl:      p.foto_url || "",
+                    hasFiscalData:  p.hasFiscalData ?? true,
+                    status_eleicao: p.status_eleicao,
+                    ano_eleicao:    p.ano_eleicao,
                 }));
 
-                const uniquePartidos = [...new Set(mapped.map(p => p.partido).filter(Boolean))] as string[];
+                const uniquePartidos = [
+                    ...new Set(mapped.map(p => p.partido).filter(Boolean))
+                ] as string[];
+
                 setPartidos(uniquePartidos.sort());
                 setPoliticians(mapped);
                 setTotalCount(json.total || mapped.length);
+
             } catch (err: any) {
-                console.error("Erro ao buscar parlamentares:", err);
+                console.error("[RADAR2] Erro ao buscar parlamentares:", err);
                 setError(err.message);
             } finally {
                 setIsLoading(false);
@@ -95,7 +113,8 @@ export default function RadarIndexPage() {
                                     <span className="text-xs font-bold bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full uppercase tracking-wider">PRISMA 888</span>
                                 </div>
                                 <p className="text-slate-500 font-medium mt-0.5">
-                                    Central de Inteligência Política · <span className="text-indigo-600 font-semibold">Auditoria 3D em tempo real</span>
+                                    Central de Inteligência Política ·{" "}
+                                    <span className="text-indigo-600 font-semibold">Auditoria 3D em tempo real</span>
                                 </p>
                             </div>
                         </div>
@@ -107,8 +126,8 @@ export default function RadarIndexPage() {
                                 <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Parlamentares</p>
                             </div>
                             <div className="text-center px-5 py-3 bg-emerald-50 rounded-2xl border border-emerald-100">
-                                <p className="text-2xl font-black text-emerald-700">{totalCount}</p>
-                                <p className="text-xs font-semibold text-emerald-500 uppercase tracking-wide">Com Dados</p>
+                                <p className="text-2xl font-black text-emerald-700">{filtered.length}</p>
+                                <p className="text-xs font-semibold text-emerald-500 uppercase tracking-wide">Visíveis</p>
                             </div>
                             <div className="text-center px-5 py-3 bg-indigo-50 rounded-2xl border border-indigo-100">
                                 <p className="text-2xl font-black text-indigo-700">2</p>
@@ -201,8 +220,10 @@ export default function RadarIndexPage() {
                         <div className="py-20 text-center bg-white rounded-2xl border border-dashed border-red-200 shadow-sm">
                             <ShieldAlert className="h-10 w-10 text-red-300 mx-auto mb-4" />
                             <h3 className="text-xl font-bold text-slate-900">Erro ao Carregar</h3>
-                            <p className="text-slate-400 mt-2 text-sm">{error}</p>
+                            <p className="text-slate-400 mt-2 text-sm max-w-md mx-auto">{error}</p>
+                            <p className="text-slate-300 mt-1 text-xs">Verifique se <code className="bg-slate-100 px-1 rounded">api_server.py</code> está rodando em <code className="bg-slate-100 px-1 rounded">localhost:8003</code></p>
                             <Button variant="outline" className="mt-5" onClick={() => window.location.reload()}>Tentar Novamente</Button>
+
                         </div>
                     ) : filtered.length > 0 ? (
                         filtered.map((pol) => (
@@ -222,7 +243,11 @@ export default function RadarIndexPage() {
                 {!isLoading && !error && (
                     <div className="text-center pt-10 border-t border-slate-100 mt-10">
                         <p className="text-xs text-slate-400 font-medium">
-                            Dados sincronizados via <strong className="text-slate-600">Pipeline Zidane v4.0</strong> · PRISMA 888 Intelligence Platform
+                            Dados sincronizados via{" "}
+                            <strong className="text-slate-600">PostgreSQL Local · prisma_data</strong>
+                            {" "}· API Bridge{" "}
+                            <strong className="text-slate-600">FastAPI :8003</strong>
+                            {" "}· PRISMA 888 Intelligence Platform
                         </p>
                     </div>
                 )}
